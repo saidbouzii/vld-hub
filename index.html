@@ -1084,7 +1084,22 @@ tbody tr:last-child td{border-bottom:none}
       <div class="date-display" id="date-now">—</div>
     </div>
   </div>
-
+<!-- TIME SLICER -->
+<div style="background:linear-gradient(135deg,rgba(56,189,248,.08),rgba(0,229,180,.05));border:1px solid rgba(56,189,248,.25);border-radius:12px;padding:.75rem 1rem;margin:.75rem 0;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
+  <span style="font-family:var(--font);font-size:13px;letter-spacing:.1em;color:var(--cyan);white-space:nowrap;">🌅 FENÊTRE HORAIRE</span>
+  <select id="time-window" onchange="renderMatrix(false);renderCards(false);renderBanner();" style="font-family:var(--font);font-size:14px;background:var(--surface2);border:1px solid var(--border3);color:var(--cyan);padding:.4rem .8rem;border-radius:8px;cursor:pointer;outline:none;flex:1;min-width:180px;">
+    <option value="avg">Moyenne matin (5h-11h)</option>
+    <option value="0">🌅 Lever soleil exact</option>
+    <option value="0.5">🌅 +30 min</option>
+    <option value="1" selected>🌅 +1h ⭐ (Pic mirage)</option>
+    <option value="1.5">🌅 +1h30</option>
+    <option value="2">🌅 +2h</option>
+    <option value="3">🌅 +3h</option>
+    <option value="4">🌅 +4h</option>
+    <option value="5">🌅 +5h</option>
+  </select>
+  <span id="ts-sunrise" style="padding:2px 8px;border-radius:10px;font-size:10px;background:rgba(240,165,0,.15);border:1px solid rgba(240,165,0,.3);color:var(--amber);">⏳ Charger prévisions</span>
+</div>
   <!-- LOAD ROW -->
   <div class="load-row">
     <button class="load-btn" id="fetch-btn" onclick="fetchAll()">⟳ PRÉVISIONS 7 JOURS</button>
@@ -1486,35 +1501,38 @@ async function fetchSpot(spot) {
     'precipitation_probability','fog',
     'temperature_850hPa','temperature_700hPa','geopotential_height_850hPa','geopotential_height_700hPa'
   ].join(',');
-  const base = `https://api.open-meteo.com/v1/forecast?forecast_days=7&timezone=auto`;
+  const base = `https://api.open-meteo.com/v1/forecast?forecast_days=7&daily=sunrise,sunset&timezone=auto`;
   const urlObs = `${base}&latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=${params}`;
   const urlMid = `${base}&latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=visibility,cloud_cover_low,relative_humidity_2m`;
   const [r1,r2] = await Promise.all([fetch(urlObs),fetch(urlMid)]);
   const [d1,d2] = await Promise.all([r1.json(),r2.json()]);
   const daily = [];
+  
   for (let day=0; day<7; day++) {
+    const sunriseStr = d1.daily?.sunrise?.[day];
+    const sunriseHour = sunriseStr ? new Date(sunriseStr).getHours() + new Date(sunriseStr).getMinutes()/60 : 7;
+    
     const s=day*24+5, e=day*24+11;
-    const avg = arr => {
+    const avg = (arr, start, end) => {
       if(!arr || !Array.isArray(arr)) return null;
-      const v = arr.slice(s,e).filter(x=>x!==null&&x!==undefined&&!isNaN(x));
+      const v = arr.slice(start||s, end||e).filter(x=>x!==null&&x!==undefined&&!isNaN(x));
       return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null;
     };
+    
     const temp=avg(d1.hourly?.temperature_2m);
     const dew=avg(d1.hourly?.dew_point_2m);
     const P_mbar = avg(d1.hourly?.surface_pressure) || 1013.25;
     const T850 = avg(d1.hourly?.temperature_850hPa);
     const H850 = avg(d1.hourly?.geopotential_height_850hPa);
-    // dT/dh entre sol et 850hPa (en °C/m)
-    let dTdh = -0.0065; // lapse rate standard
+    let dTdh = -0.0065;
     if (T850 !== null && temp !== null && H850 !== null && H850 > (spot.obs.alt||0) + 50) {
       dTdh = (T850 - temp) / (H850 - (spot.obs.alt||0));
     }
-    // Bislin eq.(2) : k = 503 * (P/T²) * (0.0343 + dT/dh)  [T en Kelvin]
     const T_K = (temp !== null ? temp : 15) + 273.15;
     const k_bislin = 503 * (P_mbar / (T_K * T_K)) * (0.0343 + dTdh);
-    // eq.(7) : lift = k * d² / (2R)  [mètres]
     const dist_m = (spot.dist_km || 300) * 1000;
     const lift_m = hiddenByEarth(dist_m) - hiddenWithRefraction(dist_m, k_bislin);
+    
     const h = {
       cloud_low: avg(d1.hourly?.cloud_cover_low),
       cloud_mid: avg(d1.hourly?.cloud_cover_mid),
@@ -1529,10 +1547,36 @@ async function fetchSpot(spot) {
       vis_mid: (avg(d2.hourly?.visibility)??0)/1000,
       temp, dTdh, k_bislin, lift_m,
     };
+    
+    // TIME SLICER - Score pour chaque tranche horaire après lever soleil
+    const hourlyScores = {};
+    const timeOffsets = [0, 0.5, 1, 1.5, 2, 3, 4, 5];
+    for (const offset of timeOffsets) {
+      const targetHour = sunriseHour + offset;
+      const hourIdx = day*24 + Math.floor(targetHour);
+      const hData = {
+        cloud_low: d1.hourly?.cloud_cover_low?.[hourIdx] ?? h.cloud_low,
+        cloud_mid: d1.hourly?.cloud_cover_mid?.[hourIdx] ?? h.cloud_mid,
+        cloud_high: d1.hourly?.cloud_cover_high?.[hourIdx] ?? h.cloud_high,
+        fog: d1.hourly?.fog?.[hourIdx] ?? h.fog,
+        rh: d1.hourly?.relative_humidity_2m?.[hourIdx] ?? h.rh,
+        slp: d1.hourly?.surface_pressure?.[hourIdx] ?? h.slp,
+        wind: d1.hourly?.wind_speed_10m?.[hourIdx] ?? h.wind,
+        vis: (d1.hourly?.visibility?.[hourIdx] ?? 0)/1000 || h.vis,
+        precip: d1.hourly?.precipitation_probability?.[hourIdx] ?? h.precip,
+        vis_mid: (d2.hourly?.visibility?.[hourIdx] ?? 0)/1000 || h.vis_mid,
+      };
+      const tH = d1.hourly?.temperature_2m?.[hourIdx];
+      const dH = d1.hourly?.dew_point_2m?.[hourIdx];
+      hData.spread = (tH!=null && dH!=null) ? tH-dH : h.spread;
+      hourlyScores[offset] = scoreDay(spot, hData).score;
+    }
+    
     const dt=new Date(); dt.setDate(dt.getDate()+day);
-    daily.push({ date:dt, day, ...scoreDay(spot,h), raw:h });
+    daily.push({ date:dt, day, sunriseHour, sunriseStr, ...scoreDay(spot,h), raw:h, hourlyScores });
   }
   return daily;
+}
 }
 
 // ═══════════════════════════════════════════════════
@@ -1573,16 +1617,34 @@ function verdict(sc){
 }
 function scoreColor(sc){ return sc>=65?'var(--green)':sc>=40?'var(--amber)':'var(--red)'; }
 
+function getScore(fc, di) {
+  const tw = document.getElementById('time-window')?.value || '1';
+  if (tw === 'avg') return fc[di].score;
+  return fc[di].hourlyScores?.[parseFloat(tw)] ?? fc[di].score;
+}
+
 function renderMatrix(loading) {
   const days=getDays();
+  const tw = document.getElementById('time-window')?.value || '1';
+  const twLabels = {'avg':'Matin 5-11h','0':'Lever','0.5':'+30m','1':'+1h','1.5':'+1h30','2':'+2h','3':'+3h','4':'+4h','5':'+5h'};
+  const twLbl = twLabels[tw] || '+1h';
+  
+  // Update sunrise badge
+  const firstFc = Object.values(forecasts).find(f => f && f[0]?.sunriseStr);
+  if (firstFc && firstFc[0]?.sunriseStr) {
+    const sr = new Date(firstFc[0].sunriseStr);
+    const el = document.getElementById('ts-sunrise');
+    if (el) el.textContent = `🌅 Lever aujourd'hui: ${sr.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}`;
+  }
+  
   document.getElementById('matrix-head').innerHTML=`<tr>
     <th class="spot-col">Spot</th>
-    ${days.map((d,i)=>`<th class="${i===0?'today-col':''}">${dayLabel(d)}</th>`).join('')}
+    ${days.map((d,i)=>`<th class="${i===0?'today-col':''}">${dayLabel(d)}<br><small style="color:var(--cyan);font-size:8px">${twLbl}</small></th>`).join('')}
   </tr>`;
   document.getElementById('matrix-body').innerHTML=SPOTS.map(s=>{
     const fc=forecasts[s.id];
     let bestDay=-1,bestSc=-1;
-    if(fc) fc.forEach((d,i)=>{if(d.score>bestSc){bestSc=d.score;bestDay=i;}});
+    if(fc) fc.forEach((d,i)=>{const sc=getScore(fc,i); if(sc>bestSc){bestSc=sc;bestDay=i;}});
     return `<tr>
       <td class="spot-nm">
         <span class="snm" style="color:${s.color}">${s.name}</span>
@@ -1591,7 +1653,7 @@ function renderMatrix(loading) {
       ${days.map((_,di)=>{
         if(loading) return `<td><div class="dcell loading">…</div></td>`;
         if(!fc) return `<td><div class="dcell empty">—</div></td>`;
-        const sc=fc[di].score, isBest=di===bestDay;
+        const sc=getScore(fc,di), isBest=di===bestDay;
         return `<td><div class="dcell ${cellClass(sc)} ${isBest?'best-day':''}">${sc}</div></td>`;
       }).join('')}
     </tr>`;
@@ -1603,14 +1665,14 @@ function renderBanner() {
   const days=getDays();
   const entries=[];
   days.forEach((d,di)=>{
-    const hits=SPOTS.filter(s=>forecasts[s.id]&&forecasts[s.id][di].score>=threshold);
+    const hits=SPOTS.filter(s=>forecasts[s.id]&&getScore(forecasts[s.id],di)>=threshold);
     if(hits.length) entries.push({date:d,di,hits});
   });
   const banner=document.getElementById('best-banner');
   if(!entries.length){banner.style.display='none';return;}
   banner.style.display='block';
   document.getElementById('bb-entries').innerHTML=entries.map(e=>
-    `<div class="bb-entry"><strong>${fullLabel(e.date)}</strong> — ${e.hits.map(s=>`${s.name} <strong>${forecasts[s.id][e.di].score}/100</strong>`).join(' · ')}</div>`
+    `<div class="bb-entry"><strong>${fullLabel(e.date)}</strong> — ${e.hits.map(s=>`${s.name} <strong>${getScore(forecasts[s.id],e.di)}/100</strong>`).join(' · ')}</div>`
   ).join('');
 }
 
@@ -1618,8 +1680,18 @@ function renderCards(loading) {
   const days=getDays();
   document.getElementById('spot-cards').innerHTML=SPOTS.map(s=>{
     const fc=forecasts[s.id];
-    let bestSc=0,bestDayLabel='';
-    if(fc){let bi=0;fc.forEach((d,i)=>{if(d.score>bestSc){bestSc=d.score;bi=i;}});bestDayLabel=fullLabel(days[bi]);}
+    let bestSc=0,bestDayLabel='',bestOffset=-1;
+    if(fc){
+      let bi=0;
+      fc.forEach((d,i)=>{const sc=getScore(fc,i); if(sc>bestSc){bestSc=sc;bi=i;}});
+      bestDayLabel=fullLabel(days[bi]);
+      // Trouver meilleure heure pour ce spot
+      if(fc[bi]?.hourlyScores){
+        let bHS=0;
+        Object.entries(fc[bi].hourlyScores).forEach(([o,sc])=>{if(sc>bHS){bHS=sc;bestOffset=parseFloat(o);}});
+      }
+    }
+    const bestHourTxt = bestOffset>=0 ? `🌅 +${bestOffset}h` : '';
     const body=loading
       ?`<div class="scard-body" id="sdb-${s.id}"><div style="padding:1rem;color:var(--text3);font-size:10px;font-family:var(--mono)">Chargement…</div></div>`
       :!fc
@@ -1630,9 +1702,7 @@ function renderCards(loading) {
             Nuages bas élim ≥${s.criteria.cloud_low_elim}% · Fog élim >${s.criteria.fog_elim}% ·
             Vent élim >${s.criteria.wind_elim} km/h · RH élim >${s.criteria.rh_elim}% ·
             SLP élim &lt;${s.criteria.slp_elim} hPa · Vis mi-trajet ok >${s.criteria.vis_mid_ok} km
-            ${s.type==='mediterranee_corse'?' · Mistral idéal 15–35 km/h':
-              s.type==='mediterranee_marin'?' · Maritime très strict':
-              ' · CAPE élim >300 J/kg'}
+            ${bestHourTxt?`<br><strong style="color:var(--green)">⭐ Meilleure heure: ${bestHourTxt}</strong>`:''}
           </div>
           ${fc.map((dayData,di)=>renderDayRow(dayData,days[di],s)).join('')}
         </div>`;
@@ -1645,7 +1715,7 @@ function renderCards(loading) {
         <div class="scard-right">
           <div>
             <div class="scard-bestscore" style="color:${scoreColor(bestSc)}">${bestSc}</div>
-            <div class="scard-bestday">${bestDayLabel||'—'}</div>
+            <div class="scard-bestday">${bestDayLabel||'—'} ${bestHourTxt}</div>
           </div>
           <div class="chevron" id="chev-${s.id}">▾</div>
         </div>
@@ -1654,8 +1724,6 @@ function renderCards(loading) {
     </div>`;
   }).join('');
 }
-
-function renderDayRow(dayData, date, spot) {
   const {score,items,hasElim,day}=dayData;
   const h = dayData.raw || {};
   const cls=cellClass(score), sc=scoreColor(score), isToday=day===0;
