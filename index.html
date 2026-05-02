@@ -1897,7 +1897,7 @@ async function fetchSpot(spot) {
       if(!arr || !Array.isArray(arr)) return null;
       const v = arr.slice(s,e).filter(x!==null&&x!==undefined&&!isNaN(x)&&x<900);
       return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null;
-      if (wind !== null && wind > 200) wind = null;
+    
     };
     const temp=avg(d1.hourly?.temperature_2m);
     const dew=avg(d1.hourly?.dew_point_2m);
