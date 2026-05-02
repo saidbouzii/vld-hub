@@ -571,7 +571,225 @@ body::after{
   padding:0 1rem 2rem;
 }
 
-/* ── HEADER ── */
+/* ── BARRE D'ONGLETS ── */
+.tab-nav{
+  display:flex;
+  gap:4px;
+  padding:.5rem 0 0;
+  border-bottom:1px solid var(--border2);
+  margin-bottom:.5rem;
+  background:linear-gradient(180deg,rgba(56,189,248,.03),transparent);
+}
+.tab-btn{
+  font-family:var(--font);
+  font-size:14px;
+  letter-spacing:.08em;
+  padding:.65rem 1.5rem;
+  background:transparent;
+  border:1px solid transparent;
+  border-bottom:none;
+  border-radius:8px 8px 0 0;
+  color:var(--text3);
+  cursor:pointer;
+  transition:all .2s;
+  display:flex;
+  align-items:center;
+  gap:.5rem;
+}
+.tab-btn:hover{
+  color:var(--text);
+  background:rgba(56,189,248,.05);
+}
+.tab-btn.active{
+  background:var(--surface);
+  border-color:var(--border2);
+  color:var(--cyan);
+  box-shadow:0 -2px 8px rgba(56,189,248,.1);
+  position:relative;
+}
+.tab-btn.active::after{
+  content:'';
+  position:absolute;
+  bottom:-1px;
+  left:0;
+  right:0;
+  height:2px;
+  background:var(--cyan);
+}
+.tab-content{display:none}
+.tab-content.active{display:block;animation:fadeIn .3s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── CRÉATEUR DE SPOT ── */
+.creator-wrap{
+  background:var(--surface);
+  border:1px solid var(--border2);
+  border-radius:12px;
+  padding:1.5rem;
+  margin-top:1rem;
+}
+.creator-title{
+  font-family:var(--font);
+  font-size:22px;
+  letter-spacing:.06em;
+  color:var(--cyan);
+  margin-bottom:.3rem;
+}
+.creator-sub{
+  font-size:11px;
+  color:var(--text3);
+  margin-bottom:1.5rem;
+  line-height:1.6;
+}
+.creator-section{
+  margin-bottom:1.25rem;
+  padding:1rem;
+  background:var(--bg2);
+  border-radius:8px;
+  border:1px solid var(--border);
+}
+.creator-section-title{
+  font-family:var(--font);
+  font-size:13px;
+  letter-spacing:.1em;
+  color:var(--text2);
+  margin-bottom:.75rem;
+  display:flex;
+  align-items:center;
+  gap:.5rem;
+}
+.creator-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:.75rem;
+}
+.creator-grid.cols3{grid-template-columns:1fr 1fr 1fr}
+.creator-field{display:flex;flex-direction:column;gap:4px}
+.creator-field label{
+  font-size:10px;
+  color:var(--text3);
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+.creator-field input,
+.creator-field select,
+.creator-field textarea{
+  background:var(--bg3);
+  border:1px solid var(--border2);
+  color:var(--text);
+  font-family:var(--mono);
+  font-size:12px;
+  padding:.5rem .7rem;
+  border-radius:5px;
+  outline:none;
+  transition:border-color .2s;
+}
+.creator-field input:focus,
+.creator-field select:focus,
+.creator-field textarea:focus{border-color:var(--cyan)}
+.creator-checkbox-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(180px,1fr));
+  gap:.5rem;
+}
+.creator-checkbox{
+  display:flex;
+  align-items:center;
+  gap:.5rem;
+  padding:.4rem .7rem;
+  background:var(--bg3);
+  border:1px solid var(--border);
+  border-radius:6px;
+  cursor:pointer;
+  transition:all .2s;
+  font-size:11px;
+}
+.creator-checkbox:hover{border-color:var(--border3);background:var(--surface2)}
+.creator-checkbox input{accent-color:var(--cyan);cursor:pointer}
+.creator-btn-row{
+  display:flex;
+  gap:.75rem;
+  margin-top:1rem;
+  flex-wrap:wrap;
+}
+.creator-btn{
+  font-family:var(--font);
+  font-size:14px;
+  letter-spacing:.08em;
+  padding:.6rem 1.5rem;
+  border-radius:6px;
+  border:1px solid;
+  cursor:pointer;
+  transition:all .2s;
+  display:flex;
+  align-items:center;
+  gap:.5rem;
+}
+.creator-btn.primary{
+  background:rgba(0,229,180,.1);
+  border-color:var(--gglow);
+  color:var(--green);
+}
+.creator-btn.primary:hover{background:rgba(0,229,180,.2);box-shadow:0 0 15px var(--gglow)}
+.creator-btn.secondary{
+  background:transparent;
+  border-color:var(--border2);
+  color:var(--text2);
+  font-family:var(--mono);
+  font-size:11px;
+}
+.creator-btn.secondary:hover{border-color:var(--cyan);color:var(--cyan)}
+.creator-btn.danger{
+  background:rgba(255,69,96,.08);
+  border-color:rgba(255,69,96,.3);
+  color:var(--red);
+}
+
+/* Liste des spots personnalisés */
+.custom-spots-list{
+  display:flex;
+  flex-direction:column;
+  gap:.5rem;
+  margin-top:1rem;
+}
+.custom-spot-item{
+  display:flex;
+  align-items:center;
+  gap:.75rem;
+  padding:.75rem 1rem;
+  background:var(--bg2);
+  border:1px solid var(--border);
+  border-radius:8px;
+}
+.custom-spot-info{flex:1}
+.custom-spot-name{
+  font-family:var(--font);
+  font-size:14px;
+  letter-spacing:.04em;
+  color:var(--text);
+}
+.custom-spot-details{
+  font-size:10px;
+  color:var(--text3);
+  margin-top:2px;
+}
+.custom-spot-actions{
+  display:flex;
+  gap:.4rem;
+}
+.spot-action-btn{
+  background:transparent;
+  border:1px solid var(--border);
+  color:var(--text3);
+  padding:.25rem .6rem;
+  border-radius:4px;
+  font-size:10px;
+  cursor:pointer;
+  transition:all .15s;
+}
+.spot-action-btn:hover{border-color:var(--cyan);color:var(--cyan)}
+.spot-action-btn.delete:hover{border-color:var(--red);color:var(--red)}
+  /* ── HEADER ── */
 .hdr{
   padding:1.5rem 0 1rem;
   display:flex;
@@ -1102,6 +1320,20 @@ tbody tr:last-child td{border-bottom:none}
     <span id="ts-sunrise" style="padding:2px 8px;border-radius:10px;font-size:10px;background:rgba(240,165,0,.15);border:1px solid rgba(240,165,0,.3);color:var(--amber);">⏳ Charger prévisions</span>
   </div>
 
+    <!-- ═══════════════════════════════════════════ -->
+  <!-- BARRE D'ONGLETS                              -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="tab-nav">
+    <button class="tab-btn active" onclick="switchTab('accueil')" id="tab-btn-accueil">🏔️ ACCUEIL</button>
+    <button class="tab-btn" onclick="switchTab('creator')" id="tab-btn-creator">🛠️ CRÉATEUR DE SPOT</button>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- ONGLET ACCUEIL - Tout le contenu existant    -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="tab-content active" id="tab-accueil">
+
+  
   <!-- LOAD ROW -->
   <div class="load-row">
     <button class="load-btn" id="fetch-btn" onclick="fetchAll()">⟳ PRÉVISIONS 7 JOURS</button>
@@ -1271,7 +1503,157 @@ tbody tr:last-child td{border-bottom:none}
     </div>
   </div>
 
-</div><!-- /wrap -->
+  </div><!-- /tab-accueil -->
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- ONGLET CRÉATEUR DE SPOT                      -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="tab-content" id="tab-creator">
+    <div class="creator-wrap">
+      <div class="creator-title">🛠️ Créateur de nouveau spot</div>
+      <div class="creator-sub">Crée un spot personnalisé qui sera ajouté automatiquement au dashboard avec scoring météo, courbe de Bislin et checklist détaillée.<br>📏 <strong>Utilise Google Earth</strong> pour obtenir distance et azimut précis.</div>
+
+      <!-- INFOS GÉNÉRALES -->
+      <div class="creator-section">
+        <div class="creator-section-title">📍 INFORMATIONS GÉNÉRALES</div>
+        <div class="creator-grid">
+          <div class="creator-field">
+            <label>Nom du spot</label>
+            <input type="text" id="new-spot-name" placeholder="Ex: Col de Foucille">
+          </div>
+          <div class="creator-field">
+            <label>Cible observée</label>
+            <input type="text" id="new-spot-target" placeholder="Ex: → Mont Blanc">
+          </div>
+          <div class="creator-field">
+            <label>Pays</label>
+            <select id="new-spot-country">
+              <option value="france">🇫🇷 France</option>
+              <option value="tunisie">🇹🇳 Tunisie</option>
+              <option value="italie">🇮🇹 Italie</option>
+              <option value="espagne">🇪🇸 Espagne</option>
+              <option value="maroc">🇲🇦 Maroc</option>
+              <option value="autre">🌍 Autre</option>
+            </select>
+          </div>
+          <div class="creator-field">
+            <label>Couleur (dashboard)</label>
+            <input type="color" id="new-spot-color" value="#38bdf8">
+          </div>
+        </div>
+      </div>
+
+      <!-- OBSERVATEUR -->
+      <div class="creator-section">
+        <div class="creator-section-title">👁️ POINT D'OBSERVATION</div>
+        <div class="creator-grid cols3">
+          <div class="creator-field">
+            <label>Latitude (°)</label>
+            <input type="number" step="0.0001" id="new-obs-lat" placeholder="45.4167">
+          </div>
+          <div class="creator-field">
+            <label>Longitude (°)</label>
+            <input type="number" step="0.0001" id="new-obs-lon" placeholder="4.2167">
+          </div>
+          <div class="creator-field">
+            <label>Altitude (m)</label>
+            <input type="number" id="new-obs-alt" placeholder="1432">
+          </div>
+        </div>
+      </div>
+
+      <!-- CIBLE -->
+      <div class="creator-section">
+        <div class="creator-section-title">🎯 POINT CIBLE</div>
+        <div class="creator-grid cols3">
+          <div class="creator-field">
+            <label>Latitude (°)</label>
+            <input type="number" step="0.0001" id="new-tgt-lat" placeholder="42.655">
+          </div>
+          <div class="creator-field">
+            <label>Longitude (°)</label>
+            <input type="number" step="0.0001" id="new-tgt-lon" placeholder="0.730">
+          </div>
+          <div class="creator-field">
+            <label>Altitude (m)</label>
+            <input type="number" id="new-tgt-alt" placeholder="3143">
+          </div>
+        </div>
+      </div>
+
+      <!-- POINT MILIEU -->
+      <div class="creator-section">
+        <div class="creator-section-title">📍 POINT MILIEU DE TRAJET (pour météo mi-parcours)</div>
+        <div class="creator-grid">
+          <div class="creator-field">
+            <label>Latitude milieu (°)</label>
+            <input type="number" step="0.0001" id="new-mid-lat" placeholder="44.02">
+          </div>
+          <div class="creator-field">
+            <label>Longitude milieu (°)</label>
+            <input type="number" step="0.0001" id="new-mid-lon" placeholder="2.60">
+          </div>
+        </div>
+      </div>
+
+      <!-- DISTANCE + AZIMUT -->
+      <div class="creator-section">
+        <div class="creator-section-title">📏 DISTANCE & AZIMUT (Google Earth)</div>
+        <div class="creator-grid cols3">
+          <div class="creator-field">
+            <label>Distance (km)</label>
+            <input type="number" step="0.1" id="new-dist" placeholder="395">
+          </div>
+          <div class="creator-field">
+            <label>Azimut (°)</label>
+            <input type="text" id="new-azimut" placeholder="221°–236°">
+          </div>
+          <div class="creator-field">
+            <label>Type de trajet</label>
+            <select id="new-type">
+              <option value="montagne_pyrenees">⛰️ Montagne</option>
+              <option value="mediterranee_corse">🌊 Maritime méditerranéen</option>
+              <option value="mediterranee_marin">⛵ Marin côtier (strict)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- PARTICULARITÉS -->
+      <div class="creator-section">
+        <div class="creator-section-title">⚡ PARTICULARITÉS (pour adapter les seuils)</div>
+        <div class="creator-checkbox-grid">
+          <label class="creator-checkbox"><input type="checkbox" id="part-mistral"> Mistral requis</label>
+          <label class="creator-checkbox"><input type="checkbox" id="part-anticyclone"> Anticyclone obligatoire</label>
+          <label class="creator-checkbox"><input type="checkbox" id="part-inversion"> Inversion marine</label>
+          <label class="creator-checkbox"><input type="checkbox" id="part-sst"> SST importante</label>
+          <label class="creator-checkbox"><input type="checkbox" id="part-dust"> Poussières sahariennes</label>
+          <label class="creator-checkbox"><input type="checkbox" id="part-cape"> CAPE à surveiller</label>
+        </div>
+      </div>
+
+      <!-- BOUTONS -->
+      <div class="creator-btn-row">
+        <button class="creator-btn primary" onclick="createSpot()">💾 AJOUTER AU DASHBOARD</button>
+        <button class="creator-btn secondary" onclick="resetCreatorForm()">🔄 Réinitialiser</button>
+        <button class="creator-btn secondary" onclick="exportSpots()">📥 Exporter spots (HTML)</button>
+        <button class="creator-btn secondary" onclick="document.getElementById('import-file').click()">📤 Importer spots</button>
+        <input type="file" id="import-file" accept=".html,.json" style="display:none" onchange="importSpots(event)">
+      </div>
+
+      <!-- LISTE DES SPOTS PERSONNALISÉS -->
+      <div class="creator-section" style="margin-top:1.5rem">
+        <div class="creator-section-title">📋 SPOTS PERSONNALISÉS CRÉÉS</div>
+        <div class="custom-spots-list" id="custom-spots-list">
+          <div style="font-size:11px;color:var(--text3);text-align:center;padding:1rem">Aucun spot créé pour l'instant</div>
+        </div>
+      </div>
+
+    </div>
+  </div><!-- /tab-creator -->
+
+  
+  </div><!-- /wrap -->
 
 <script>
 // ═══════════════════════════════════════════════════
@@ -2076,13 +2458,303 @@ function renderCurveBlock(spot, k_default){
   </div>`;
 }
 
-// INIT
+// ═══════════════════════════════════════════════════
+// CRÉATEUR DE SPOT - Gestion onglets
+// ═══════════════════════════════════════════════════
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + tabId).classList.add('active');
+  document.getElementById('tab-btn-' + tabId).classList.add('active');
+  if (tabId === 'creator') renderCustomSpotsList();
+}
+
+// ═══════════════════════════════════════════════════
+// CRÉATEUR DE SPOT - Génération des seuils par type
+// ═══════════════════════════════════════════════════
+function getCriteriaByType(type, particularites) {
+  const base = {
+    montagne_pyrenees: {
+      cloud_low_elim:20, cloud_low_ok:10, fog_elim:5,
+      cloud_mid_elim:30, cloud_mid_ok:20, cloud_high_ok:15,
+      rh_elim:70, rh_ok:55, rh_exc:35,
+      spread_elim:3, spread_ok:5, spread_exc:12,
+      slp_elim:1015, slp_ok:1020, slp_exc:1030,
+      wind_elim:30, wind_ok:20,
+      vis_ok:30, vis_exc:50, vis_mid_ok:30, vis_mid_exc:50,
+      cape_elim:300, cape_ok:100,
+    },
+    mediterranee_corse: {
+      cloud_low_elim:20, cloud_low_ok:10, fog_elim:5,
+      cloud_mid_elim:30, cloud_mid_ok:20, cloud_high_ok:15,
+      rh_elim:80, rh_ok:65, rh_exc:50,
+      spread_elim:3, spread_ok:5, spread_exc:12,
+      slp_elim:1015, slp_ok:1020, slp_exc:1030,
+      wind_elim:50, wind_ok:35, wind_min:15,
+      vis_ok:30, vis_exc:50,
+      vis_mid_elim:30, vis_mid_ok:50, vis_mid_exc:100,
+    },
+    mediterranee_marin: {
+      cloud_low_elim:15, cloud_low_ok:5, fog_elim:1,
+      cloud_mid_elim:25, cloud_mid_ok:15, cloud_high_ok:10,
+      rh_elim:75, rh_ok:65, rh_exc:50,
+      spread_elim:4, spread_ok:7, spread_exc:14,
+      slp_elim:1015, slp_ok:1020, slp_exc:1028,
+      wind_elim:25, wind_ok:20,
+      vis_ok:30, vis_exc:50,
+      vis_mid_elim:50, vis_mid_ok:100, vis_mid_exc:150,
+    },
+  };
+  const c = JSON.parse(JSON.stringify(base[type] || base.montagne_pyrenees));
+  
+  // Adapter selon particularités
+  if (particularites.anticyclone) { c.slp_elim = 1018; c.slp_ok = 1023; }
+  if (particularites.cape) { c.cape_elim = 200; c.cape_ok = 50; }
+  if (particularites.sst) { c.vis_mid_elim = (c.vis_mid_elim || 30) + 20; }
+  if (particularites.dust) { c.vis_ok = 40; c.vis_exc = 60; }
+  if (particularites.inversion) { c.rh_exc = c.rh_exc - 5; c.spread_exc = c.spread_exc + 2; }
+  
+  return c;
+}
+
+// ═══════════════════════════════════════════════════
+// CRÉATEUR DE SPOT - Créer un nouveau spot
+// ═══════════════════════════════════════════════════
+function createSpot() {
+  const name = document.getElementById('new-spot-name').value.trim();
+  const target = document.getElementById('new-spot-target').value.trim();
+  const country = document.getElementById('new-spot-country').value;
+  const color = document.getElementById('new-spot-color').value;
+  
+  const obsLat = parseFloat(document.getElementById('new-obs-lat').value);
+  const obsLon = parseFloat(document.getElementById('new-obs-lon').value);
+  const obsAlt = parseInt(document.getElementById('new-obs-alt').value);
+  
+  const tgtLat = parseFloat(document.getElementById('new-tgt-lat').value);
+  const tgtLon = parseFloat(document.getElementById('new-tgt-lon').value);
+  const tgtAlt = parseInt(document.getElementById('new-tgt-alt').value);
+  
+  const midLat = parseFloat(document.getElementById('new-mid-lat').value);
+  const midLon = parseFloat(document.getElementById('new-mid-lon').value);
+  
+  const distance = parseFloat(document.getElementById('new-dist').value);
+  const azimut = document.getElementById('new-azimut').value.trim();
+  const type = document.getElementById('new-type').value;
+  
+  const particularites = {
+    mistral: document.getElementById('part-mistral').checked,
+    anticyclone: document.getElementById('part-anticyclone').checked,
+    inversion: document.getElementById('part-inversion').checked,
+    sst: document.getElementById('part-sst').checked,
+    dust: document.getElementById('part-dust').checked,
+    cape: document.getElementById('part-cape').checked,
+  };
+  
+  // Validation
+  if (!name || !target || isNaN(obsLat) || isNaN(obsLon) || isNaN(obsAlt) || 
+      isNaN(tgtLat) || isNaN(tgtLon) || isNaN(tgtAlt) || 
+      isNaN(midLat) || isNaN(midLon) || isNaN(distance) || !azimut) {
+    alert('⚠️ Remplis TOUS les champs obligatoires !');
+    return;
+  }
+  
+  // Créer l'objet spot
+  const id = 'custom_' + Date.now();
+  const newSpot = {
+    id, name, target, color, country,
+    obs: { lat: obsLat, lon: obsLon, alt: obsAlt },
+    mid: { lat: midLat, lon: midLon },
+    tgt: { lat: tgtLat, lon: tgtLon, alt: tgtAlt },
+    dist_km: distance,
+    azimut: azimut,
+    type: type,
+    criteria: getCriteriaByType(type, particularites),
+    particularites: particularites,
+    custom: true,
+  };
+  
+  // Ajouter à la liste globale
+  SPOTS.push(newSpot);
+  
+  // Sauvegarder dans localStorage
+  saveCustomSpots();
+  
+  // Récupérer les prévisions pour ce nouveau spot
+  fetchSpot(newSpot).then(daily => {
+    forecasts[newSpot.id] = daily;
+    renderMatrix(false);
+    renderCards(false);
+    renderBanner();
+    renderCustomSpotsList();
+  }).catch(err => {
+    log(`❌ Erreur fetch ${newSpot.name}: ${err}`, 'err');
+  });
+  
+  // Reset form
+  resetCreatorForm();
+  
+  // Retour à l'accueil
+  switchTab('accueil');
+  
+  alert(`✅ Spot "${name}" créé avec succès !\nLes prévisions météo sont en cours de chargement...`);
+}
+
+// ═══════════════════════════════════════════════════
+// CRÉATEUR DE SPOT - localStorage
+// ═══════════════════════════════════════════════════
+function saveCustomSpots() {
+  const customSpots = SPOTS.filter(s => s.custom);
+  try {
+    localStorage.setItem('vld_custom_spots', JSON.stringify(customSpots));
+  } catch(e) {
+    console.warn('Impossible de sauvegarder les spots personnalisés');
+  }
+}
+
+function loadCustomSpots() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('vld_custom_spots') || '[]');
+    saved.forEach(spot => {
+      if (!SPOTS.find(s => s.id === spot.id)) {
+        SPOTS.push(spot);
+      }
+    });
+    return saved.length;
+  } catch(e) {
+    return 0;
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// CRÉATEUR DE SPOT - Gestion liste
+// ═══════════════════════════════════════════════════
+function renderCustomSpotsList() {
+  const customSpots = SPOTS.filter(s => s.custom);
+  const list = document.getElementById('custom-spots-list');
+  if (!customSpots.length) {
+    list.innerHTML = '<div style="font-size:11px;color:var(--text3);text-align:center;padding:1rem">Aucun spot créé pour l\'instant</div>';
+    return;
+  }
+  list.innerHTML = customSpots.map(s => `
+    <div class="custom-spot-item">
+      <div class="custom-spot-info">
+        <div class="custom-spot-name" style="color:${s.color}">${s.name} ${s.target}</div>
+        <div class="custom-spot-details">
+          📏 ${s.dist_km} km · 🧭 ${s.azimut} · ⬆️ ${s.obs.alt}m → ${s.tgt.alt}m · 
+          ${s.country === 'france' ? '🇫🇷' : s.country === 'tunisie' ? '🇹🇳' : s.country === 'italie' ? '🇮🇹' : s.country === 'espagne' ? '🇪🇸' : s.country === 'maroc' ? '🇲🇦' : '🌍'} ${s.country}
+        </div>
+      </div>
+      <div class="custom-spot-actions">
+        <button class="spot-action-btn delete" onclick="deleteCustomSpot('${s.id}')">🗑️ Supprimer</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function deleteCustomSpot(id) {
+  if (!confirm('Supprimer ce spot personnalisé ?')) return;
+  const idx = SPOTS.findIndex(s => s.id === id);
+  if (idx >= 0) SPOTS.splice(idx, 1);
+  delete forecasts[id];
+  saveCustomSpots();
+  renderMatrix(false);
+  renderCards(false);
+  renderBanner();
+  renderCustomSpotsList();
+}
+
+// ═══════════════════════════════════════════════════
+// CRÉATEUR DE SPOT - Reset form
+// ═══════════════════════════════════════════════════
+function resetCreatorForm() {
+  document.getElementById('new-spot-name').value = '';
+  document.getElementById('new-spot-target').value = '';
+  document.getElementById('new-spot-color').value = '#38bdf8';
+  document.getElementById('new-obs-lat').value = '';
+  document.getElementById('new-obs-lon').value = '';
+  document.getElementById('new-obs-alt').value = '';
+  document.getElementById('new-tgt-lat').value = '';
+  document.getElementById('new-tgt-lon').value = '';
+  document.getElementById('new-tgt-alt').value = '';
+  document.getElementById('new-mid-lat').value = '';
+  document.getElementById('new-mid-lon').value = '';
+  document.getElementById('new-dist').value = '';
+  document.getElementById('new-azimut').value = '';
+  document.querySelectorAll('.creator-checkbox input').forEach(c => c.checked = false);
+}
+
+// ═══════════════════════════════════════════════════
+// CRÉATEUR DE SPOT - Export / Import HTML
+// ═══════════════════════════════════════════════════
+function exportSpots() {
+  const customSpots = SPOTS.filter(s => s.custom);
+  if (!customSpots.length) {
+    alert('Aucun spot personnalisé à exporter');
+    return;
+  }
+  const data = JSON.stringify(customSpots, null, 2);
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>VLD Hub - Export Spots</title></head>
+<body><script type="application/json" id="vld-spots-data">${data}<\/script>
+<h1>VLD Hub - Spots exportés</h1>
+<p>${customSpots.length} spot(s) sauvegardé(s)</p>
+<pre>${data}</pre>
+</body></html>`;
+  const blob = new Blob([html], {type: 'text/html'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `vld-spots-${new Date().toISOString().split('T')[0]}.html`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importSpots(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const content = e.target.result;
+      let data;
+      // Si c'est un fichier HTML exporté
+      const match = content.match(/<script[^>]*id="vld-spots-data"[^>]*>([\s\S]*?)<\/script>/);
+      if (match) {
+        data = JSON.parse(match[1]);
+      } else {
+        // Sinon tenter du JSON direct
+        data = JSON.parse(content);
+      }
+      if (!Array.isArray(data)) throw new Error('Format invalide');
+      let added = 0;
+      data.forEach(spot => {
+        if (spot.id && !SPOTS.find(s => s.id === spot.id)) {
+          SPOTS.push(spot);
+          added++;
+        }
+      });
+      saveCustomSpots();
+      renderCustomSpotsList();
+      alert(`✅ ${added} spot(s) importé(s) !\nClique "⟳ PRÉVISIONS 7 JOURS" pour charger la météo.`);
+    } catch(err) {
+      alert('❌ Erreur import: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+  
+  // INIT
 setInterval(()=>{
   document.getElementById('clock').textContent=new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
 },1000);
 document.getElementById('clock').textContent=new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
 document.getElementById('date-now').textContent=new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).toUpperCase();
 loadCfg();
+  const customCount = loadCustomSpots();
+if (customCount > 0) {
+  setStatus(`Prêt · ${SPOTS.length} spots chargés (dont ${customCount} personnalisé${customCount>1?'s':''})`);
+}
 renderMatrix(false);
 renderCards(false);
 
