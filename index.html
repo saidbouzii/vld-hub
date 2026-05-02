@@ -1085,6 +1085,23 @@ tbody tr:last-child td{border-bottom:none}
     </div>
   </div>
 
+    <!-- TIME SLICER -->
+  <div style="background:linear-gradient(135deg,rgba(56,189,248,.08),rgba(0,229,180,.05));border:1px solid rgba(56,189,248,.25);border-radius:12px;padding:.75rem 1rem;margin:.75rem 0;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
+    <span style="font-family:var(--font);font-size:13px;letter-spacing:.1em;color:var(--cyan);white-space:nowrap;">🌅 FENÊTRE HORAIRE</span>
+    <select id="time-window" onchange="if(Object.keys(forecasts).length>0){renderMatrix(false);renderCards(false);renderBanner();}" style="font-family:var(--font);font-size:14px;background:var(--surface2);border:1px solid var(--border3);color:var(--cyan);padding:.4rem .8rem;border-radius:8px;cursor:pointer;outline:none;flex:1;min-width:180px;">
+      <option value="avg">Moyenne matin (5h-11h)</option>
+      <option value="0">🌅 Lever soleil exact</option>
+      <option value="0.5">🌅 +30 min</option>
+      <option value="1" selected>🌅 +1h ⭐ (Pic mirage)</option>
+      <option value="1.5">🌅 +1h30</option>
+      <option value="2">🌅 +2h</option>
+      <option value="3">🌅 +3h</option>
+      <option value="4">🌅 +4h</option>
+      <option value="5">🌅 +5h</option>
+    </select>
+    <span id="ts-sunrise" style="padding:2px 8px;border-radius:10px;font-size:10px;background:rgba(240,165,0,.15);border:1px solid rgba(240,165,0,.3);color:var(--amber);">⏳ Charger prévisions</span>
+  </div>
+
   <!-- LOAD ROW -->
   <div class="load-row">
     <button class="load-btn" id="fetch-btn" onclick="fetchAll()">⟳ PRÉVISIONS 7 JOURS</button>
@@ -1486,7 +1503,7 @@ async function fetchSpot(spot) {
     'precipitation_probability','fog',
     'temperature_850hPa','temperature_700hPa','geopotential_height_850hPa','geopotential_height_700hPa'
   ].join(',');
-  const base = `https://api.open-meteo.com/v1/forecast?forecast_days=7&timezone=auto`;
+   const base = `https://api.open-meteo.com/v1/forecast?forecast_days=7&daily=sunrise,sunset&timezone=auto`;
   const urlObs = `${base}&latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=${params}`;
   const urlMid = `${base}&latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=visibility,cloud_cover_low,relative_humidity_2m`;
   const [r1,r2] = await Promise.all([fetch(urlObs),fetch(urlMid)]);
@@ -1530,7 +1547,32 @@ async function fetchSpot(spot) {
       temp, dTdh, k_bislin, lift_m,
     };
     const dt=new Date(); dt.setDate(dt.getDate()+day);
-    daily.push({ date:dt, day, ...scoreDay(spot,h), raw:h });
+        // TIME SLICER - Sunrise & scoring par heure
+    const sunriseStr = d1.daily?.sunrise?.[day];
+    const sunriseHour = sunriseStr ? new Date(sunriseStr).getHours() + new Date(sunriseStr).getMinutes()/60 : 7;
+    const hourlyScores = {};
+    const timeOffsets = [0, 0.5, 1, 1.5, 2, 3, 4, 5];
+    for (const offset of timeOffsets) {
+      const hourIdx = day*24 + Math.floor(sunriseHour + offset);
+      const tH = d1.hourly?.temperature_2m?.[hourIdx];
+      const dH = d1.hourly?.dew_point_2m?.[hourIdx];
+      const hData = {
+        cloud_low: d1.hourly?.cloud_cover_low?.[hourIdx] ?? h.cloud_low,
+        cloud_mid: d1.hourly?.cloud_cover_mid?.[hourIdx] ?? h.cloud_mid,
+        cloud_high: d1.hourly?.cloud_cover_high?.[hourIdx] ?? h.cloud_high,
+        fog: d1.hourly?.fog?.[hourIdx] ?? h.fog,
+        rh: d1.hourly?.relative_humidity_2m?.[hourIdx] ?? h.rh,
+        slp: d1.hourly?.surface_pressure?.[hourIdx] ?? h.slp,
+        wind: d1.hourly?.wind_speed_10m?.[hourIdx] ?? h.wind,
+        vis: (d1.hourly?.visibility?.[hourIdx] ?? 0)/1000 || h.vis,
+        precip: d1.hourly?.precipitation_probability?.[hourIdx] ?? h.precip,
+        vis_mid: (d2.hourly?.visibility?.[hourIdx] ?? 0)/1000 || h.vis_mid,
+        spread: (tH!=null && dH!=null) ? tH-dH : h.spread,
+      };
+      hourlyScores[offset] = scoreDay(spot, hData).score;
+    }
+    
+    daily.push({ date:dt, day, sunriseHour, sunriseStr, hourlyScores, ...scoreDay(spot,h), raw:h });;
   }
   return daily;
 }
@@ -1573,16 +1615,33 @@ function verdict(sc){
 }
 function scoreColor(sc){ return sc>=65?'var(--green)':sc>=40?'var(--amber)':'var(--red)'; }
 
+function getScore(fc, di) {
+  const tw = document.getElementById('time-window')?.value || '1';
+  if (tw === 'avg') return fc[di].score;
+  return fc[di].hourlyScores?.[parseFloat(tw)] ?? fc[di].score;
+}
+
 function renderMatrix(loading) {
   const days=getDays();
+  const tw = document.getElementById('time-window')?.value || '1';
+  const twLabels = {'avg':'5-11h','0':'Lever','0.5':'+30m','1':'+1h','1.5':'+1h30','2':'+2h','3':'+3h','4':'+4h','5':'+5h'};
+  const twLbl = twLabels[tw] || '+1h';
+  
+  const firstFc = Object.values(forecasts).find(f => f && f[0]?.sunriseStr);
+  if (firstFc && firstFc[0]?.sunriseStr) {
+    const sr = new Date(firstFc[0].sunriseStr);
+    const el = document.getElementById('ts-sunrise');
+    if (el) el.textContent = `🌅 Lever aujourd'hui: ${sr.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}`;
+  }
+  
   document.getElementById('matrix-head').innerHTML=`<tr>
     <th class="spot-col">Spot</th>
-    ${days.map((d,i)=>`<th class="${i===0?'today-col':''}">${dayLabel(d)}</th>`).join('')}
+    ${days.map((d,i)=>`<th class="${i===0?'today-col':''}">${dayLabel(d)}<br><small style="color:var(--cyan);font-size:8px">${twLbl}</small></th>`).join('')}
   </tr>`;
   document.getElementById('matrix-body').innerHTML=SPOTS.map(s=>{
     const fc=forecasts[s.id];
     let bestDay=-1,bestSc=-1;
-    if(fc) fc.forEach((d,i)=>{if(d.score>bestSc){bestSc=d.score;bestDay=i;}});
+    if(fc) fc.forEach((d,i)=>{const sc=getScore(fc,i); if(sc>bestSc){bestSc=sc;bestDay=i;}});
     return `<tr>
       <td class="spot-nm">
         <span class="snm" style="color:${s.color}">${s.name}</span>
@@ -1591,7 +1650,7 @@ function renderMatrix(loading) {
       ${days.map((_,di)=>{
         if(loading) return `<td><div class="dcell loading">…</div></td>`;
         if(!fc) return `<td><div class="dcell empty">—</div></td>`;
-        const sc=fc[di].score, isBest=di===bestDay;
+        const sc=getScore(fc,di), isBest=di===bestDay;
         return `<td><div class="dcell ${cellClass(sc)} ${isBest?'best-day':''}">${sc}</div></td>`;
       }).join('')}
     </tr>`;
@@ -1603,14 +1662,14 @@ function renderBanner() {
   const days=getDays();
   const entries=[];
   days.forEach((d,di)=>{
-    const hits=SPOTS.filter(s=>forecasts[s.id]&&forecasts[s.id][di].score>=threshold);
+    const hits=SPOTS.filter(s=>forecasts[s.id]&&getScore(forecasts[s.id],di)>=threshold);
     if(hits.length) entries.push({date:d,di,hits});
   });
   const banner=document.getElementById('best-banner');
   if(!entries.length){banner.style.display='none';return;}
   banner.style.display='block';
   document.getElementById('bb-entries').innerHTML=entries.map(e=>
-    `<div class="bb-entry"><strong>${fullLabel(e.date)}</strong> — ${e.hits.map(s=>`${s.name} <strong>${forecasts[s.id][e.di].score}/100</strong>`).join(' · ')}</div>`
+    `<div class="bb-entry"><strong>${fullLabel(e.date)}</strong> — ${e.hits.map(s=>`${s.name} <strong>${getScore(forecasts[s.id],e.di)}/100</strong>`).join(' · ')}</div>`
   ).join('');
 }
 
@@ -1619,7 +1678,7 @@ function renderCards(loading) {
   document.getElementById('spot-cards').innerHTML=SPOTS.map(s=>{
     const fc=forecasts[s.id];
     let bestSc=0,bestDayLabel='';
-    if(fc){let bi=0;fc.forEach((d,i)=>{if(d.score>bestSc){bestSc=d.score;bi=i;}});bestDayLabel=fullLabel(days[bi]);}
+       if(fc){let bi=0;fc.forEach((d,i)=>{const sc=getScore(fc,i); if(sc>bestSc){bestSc=sc;bi=i;}});bestDayLabel=fullLabel(days[bi]);}
     const body=loading
       ?`<div class="scard-body" id="sdb-${s.id}"><div style="padding:1rem;color:var(--text3);font-size:10px;font-family:var(--mono)">Chargement…</div></div>`
       :!fc
