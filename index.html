@@ -2065,6 +2065,14 @@ function scoreColor(sc){ return sc>=65?'var(--green)':sc>=40?'var(--amber)':'var
 function getScore(fc, di) {
   const tw = document.getElementById('time-window')?.value || '1';
   if (tw === 'avg') return fc[di].score;
+  if (tw === 'now') {
+    const now = new Date();
+    const offsetH = now.getHours() + now.getMinutes()/60;
+    const sunriseH = fc[di]?.sunriseHour ?? 7;
+    const offsets = [0,0.5,1,1.5,2,3,4,5];
+    const closest = offsets.reduce((a,b) => Math.abs((sunriseH+b)-offsetH) < Math.abs((sunriseH+a)-offsetH) ? b : a);
+    return fc[di].hourlyScores?.[closest] ?? fc[di].score;
+  }
   return fc[di].hourlyScores?.[parseFloat(tw)] ?? fc[di].score;
 }
 
