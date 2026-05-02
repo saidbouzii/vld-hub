@@ -1879,10 +1879,10 @@ function scoreDay(spot, h) {
 // FETCH
 // ═══════════════════════════════════════════════════
 async function fetchSpot(spot) {
-  const params = [
+ const params = [
   'visibility','wind_speed_10m','cloud_cover_low','cloud_cover_mid','cloud_cover_high',
   'relative_humidity_2m','dew_point_2m','temperature_2m','surface_pressure',
-  'precipitation_probability','fog',
+  'precipitation_probability',
   'temperature_850hPa','temperature_700hPa','geopotential_height_850hPa','geopotential_height_700hPa'
 ].join(',');
    const base = `https://api.open-meteo.com/v1/forecast?forecast_days=7&daily=sunrise,sunset&timezone=auto`;
