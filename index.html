@@ -1371,6 +1371,67 @@ tbody tr:last-child td{border-bottom:none}
   ⊞ VUE SEMAINE — SCORE /100 PAR MATIN
   <span style="font-size:13px;color:var(--cyan);margin-left:.5rem;">ℹ︎</span>
 </div>
+    <div id="score-legend-panel" style="
+  display:none;
+  background:#fff;
+  color:#111;
+  border-radius:12px;
+  padding:1.1rem 1.3rem;
+  margin-bottom:.75rem;
+  border:1px solid #ddd;
+  box-shadow:0 4px 24px rgba(0,0,0,.18);
+  font-family:'DM Mono',monospace;
+  font-size:12px;
+  line-height:1.7;
+">
+  <div style="font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:.08em;margin-bottom:.75rem;color:#111;">
+    🔭 GRILLE DE SCORE /100
+  </div>
+  <table style="width:100%;border-collapse:collapse;">
+    <thead>
+      <tr style="border-bottom:2px solid #eee;text-align:left;">
+        <th style="padding:.35rem .6rem;color:#555;font-weight:500;">Score</th>
+        <th style="padding:.35rem .6rem;color:#555;font-weight:500;">Verdict</th>
+        <th style="padding:.35rem .6rem;color:#555;font-weight:500;">Conditions typiques</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-bottom:1px solid #f0f0f0;">
+        <td style="padding:.35rem .6rem;font-family:'Bebas Neue',sans-serif;font-size:16px;color:#00c49a;">90–100</td>
+        <td style="padding:.35rem .6rem;">⭐ Exceptionnel</td>
+        <td style="padding:.35rem .6rem;color:#444;">Ciel limpide, vent &lt;15 km/h, visibilité max, inversion marquée — conditions mirage probables</td>
+      </tr>
+      <tr style="border-bottom:1px solid #f0f0f0;background:#fafafa;">
+        <td style="padding:.35rem .6rem;font-family:'Bebas Neue',sans-serif;font-size:16px;color:#4ade80;">75–89</td>
+        <td style="padding:.35rem .6rem;">🟢 Bon</td>
+        <td style="padding:.35rem .6rem;color:#444;">Nuages hauts seulement, vent modéré, bonne visibilité — observation VLD réaliste</td>
+      </tr>
+      <tr style="border-bottom:1px solid #f0f0f0;">
+        <td style="padding:.35rem .6rem;font-family:'Bebas Neue',sans-serif;font-size:16px;color:#f0a500;">55–74</td>
+        <td style="padding:.35rem .6rem;">🟡 Correct</td>
+        <td style="padding:.35rem .6rem;color:#444;">Quelques nuages moyens ou humidité élevée — tentative possible, résultat incertain</td>
+      </tr>
+      <tr style="border-bottom:1px solid #f0f0f0;background:#fafafa;">
+        <td style="padding:.35rem .6rem;font-family:'Bebas Neue',sans-serif;font-size:16px;color:#fb923c;">35–54</td>
+        <td style="padding:.35rem .6rem;">🟠 Médiocre</td>
+        <td style="padding:.35rem .6rem;color:#444;">Nuages bas présents, vent ou humidité pénalisants — VLD compromise</td>
+      </tr>
+      <tr style="border-bottom:1px solid #f0f0f0;">
+        <td style="padding:.35rem .6rem;font-family:'Bebas Neue',sans-serif;font-size:16px;color:#ff4560;">15–34</td>
+        <td style="padding:.35rem .6rem;">🔴 Mauvais</td>
+        <td style="padding:.35rem .6rem;color:#444;">Couverture nuageuse dense, vent fort ou précipitations — observation improbable</td>
+      </tr>
+      <tr style="background:#fafafa;">
+        <td style="padding:.35rem .6rem;font-family:'Bebas Neue',sans-serif;font-size:16px;color:#888;">0–14</td>
+        <td style="padding:.35rem .6rem;">⛔ Éliminé</td>
+        <td style="padding:.35rem .6rem;color:#444;">Critère éliminatoire déclenché : brouillard, nuages bas &gt;20%, vent &gt;50 km/h, visibilité nulle</td>
+      </tr>
+    </tbody>
+  </table>
+  <div style="margin-top:.75rem;padding-top:.6rem;border-top:1px solid #eee;font-size:10px;color:#888;">
+    ⚠️ Les critères éliminatoires (<span style="color:#ff4560;">élim</span>) annulent le score indépendamment des autres paramètres. Un score de 0 signifie qu'au moins un seuil rédhibitoire est dépassé.
+  </div>
+</div>
   <div class="matrix-wrap"><div class="matrix-scroll">
     <table id="matrix-table">
       <thead id="matrix-head"></thead>
@@ -2827,7 +2888,16 @@ if (isIos) {
     banner.classList.remove('hidden');
   }
 }
+
+  // Légende score — toggle au clic sur le titre
+document.getElementById('score-legend-trigger').addEventListener('click', function() {
+  const p = document.getElementById('score-legend-panel');
+  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+});
+  
 </script>
+
+
 
 <!-- OVERLAY ZOOM COURBE -->
 <div id="curve-overlay" onclick="closeCurveOverlay(event)">
