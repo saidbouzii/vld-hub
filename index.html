@@ -69,26 +69,26 @@ if ('serviceWorker' in navigator) {
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=Crimson+Pro:ital,wght@0,300;0,600;1,300&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#050810;
+  --bg:#040810;
   --bg2:#080d1a;
   --bg3:#0d1525;
   --surface:#0f1b2d;
   --surface2:#162237;
-  --border:rgba(100,160,220,.1);
-  --border2:rgba(100,160,220,.2);
-  --border3:rgba(100,160,220,.35);
-  --text:#c8dff0;
-  --text2:#6a9ab8;
-  --text3:#304a60;
+  --border:rgba(100,160,220,.15);
+  --border2:rgba(100,160,220,.28);
+  --border3:rgba(100,160,220,.45);
+  --text:#eaf4ff;
+  --text2:#93c5e8;
+  --text3:#5a85a8;
   --green:#00e5b4;
-  --gdim:rgba(0,229,180,.07);
-  --gglow:rgba(0,229,180,.3);
-  --amber:#f0a500;
-  --adim:rgba(240,165,0,.08);
-  --red:#ff4560;
-  --rdim:rgba(255,69,96,.08);
+  --gdim:rgba(0,229,180,.09);
+  --gglow:rgba(0,229,180,.35);
+  --amber:#f5b800;
+  --adim:rgba(245,184,0,.09);
+  --red:#ff4d6a;
+  --rdim:rgba(255,77,106,.09);
   --cyan:#38bdf8;
-  --cglow:rgba(56,189,248,.25);
+  --cglow:rgba(56,189,248,.3);
   --gold:#e8c97a;
   --font:'Bebas Neue',sans-serif;
   --mono:'DM Mono',monospace;
@@ -140,7 +140,7 @@ body{
   margin-left:auto;
 }
 .k-sub{
-  font-size:9px;
+  font-size:15px;
   color:var(--text3);
   margin-left:auto;
   font-family:var(--mono);
@@ -193,7 +193,7 @@ body{
 .bsl-verdict{
   text-align:center;
   font-family:var(--font);
-  font-size:13px;
+  font-size:16px;
   letter-spacing:.08em;
   margin-top:.75rem;
   padding:.5rem;
@@ -510,7 +510,7 @@ body{
   white-space:nowrap;
 }
 #install-close{
-  font-size:14px;
+  font-size:17px;
   color:var(--text3);
   background:none;
   border:none;
@@ -1229,7 +1229,7 @@ tbody tr:last-child td{border-bottom:none}
   padding:.6rem;
   max-height:80px;
   overflow-y:auto;
-  font-size:8.5px;
+  font-size:12px;
   color:var(--text3);
   line-height:2;
   display:none;
@@ -2018,7 +2018,8 @@ function renderMatrix(loading) {
   
   document.getElementById('matrix-head').innerHTML=`<tr>
     <th class="spot-col">Spot</th>
-    ${days.map((d,i)=>`<th class="${i===0?'today-col':''}">${dayLabel(d)}<br><small style="color:var(--cyan);font-size:8px">${twLbl}</small></th>`).join('')}
+    ${days.map((d,i)=>`<th class="${i===0?'today-col':''}">${dayLabel(d)}<br><small style="color:var(--cyan);font-size:11
+    px">${twLbl}</small></th>`).join('')}
   </tr>`;
   document.getElementById('matrix-body').innerHTML=SPOTS.map(s=>{
     const fc=forecasts[s.id];
@@ -2062,7 +2063,7 @@ function renderCards(loading) {
     let bestSc=0,bestDayLabel='';
        if(fc){let bi=0;fc.forEach((d,i)=>{const sc=getScore(fc,i); if(sc>bestSc){bestSc=sc;bi=i;}});bestDayLabel=fullLabel(days[bi]);}
     const body=loading
-      ?`<div class="scard-body" id="sdb-${s.id}"><div style="padding:1rem;color:var(--text3);font-size:10px;font-family:var(--mono)">Chargement…</div></div>`
+      ?`<div class="scard-body" id="sdb-${s.id}"><div style="padding:1rem;color:var(--text3);font-size:13px;font-family:var(--mono)">Chargement…</div></div>`
       :!fc
       ?`<div class="scard-body" id="sdb-${s.id}"><div style="padding:1rem;color:var(--red);font-size:10px">Erreur</div></div>`
       :`<div class="scard-body" id="sdb-${s.id}">
@@ -2632,7 +2633,7 @@ function renderCustomSpotsList() {
   const customSpots = SPOTS.filter(s => s.custom);
   const list = document.getElementById('custom-spots-list');
   if (!customSpots.length) {
-    list.innerHTML = '<div style="font-size:11px;color:var(--text3);text-align:center;padding:1rem">Aucun spot créé pour l\'instant</div>';
+    list.innerHTML = '<div style="font-size:14px;color:var(--text3);text-align:center;padding:1rem">Aucun spot créé pour l\'instant</div>';
     return;
   }
   list.innerHTML = customSpots.map(s => `
