@@ -690,6 +690,118 @@ tbody tr:hover td{background:rgba(56,189,248,.03)}
   .scard-name{font-size:18px}
 }
 
+/* ── JOURNAL DE BORD ── */
+.journal-wrap{margin-top:1rem}
+.journal-form{
+  background:var(--surface);border:1px solid var(--border2);
+  border-radius:14px;padding:1.25rem 1.5rem;margin-bottom:1.25rem;
+  box-shadow:var(--shadow-md),var(--inset);
+}
+.journal-form-title{
+  font-family:var(--font);font-size:18px;letter-spacing:.08em;
+  color:var(--cyan);margin-bottom:1rem;
+  display:flex;align-items:center;gap:.5rem;
+}
+.journal-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem}
+.journal-grid.cols3{grid-template-columns:1fr 1fr 1fr}
+.journal-field{display:flex;flex-direction:column;gap:4px}
+.journal-field label{font-size:10px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;font-weight:600}
+.journal-field input,.journal-field select,.journal-field textarea{
+  background:var(--bg3);border:1px solid var(--border2);color:var(--text);
+  font-family:var(--mono);font-size:12px;padding:.5rem .7rem;border-radius:8px;
+  outline:none;transition:all .2s;box-shadow:inset 0 2px 4px rgba(0,0,0,.3);
+  width:100%;
+}
+.journal-field input:focus,.journal-field select:focus,.journal-field textarea:focus{
+  border-color:var(--cyan);box-shadow:inset 0 2px 4px rgba(0,0,0,.3),0 0 0 2px rgba(56,189,248,.1)
+}
+.journal-field textarea{min-height:80px;resize:vertical;line-height:1.6}
+.journal-photo-preview{
+  width:100%;max-height:180px;object-fit:cover;
+  border-radius:8px;margin-top:.5rem;display:none;
+  border:1px solid var(--border2);
+}
+.journal-meteo-auto{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:.4rem;
+  margin-bottom:.75rem;
+}
+.journal-meteo-pill{
+  background:var(--bg3);border:1px solid var(--border);border-radius:8px;
+  padding:.4rem .6rem;font-size:10px;font-family:var(--mono);
+  display:flex;flex-direction:column;gap:2px;
+  box-shadow:inset 0 1px 3px rgba(0,0,0,.3);
+}
+.journal-meteo-pill span:first-child{color:var(--text3);font-size:9px;text-transform:uppercase;letter-spacing:.06em}
+.journal-meteo-pill span:last-child{color:var(--text);font-weight:500}
+.journal-btn-row{display:flex;gap:.75rem;flex-wrap:wrap;margin-top:.75rem}
+.journal-btn{
+  font-family:var(--font);font-size:14px;letter-spacing:.08em;
+  padding:.55rem 1.4rem;border-radius:8px;border:1px solid;
+  cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:.5rem;
+  box-shadow:var(--shadow-sm),var(--inset);
+}
+.journal-btn.primary{
+  background:linear-gradient(180deg,rgba(34,197,94,.18),rgba(34,197,94,.08));
+  border-color:var(--gglow);color:var(--green);
+}
+.journal-btn.primary:hover{background:linear-gradient(180deg,rgba(34,197,94,.28),rgba(34,197,94,.14));transform:translateY(-1px);box-shadow:0 0 20px rgba(34,197,94,.2),var(--inset)}
+.journal-btn.secondary{
+  background:linear-gradient(180deg,rgba(56,189,248,.12),rgba(56,189,248,.05));
+  border-color:var(--border3);color:var(--cyan);
+}
+.journal-btn.secondary:hover{background:linear-gradient(180deg,rgba(56,189,248,.2),rgba(56,189,248,.1));transform:translateY(-1px)}
+.journal-btn.danger{background:transparent;border-color:rgba(239,68,68,.3);color:var(--red);font-family:var(--mono);font-size:11px}
+.journal-entries{display:flex;flex-direction:column;gap:.75rem}
+.journal-entry{
+  background:var(--surface);border:1px solid var(--border2);
+  border-radius:14px;overflow:hidden;
+  box-shadow:var(--shadow-md),var(--inset);
+  transition:all .3s;
+}
+.journal-entry:hover{border-color:var(--border3);box-shadow:var(--shadow-lg),var(--inset)}
+.journal-entry-hdr{
+  padding:.85rem 1.2rem;display:flex;align-items:center;gap:.75rem;
+  cursor:pointer;transition:background .2s;
+  background:linear-gradient(180deg,rgba(255,255,255,.03),transparent);
+}
+.journal-entry-hdr:hover{background:linear-gradient(180deg,rgba(56,189,248,.05),transparent)}
+.journal-entry-date{font-family:var(--font);font-size:16px;letter-spacing:.06em;color:var(--cyan)}
+.journal-entry-spot{font-family:var(--font);font-size:14px;color:var(--text);flex:1}
+.journal-entry-score{
+  font-family:var(--font);font-size:22px;letter-spacing:.04em;
+  text-shadow:0 0 15px currentColor;
+}
+.journal-entry-tags{display:flex;gap:.35rem;flex-wrap:wrap;margin-top:.25rem}
+.journal-tag{
+  font-size:9px;padding:2px 8px;border-radius:10px;
+  background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.2);
+  color:var(--cyan);font-family:var(--mono);
+}
+.journal-entry-body{
+  display:none;padding:.75rem 1.2rem 1rem;
+  border-top:1px solid var(--border);background:var(--bg2);
+}
+.journal-entry-body.open{display:block}
+.journal-entry-photo{
+  width:100%;max-height:300px;object-fit:cover;
+  border-radius:10px;margin-bottom:.75rem;
+  border:1px solid var(--border2);
+}
+.journal-entry-text{
+  font-size:12px;color:var(--text2);line-height:1.8;
+  font-family:var(--mono);white-space:pre-wrap;margin-bottom:.75rem;
+}
+.journal-entry-meteo{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:.35rem;
+  margin-bottom:.75rem;
+}
+.journal-entry-actions{display:flex;gap:.5rem;justify-content:flex-end}
+.journal-empty{
+  text-align:center;padding:3rem 1rem;color:var(--text3);
+  font-family:var(--mono);font-size:12px;line-height:2;
+}
+.journal-io-row{display:flex;gap:.75rem;margin-bottom:1rem;flex-wrap:wrap}
+
 </style>
 </head>
 <body>
@@ -764,6 +876,7 @@ tbody tr:hover td{background:rgba(56,189,248,.03)}
   <div class="tab-nav">
     <button class="tab-btn active" onclick="switchTab('accueil')" id="tab-btn-accueil">🏔️ ACCUEIL</button>
     <button class="tab-btn" onclick="switchTab('creator')" id="tab-btn-creator">🛠️ CRÉATEUR DE SPOT</button>
+    <button class="tab-btn" onclick="switchTab('journal')" id="tab-btn-journal">📖 JOURNAL</button>
   </div>
 
   <!-- ═══════════════════════════════════════════ -->
@@ -1153,6 +1266,87 @@ tbody tr:hover td{background:rgba(56,189,248,.03)}
 
     </div>
   </div><!-- /tab-creator -->
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- ONGLET JOURNAL DE BORD                      -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="tab-content" id="tab-journal">
+    <div class="journal-wrap">
+
+      <!-- FORMULAIRE NOUVELLE ENTRÉE -->
+      <div class="journal-form">
+        <div class="journal-form-title">✏️ NOUVELLE OBSERVATION</div>
+
+        <div class="journal-grid cols3">
+          <div class="journal-field">
+            <label>📅 Date</label>
+            <input type="datetime-local" id="jnl-date">
+          </div>
+          <div class="journal-field">
+            <label>📍 Spot</label>
+            <select id="jnl-spot">
+              <option value="">-- Choisir un spot --</option>
+            </select>
+          </div>
+          <div class="journal-field">
+            <label>🎯 Score /100</label>
+            <input type="number" id="jnl-score" min="0" max="100" placeholder="ex: 78">
+          </div>
+        </div>
+
+        <div class="journal-field" style="margin-bottom:.75rem">
+          <label>🏷️ Tags (séparés par virgule)</label>
+          <input type="text" id="jnl-tags" placeholder="mirage, réfraction, record, Fata Morgana...">
+        </div>
+
+        <!-- CONDITIONS MÉTÉO AUTO -->
+        <div style="font-size:10px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;font-weight:600;margin-bottom:.4rem;">
+          🌤️ Conditions météo — <span style="color:var(--cyan)">auto depuis le dashboard</span>
+        </div>
+        <div class="journal-meteo-auto" id="jnl-meteo-auto">
+          <div class="journal-meteo-pill"><span>Vent</span><span id="jm-wind">—</span></div>
+          <div class="journal-meteo-pill"><span>Nuages bas</span><span id="jm-cloud-low">—</span></div>
+          <div class="journal-meteo-pill"><span>Humidité</span><span id="jm-rh">—</span></div>
+          <div class="journal-meteo-pill"><span>Visibilité</span><span id="jm-vis">—</span></div>
+          <div class="journal-meteo-pill"><span>Pression</span><span id="jm-slp">—</span></div>
+          <div class="journal-meteo-pill"><span>K Bislin</span><span id="jm-k">—</span></div>
+        </div>
+
+        <div class="journal-field" style="margin-bottom:.75rem">
+          <label>📝 Observation / Commentaire</label>
+          <textarea id="jnl-text" placeholder="Décris ce que tu as observé : distance estimée, phénomène visible, conditions ressenties..."></textarea>
+        </div>
+
+        <div class="journal-field" style="margin-bottom:.75rem">
+          <label>📷 Photo (optionnelle)</label>
+          <input type="file" id="jnl-photo" accept="image/*" onchange="previewJournalPhoto(this)">
+          <img id="jnl-photo-preview" class="journal-photo-preview">
+        </div>
+
+        <div class="journal-btn-row">
+          <button class="journal-btn primary" onclick="saveJournalEntry()">💾 SAUVEGARDER</button>
+          <button class="journal-btn secondary" onclick="autoFillJournalMeteo()">⚡ REMPLIR MÉTÉO AUTO</button>
+        </div>
+      </div>
+
+      <!-- IMPORT / EXPORT -->
+      <div class="journal-io-row">
+        <button class="journal-btn secondary" onclick="exportJournal()" style="font-size:12px;padding:.4rem 1rem;">⬇️ EXPORTER JSON</button>
+        <label class="journal-btn secondary" style="font-size:12px;padding:.4rem 1rem;cursor:pointer;">
+          ⬆️ IMPORTER JSON
+          <input type="file" id="jnl-import" accept=".json" style="display:none" onchange="importJournal(this)">
+        </label>
+        <span id="jnl-count" style="font-size:10px;color:var(--text3);font-family:var(--mono);align-self:center;margin-left:auto;"></span>
+      </div>
+
+      <!-- LISTE DES ENTRÉES -->
+      <div class="journal-entries" id="journal-entries">
+        <div class="journal-empty">📖 Aucune observation pour le moment.<br>Remplis le formulaire ci-dessus pour commencer ton journal.</div>
+      </div>
+
+    </div>
+  </div><!-- /tab-journal -->
+
 
   
   </div><!-- /wrap -->
@@ -2108,6 +2302,7 @@ function createSpot() {
   
   // Retour à l'accueil
   switchTab('accueil');
+  initJournal();
   
   alert(`✅ Spot "${name}" créé avec succès !\nLes prévisions météo sont en cours de chargement...`);
 }
@@ -2337,7 +2532,214 @@ if (isIos) {
   }
 }
 
-  // Légende score — toggle au clic sur le titre
+  
+// ══════════════════════════════════════════
+// JOURNAL DE BORD
+// ══════════════════════════════════════════
+let journalEntries = [];
+
+function initJournal() {
+  // Remplir le select spot
+  const sel = document.getElementById('jnl-spot');
+  SPOTS.forEach(s => {
+    const o = document.createElement('option');
+    o.value = s.id; o.textContent = s.name;
+    sel.appendChild(o);
+  });
+  // Date/heure actuelle par défaut
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  document.getElementById('jnl-date').value = now.toISOString().slice(0,16);
+  renderJournalEntries();
+}
+
+function autoFillJournalMeteo() {
+  const spotId = document.getElementById('jnl-spot').value;
+  if (!spotId || !forecasts[spotId]) {
+    alert('Charge d'abord les prévisions et sélectionne un spot !'); return;
+  }
+  const fc = forecasts[spotId];
+  const today = fc[0];
+  if (!today) return;
+  const h = today.raw || {};
+  document.getElementById('jm-wind').textContent = h.wind != null ? h.wind.toFixed(1) + ' km/h' : '—';
+  document.getElementById('jm-cloud-low').textContent = h.cloud_low != null ? Math.round(h.cloud_low) + '%' : '—';
+  document.getElementById('jm-rh').textContent = h.rh != null ? Math.round(h.rh) + '%' : '—';
+  document.getElementById('jm-vis').textContent = h.vis != null ? h.vis.toFixed(1) + ' km' : '—';
+  document.getElementById('jm-slp').textContent = h.slp != null ? Math.round(h.slp) + ' hPa' : '—';
+  document.getElementById('jm-k').textContent = h.k_bislin != null ? h.k_bislin.toFixed(3) : '—';
+  // Score auto
+  const sc = getScore(fc, 0);
+  if (sc != null) document.getElementById('jnl-score').value = sc;
+}
+
+function previewJournalPhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    // Redimensionner à 800px max
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const max = 800;
+      let w = img.width, h = img.height;
+      if (w > max) { h = Math.round(h * max / w); w = max; }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const data = canvas.toDataURL('image/jpeg', 0.82);
+      const preview = document.getElementById('jnl-photo-preview');
+      preview.src = data; preview.style.display = 'block';
+      preview.dataset.b64 = data;
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function saveJournalEntry() {
+  const date = document.getElementById('jnl-date').value;
+  const spotId = document.getElementById('jnl-spot').value;
+  const score = parseInt(document.getElementById('jnl-score').value) || null;
+  const text = document.getElementById('jnl-text').value.trim();
+  const tagsRaw = document.getElementById('jnl-tags').value;
+  const tags = tagsRaw.split(',').map(t => t.trim()).filter(Boolean);
+  const preview = document.getElementById('jnl-photo-preview');
+  const photo = preview.dataset.b64 || null;
+
+  if (!date || !spotId) { alert('Date et spot obligatoires !'); return; }
+
+  const spot = SPOTS.find(s => s.id === spotId);
+  const meteo = {
+    wind: document.getElementById('jm-wind').textContent,
+    cloud_low: document.getElementById('jm-cloud-low').textContent,
+    rh: document.getElementById('jm-rh').textContent,
+    vis: document.getElementById('jm-vis').textContent,
+    slp: document.getElementById('jm-slp').textContent,
+    k: document.getElementById('jm-k').textContent,
+  };
+
+  const entry = {
+    id: Date.now(),
+    date, spotId,
+    spotName: spot ? spot.name : spotId,
+    score, text, tags, photo, meteo
+  };
+
+  journalEntries.unshift(entry);
+  renderJournalEntries();
+  resetJournalForm();
+}
+
+function resetJournalForm() {
+  document.getElementById('jnl-text').value = '';
+  document.getElementById('jnl-tags').value = '';
+  document.getElementById('jnl-score').value = '';
+  document.getElementById('jnl-photo').value = '';
+  const preview = document.getElementById('jnl-photo-preview');
+  preview.style.display = 'none'; preview.dataset.b64 = '';
+  ['jm-wind','jm-cloud-low','jm-rh','jm-vis','jm-slp','jm-k'].forEach(id => {
+    document.getElementById(id).textContent = '—';
+  });
+}
+
+function deleteJournalEntry(id) {
+  if (!confirm('Supprimer cette observation ?')) return;
+  journalEntries = journalEntries.filter(e => e.id !== id);
+  renderJournalEntries();
+}
+
+function scoreColorJnl(sc) {
+  if (sc == null) return 'var(--text3)';
+  if (sc >= 65) return 'var(--green)';
+  if (sc >= 40) return 'var(--amber)';
+  return 'var(--red)';
+}
+
+function renderJournalEntries() {
+  const container = document.getElementById('journal-entries');
+  const count = document.getElementById('jnl-count');
+  count.textContent = journalEntries.length + ' observation' + (journalEntries.length !== 1 ? 's' : '');
+  if (!journalEntries.length) {
+    container.innerHTML = '<div class="journal-empty">📖 Aucune observation pour le moment.<br>Remplis le formulaire ci-dessus pour commencer ton journal.</div>';
+    return;
+  }
+  container.innerHTML = journalEntries.map(e => {
+    const d = new Date(e.date);
+    const dateStr = d.toLocaleDateString('fr-FR', {weekday:'short', day:'numeric', month:'short', year:'numeric'});
+    const timeStr = d.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
+    const tags = (e.tags||[]).map(t => `<span class="journal-tag">${t}</span>`).join('');
+    const meteoItems = Object.entries(e.meteo||{})
+      .filter(([k,v]) => v && v !== '—')
+      .map(([k,v]) => `<div class="journal-meteo-pill"><span>${k}</span><span>${v}</span></div>`)
+      .join('');
+    return `
+    <div class="journal-entry" id="jentry-${e.id}">
+      <div class="journal-entry-hdr" onclick="toggleJournalEntry(${e.id})">
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+            <span class="journal-entry-date">${dateStr} · ${timeStr}</span>
+            <span class="journal-entry-spot">${e.spotName}</span>
+          </div>
+          ${tags ? `<div class="journal-entry-tags" style="margin-top:.3rem">${tags}</div>` : ''}
+        </div>
+        ${e.score != null ? `<div class="journal-entry-score" style="color:${scoreColorJnl(e.score)}">${e.score}</div>` : ''}
+        <div class="chevron">›</div>
+      </div>
+      <div class="journal-entry-body" id="jbody-${e.id}">
+        ${e.photo ? `<img src="${e.photo}" class="journal-entry-photo">` : ''}
+        ${e.text ? `<div class="journal-entry-text">${e.text}</div>` : ''}
+        ${meteoItems ? `<div class="journal-entry-meteo">${meteoItems}</div>` : ''}
+        <div class="journal-entry-actions">
+          <button class="journal-btn danger" onclick="deleteJournalEntry(${e.id})">🗑️ Supprimer</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleJournalEntry(id) {
+  const body = document.getElementById('jbody-' + id);
+  const hdr = body.previousElementSibling;
+  const chevron = hdr.querySelector('.chevron');
+  body.classList.toggle('open');
+  if (chevron) chevron.style.transform = body.classList.contains('open') ? 'rotate(90deg)' : '';
+}
+
+function exportJournal() {
+  if (!journalEntries.length) { alert('Aucune observation à exporter !'); return; }
+  const data = JSON.stringify({version:1, exported: new Date().toISOString(), entries: journalEntries}, null, 2);
+  const blob = new Blob([data], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'vld-journal-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+}
+
+function importJournal(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      const entries = data.entries || data;
+      if (!Array.isArray(entries)) throw new Error('Format invalide');
+      const existing = new Set(journalEntries.map(e => e.id));
+      const newEntries = entries.filter(e => !existing.has(e.id));
+      journalEntries = [...journalEntries, ...newEntries]
+        .sort((a,b) => new Date(b.date) - new Date(a.date));
+      renderJournalEntries();
+      alert(newEntries.length + ' observation(s) importée(s) !');
+    } catch(err) {
+      alert('Erreur lecture JSON : ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+// Légende score — toggle au clic sur le titre
 document.getElementById('score-legend-trigger').addEventListener('click', function() {
   const p = document.getElementById('score-legend-panel');
   p.style.display = p.style.display === 'none' ? 'block' : 'none';
