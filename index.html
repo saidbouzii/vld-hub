@@ -1880,11 +1880,11 @@ function scoreDay(spot, h) {
 // ═══════════════════════════════════════════════════
 async function fetchSpot(spot) {
   const params = [
-    'visibility','wind_speed_10m','cloud_cover_low','cloud_cover_mid','cloud_cover_high',
-    'relative_humidity_2m','dew_point_2m','temperature_2m','surface_pressure',
-    'precipitation_probability','fog',
-    'temperature_850hPa','temperature_700hPa','geopotential_height_850hPa','geopotential_height_700hPa'
-  ].join(',');
+  'visibility','wind_speed_10m','cloud_cover_low','cloud_cover_mid','cloud_cover_high',
+  'relative_humidity_2m','dew_point_2m','temperature_2m','surface_pressure',
+  'precipitation_probability','fog',
+  'temperature_850hPa','temperature_700hPa','geopotential_height_850hPa','geopotential_height_700hPa'
+].join(',');
    const base = `https://api.open-meteo.com/v1/forecast?forecast_days=7&daily=sunrise,sunset&timezone=auto`;
   const urlObs = `${base}&latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=${params}`;
   const urlMid = `${base}&latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=visibility,cloud_cover_low,relative_humidity_2m`;
