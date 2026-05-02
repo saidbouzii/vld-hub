@@ -2163,7 +2163,8 @@ function renderCards(loading) {
 }
 
 function renderDayRow(dayData, date, spot) {
-  const {score,items,hasElim,day}=dayData;
+  const {items,hasElim,day} = dayData;
+const score = getScore(forecasts[spot.id], day);
   const h = dayData.raw || {};
   const cls=cellClass(score), sc=scoreColor(score), isToday=day===0;
   const did=`dr-${spot.id}-${day}`;
