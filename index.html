@@ -1895,7 +1895,7 @@ async function fetchSpot(spot) {
     const s=day*24+5, e=day*24+11;
     const avg = arr => {
       if(!arr || !Array.isArray(arr)) return null;
-      const v = arr.slice(s,e).filter(x=>x!==null&&x!==undefined&&!isNaN(x));
+     const v = arr.slice(s,e).filter(x=>x!==null&&x!==undefined&&!isNaN(x)&&x<900);
       return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null;
     };
     const temp=avg(d1.hourly?.temperature_2m);
