@@ -2561,7 +2561,7 @@ async function fetchAll() {
   });
   renderMatrix(false); renderCards(false); renderBanner(); checkAutoAlert();
   btn.disabled=false; btn.textContent='⟳ PRÉVISIONS 7 JOURS';
-  setStatus(`Actualisé ${new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}`);
+  setStatus('Actualisé '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
   document.getElementById('prog').style.display='none';
 }
 
