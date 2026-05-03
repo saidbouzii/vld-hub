@@ -1371,7 +1371,8 @@ tbody tr:last-child td{border-bottom:none}
 
   <!-- MATRIX -->
   <div class="section-lbl" id="score-legend-trigger" style="cursor:pointer;user-select:none;">
-  ⊞ VUE SEMAINE — SCORE /100 PAR MATIN
+ ⊞ VUE SEMAINE — SCORE /100 PAR MATIN
+<span id="score-legend-chevron" style="font-size:14px;color:var(--cyan);margin-left:.5rem;transition:transform .3s;display:inline-block;">▼</span>
   <span style="font-size:13px;color:var(--cyan);margin-left:.5rem;">ℹ︎</span>
 </div>
     <div id="score-legend-panel" style="
@@ -2906,7 +2907,9 @@ if (isIos) {
   // Légende score — toggle au clic sur le titre
 document.getElementById('score-legend-trigger').addEventListener('click', function() {
   const p = document.getElementById('score-legend-panel');
-  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+ const open = p.style.display === 'none';
+p.style.display = open ? 'block' : 'none';
+document.getElementById('score-legend-chevron').style.transform = open ? 'rotate(180deg)' : '';
 });
   
 </script>
