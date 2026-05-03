@@ -2398,7 +2398,7 @@ function scoreDay(spot, h) {
   const vis = h.vis ?? 0;
   const visPts = vis>(c.vis_exc||50)?15:vis>c.vis_ok?10:vis>15?4:0;
   add('Vis. obs.', vis, 'km', visPts, 15,
-    vis>c.vis_ok?'green':vis>15?'amber':'red',
+          vis>c.vis_ok?'green':vis>15?'amber':'red',
     vis>(c.vis_exc||50)?'⭐ Excellente':vis>c.vis_ok?'✅ OK':'❌ Faible');
 
   const visMid = h.vis_mid ?? 0;
@@ -2422,8 +2422,27 @@ function scoreDay(spot, h) {
   add('Précipitations', precip, '%', precip<10?5:precip<30?2:0, 5,
     precip<10?'green':precip<30?'amber':'red',
     precip<10?'✅ Sec':'⚠️ Possible');
+// CAPE
+  const cape = h.cape ?? null;
+  if (cape !== null) {
+    const capeElim = cape > 300;
+    const capePts = capeElim?0:cape<10?10:cape<100?7:3;
+    add('CAPE', cape, 'J/kg', capePts, 10,
+      capeElim?'red':cape<100?'green':'amber',
+      capeElim?'❌ ÉLIM >300':cape<10?'⭐ Ultra stable':cape<100?'✅ Stable':'⚠️ Convection', capeElim);
+  }
 
-  const pct = maxScore>0 ? Math.round((score/maxScore)*100) : 0;
+  // Dust
+  const dust = h.dust ?? null;
+  if (dust !== null) {
+    const dustElim = dust > 0.5;
+    const dustPts = dustElim?0:dust<0.1?5:dust<0.3?3:1;
+    add('Poussières', dust, 'AOD', dustPts, 5,
+      dustElim?'red':dust<0.1?'green':'amber',
+      dustElim?'❌ ÉLIM Sahara':dust<0.1?'✅ Air pur':'⚠️ Voile saharien');
+  }
+
+    const pct = maxScore>0 ? Math.round((score/maxScore)*100) : 0;
   const finalScore = hasElim ? Math.min(pct, 35) : pct;
   return { score: finalScore, items, hasElim };
 }
@@ -2440,6 +2459,8 @@ async function fetchSpot(spot) {
 ].join(',');
    const base = `https://api.open-meteo.com/v1/forecast?forecast_days=7&daily=sunrise,sunset&timezone=auto`;
   const urlObs = `${base}&latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=${params}`;
+// APRÈS
+const urlMid = `${base}&latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=visibility,cloud_cover_low,relative_humidity_2m,cape,dust_aod,wind_speed_80m,wind_speed_120m`;
   const urlMid = `${base}&latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=visibility,cloud_cover_low,relative_humidity_2m`;
   const [r1,r2] = await Promise.all([fetch(urlObs),fetch(urlMid)]);
   const [d1,d2] = await Promise.all([r1.json(),r2.json()]);
@@ -2474,7 +2495,14 @@ async function fetchSpot(spot) {
       fog: avg(d1.hourly?.fog)??0,
       rh: avg(d1.hourly?.relative_humidity_2m),
       spread: (temp!==null&&dew!==null)?temp-dew:null,
-      slp: P_mbar,
+     slp: P_mbar,
+      cape: avg(d2.hourly?.cape),
+      dust: avg(d2.hourly?.dust_aod),
+      wind_shear: (() => {
+        const w80 = avg(d2.hourly?.wind_speed_80m);
+        const w120 = avg(d2.hourly?.wind_speed_120m);
+        return (w80 !== null && w120 !== null) ? Math.abs(w120 - w80) / 40 : null; // m/s par mètre
+      })(),
       wind: avg(d1.hourly?.wind_speed_10m),
       vis: (avg(d1.hourly?.visibility)??0)/1000,
       precip: avg(d1.hourly?.precipitation_probability),
