@@ -2555,8 +2555,8 @@ async function fetchAll() {
   const results = await Promise.allSettled(SPOTS.map(s=>fetchSpot(s)));
   results.forEach((r,i)=>{
     const s=SPOTS[i];
-    if(r.status==='fulfilled'){forecasts[s.id]=r.value;log(`✅ ${s.name}`,'ok');}
-    else{forecasts[s.id]=null;log(`❌ ${s.name}: ${r.reason}`,'err');}
+    if(r.status==='fulfilled'){forecasts[s.id]=r.value;log(` ${s.name}`,'ok');}
+    else{forecasts[s.id]=null;log(` ${s.name}: ${r.reason}`,'err');}
     setProgress(Math.round((i+1)/SPOTS.length*100));
   });
   renderMatrix(false); renderCards(false); renderBanner(); checkAutoAlert();
