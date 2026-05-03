@@ -1184,30 +1184,188 @@ tbody tr:last-child td{border-bottom:none}
 
 .drow-body{
   display:none;
-  padding:.5rem 1.1rem .7rem;
   background:var(--bg2);
   border-top:1px solid var(--border);
 }
 .drow-body.open{
-  display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(145px,1fr));
-  gap:.3rem;
+  display:flex;
+  flex-direction:row;
+  gap:0;
 }
 
-.cpill{
+/* ── COLONNE GAUCHE : grille boutons météo ── */
+.drow-left{
+  flex:1;
+  min-width:0;
+  padding:.75rem .75rem .75rem .9rem;
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:.55rem;
+  align-content:start;
+}
+
+/* ── BOUTON MÉTÉO iOS-style ── */
+.mb{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+  padding:.5rem .3rem .45rem;
+  border-radius:16px;
+  border:1px solid transparent;
+  cursor:default;
+  position:relative;
+  overflow:hidden;
+  transition:transform .15s,box-shadow .15s;
+  min-height:76px;
+}
+.mb.ok{
+  background:linear-gradient(145deg,#1a3a5c,#0f2540);
+  border-color:rgba(56,189,248,.35);
+  box-shadow:0 4px 12px rgba(0,0,0,.45),0 1px 0 rgba(255,255,255,.07) inset,0 -1px 0 rgba(0,0,0,.3) inset;
+}
+.mb.warn{
+  background:linear-gradient(145deg,#3d2a00,#281c00);
+  border-color:rgba(245,158,11,.35);
+  box-shadow:0 4px 12px rgba(0,0,0,.45),0 1px 0 rgba(255,255,255,.07) inset,0 -1px 0 rgba(0,0,0,.3) inset;
+}
+.mb.elim{
+  background:linear-gradient(145deg,#3d0f0f,#280a0a);
+  border-color:rgba(239,68,68,.4);
+  box-shadow:0 4px 12px rgba(0,0,0,.5),0 1px 0 rgba(255,255,255,.05) inset,0 -1px 0 rgba(0,0,0,.3) inset;
+}
+.mb:active{transform:scale(.97)}
+.mb::before{
+  content:'';
+  position:absolute;
+  top:0;left:0;right:0;
+  height:40%;
+  background:linear-gradient(180deg,rgba(255,255,255,.10) 0%,transparent 100%);
+  border-radius:16px 16px 0 0;
+  pointer-events:none;
+}
+.mb-icon{
+  width:28px;height:28px;
+  display:flex;align-items:center;justify-content:center;
+  position:relative;z-index:1;
+}
+.mb-icon svg{width:26px;height:26px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.5))}
+.mb-lbl{
+  font-size:8.5px;
+  font-family:var(--mono);
+  color:rgba(180,210,240,.75);
+  text-align:center;
+  line-height:1.2;
+  position:relative;z-index:1;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  max-width:100%;
+  padding:0 2px;
+}
+.mb-val{
+  font-family:var(--font);
+  font-size:13px;
+  letter-spacing:.05em;
+  position:relative;z-index:1;
+  text-align:center;
+}
+.mb.ok .mb-val{color:#7dd3fc}
+.mb.warn .mb-val{color:#fbbf24}
+.mb.elim .mb-val{color:#f87171}
+.mb-badge{
+  position:absolute;
+  top:5px;right:6px;
+  font-size:7px;
+  font-family:var(--mono);
+  padding:1px 4px;
+  border-radius:4px;
+  line-height:1.4;
+  font-weight:600;
+}
+.mb.elim .mb-badge{background:rgba(239,68,68,.25);color:#fca5a5;border:1px solid rgba(239,68,68,.3)}
+
+/* ── COLONNE DROITE : profil + K ── */
+.drow-right{
+  width:230px;
+  flex-shrink:0;
+  border-left:1px solid var(--border);
+  display:flex;
+  flex-direction:column;
+}
+.dr-curve{
+  flex:1;
+  padding:.6rem .65rem .5rem;
+  display:flex;
+  flex-direction:column;
+  gap:.4rem;
+  border-bottom:1px solid var(--border);
+}
+.dr-curve-title{
+  font-family:var(--font);
+  font-size:10px;
+  letter-spacing:.08em;
+  color:var(--text3);
   display:flex;
   align-items:center;
   gap:.35rem;
-  font-size:9px;
-  padding:.25rem .5rem;
-  border-radius:5px;
-  background:var(--bg3);
+}
+.dr-curve-svg{
+  border-radius:7px;
+  overflow:hidden;
+  cursor:pointer;
+  background:rgba(0,0,0,.3);
+  border:1px solid var(--border);
+  transition:border-color .2s;
+}
+.dr-curve-svg:hover{border-color:var(--cyan)}
+.dr-curve-svg svg{display:block;width:100%;height:auto}
+.dr-curve-info{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:.3rem;
+}
+.dr-ci{
+  display:flex;
+  flex-direction:column;
+  gap:1px;
+  padding:.3rem .4rem;
+  border-radius:6px;
+  background:var(--surface);
   border:1px solid var(--border);
 }
-.cp-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
-.cp-nm{color:var(--text3);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:9px}
-.cp-val{font-weight:500;font-size:10px;white-space:nowrap;font-family:var(--mono)}
-.cp-elim{font-size:7px;color:var(--red);background:var(--rdim);border-radius:3px;padding:0 3px;border:1px solid rgba(255,69,96,.2)}
+.dr-ci-lbl{font-size:8px;color:var(--text3);font-family:var(--mono)}
+.dr-ci-val{font-size:11px;font-family:var(--font);letter-spacing:.04em;color:var(--text)}
+.dr-ci.vc-ok .dr-ci-val{color:#4ade80}
+.dr-ci.vc-ko .dr-ci-val{color:#f87171}
+.dr-curve-hint{font-size:8px;color:var(--text3);font-family:var(--mono);text-align:center}
+.dr-k{
+  padding:.55rem .65rem;
+  display:flex;
+  flex-direction:column;
+  gap:.25rem;
+}
+.dr-k-main{
+  display:flex;
+  align-items:baseline;
+  gap:.5rem;
+}
+.dr-k-eq{
+  font-family:var(--font);
+  font-size:18px;
+  letter-spacing:.04em;
+}
+.dr-k-verdict{
+  font-size:9px;
+  font-family:var(--mono);
+  margin-left:auto;
+}
+.dr-k-sub{font-size:8px;color:var(--text3);font-family:var(--mono)}
+
+/* cpill legacy */
+.cpill{display:none}
+.cp-dot,.cp-nm,.cp-val,.cp-elim{display:none}
 
 /* ── CRIT LEGEND ── */
 .crit-legend{
@@ -2503,42 +2661,11 @@ function renderCards(loading) {
 
 function renderDayRow(dayData, date, spot) {
   const {items,hasElim,day} = dayData;
-const score = getScore(forecasts[spot.id], day);
+  const score = getScore(forecasts[spot.id], day);
   const h = dayData.raw || {};
   const cls=cellClass(score), sc=scoreColor(score), isToday=day===0;
   const did=`dr-${spot.id}-${day}`;
-
-  // Bloc réfraction k
   const k = h.k_bislin;
-  const lift = h.lift_m;
-  const dTdh = h.dTdh;
-  let kColor='var(--text3)', kVerdict='—', kIcon='○';
-  if (k !== undefined && k !== null) {
-    if (k > 0.4)      { kColor='#22d3ee'; kVerdict='Super-réfraction 🌊'; kIcon='▲▲'; }
-    else if (k > 0.2) { kColor='var(--green)'; kVerdict='Réfraction favorable'; kIcon='▲'; }
-    else if (k > 0.1) { kColor='var(--amber)'; kVerdict='Standard'; kIcon='→'; }
-    else if (k > 0)   { kColor='var(--text3)'; kVerdict='Faible'; kIcon='→'; }
-    else              { kColor='var(--red)'; kVerdict='Anti-réfraction ⚠️'; kIcon='▼'; }
-  }
-  const kBlock = (k !== undefined && k !== null) ? `
-    <div class="k-block">
-      <div class="k-row">
-        <span class="k-label">Coeff. réfraction k</span>
-        <span class="k-value" style="color:${kColor}">${kIcon} k = ${k.toFixed(3)}</span>
-        <span class="k-verdict" style="color:${kColor}">${kVerdict}</span>
-      </div>
-      <div class="k-row">
-        <span class="k-label">Lift apparent (${spot.dist_km} km)</span>
-        <span class="k-value" style="color:${kColor}">${lift >= 0 ? '+' : ''}${lift.toFixed(0)} m</span>
-        <span class="k-sub">dT/dh = ${(dTdh*1000).toFixed(2)} °C/100m</span>
-      </div>
-      <div class="k-bar-wrap">
-        <div class="k-bar-track">
-          <div class="k-bar-fill" style="width:${Math.min(Math.max((k/0.6)*100,0),100)}%;background:${kColor}"></div>
-        </div>
-        <span class="k-bar-labels"><span>0</span><span style="color:var(--green)">0.17</span><span>0.4</span><span>0.6</span></span>
-      </div>
-    </div>` : '';
 
   return `<div class="drow">
     <div class="drow-hdr ${cls}" onclick="toggleDrow('${did}')">
@@ -2547,17 +2674,80 @@ const score = getScore(forecasts[spot.id], day);
       <span class="drow-score" style="color:${sc}">${score}</span>
     </div>
     <div class="drow-body" id="${did}">
-      ${kBlock}
-      ${renderCurveBlock(spot, k)}
-      ${items.map(it=>`
-        <div class="cpill">
-          <div class="cp-dot" style="background:${it.color==='green'?'var(--green)':it.color==='amber'?'var(--amber)':'var(--red)'}"></div>
-          <span class="cp-nm">${it.name}</span>
-          <span class="cp-val" style="color:${it.color==='green'?'var(--green)':it.color==='amber'?'var(--amber)':'var(--red)'}">${it.val}${it.unit}</span>
-          ${it.elim?'<span class="cp-elim">élim</span>':''}
-        </div>
-      `).join('')}
+      <div class="drow-left">${renderMeteoButtons(items)}</div>
+      <div class="drow-right">${renderNewCurveBlock(spot,k)}${renderKMini(k,h)}</div>
     </div>
+  </div>`;
+}
+
+// ── ICÔNES SVG météo HD ──────────────────────────────────────────────
+const MB_ICONS = {
+  'Nuages bas': `<svg viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="cbg1" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#9ec8e0"/><stop offset="100%" stop-color="#5a8fa8"/></radialGradient><filter id="gs"><feGaussianBlur stdDeviation=".5"/></filter></defs><ellipse cx="10" cy="16" rx="6.5" ry="4.5" fill="url(#cbg1)" filter="url(#gs)"/><ellipse cx="17" cy="15" rx="5.5" ry="4" fill="#7ab4d0" filter="url(#gs)"/><ellipse cx="13" cy="13" rx="5" ry="5" fill="#b8d8eb"/><ellipse cx="8" cy="16" rx="6" ry="4" fill="#8fc5dc"/><ellipse cx="18" cy="16" rx="5" ry="3.5" fill="#7ab4d0"/><ellipse cx="13" cy="17.5" rx="8" ry="3.5" fill="#6baacb" opacity=".9"/></svg>`,
+  'Nuages moy.': `<svg viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="cmg1" cx="40%" cy="40%" r="60%"><stop offset="0%" stop-color="#c5dff0"/><stop offset="100%" stop-color="#7ab0cc"/></radialGradient></defs><ellipse cx="9" cy="15" rx="5.5" ry="4" fill="url(#cmg1)" opacity=".8"/><ellipse cx="17" cy="14" rx="5" ry="4" fill="#9dcce0" opacity=".85"/><ellipse cx="13" cy="12" rx="5.5" ry="5.5" fill="#d0e8f5"/><ellipse cx="13" cy="16" rx="7.5" ry="3.5" fill="#8bbfda"/></svg>`,
+  'Nuages hauts': `<svg viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="chg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#e8f4ff"/><stop offset="100%" stop-color="#b8d8f0"/></linearGradient></defs><ellipse cx="13" cy="14" rx="9" ry="3" fill="url(#chg)" opacity=".7"/><ellipse cx="7" cy="12" rx="5" ry="2.5" fill="#daeeff" opacity=".5"/><ellipse cx="19" cy="13" rx="4.5" ry="2" fill="#c8e4f8" opacity=".6"/></svg>`,
+  'Brouillard': `<svg viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="9" width="20" height="1.8" rx=".9" fill="#9ab8cc" opacity=".6"/><rect x="5" y="12.5" width="16" height="1.8" rx=".9" fill="#8aafc4" opacity=".55"/><rect x="3" y="16" width="20" height="1.8" rx=".9" fill="#7aa4bc" opacity=".5"/><rect x="6" y="19.5" width="14" height="1.8" rx=".9" fill="#6a9ab5" opacity=".4"/></svg>`,
+  'Humidité': `<svg viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="dhg" cx="40%" cy="30%" r="60%"><stop offset="0%" stop-color="#60d0f8"/><stop offset="100%" stop-color="#1a8fc4"/></radialGradient></defs><path d="M13 4 C13 4 6 13 6 17 a7 7 0 0 0 14 0 C20 13 13 4 13 4 Z" fill="url(#dhg)" opacity=".9"/><ellipse cx="10.5" cy="15" rx="1.5" ry="2" fill="rgba(255,255,255,.3)"/></svg>`,
+  'ΔT rosée': `<svg viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="drg" cx="40%" cy="35%" r="60%"><stop offset="0%" stop-color="#f87171"/><stop offset="100%" stop-color="#b91c1c"/></radialGradient></defs><rect x="11.5" y="4" width="3" height="12" rx="1.5" fill="#d97070"/><circle cx="13" cy="19" r="4.5" fill="url(#drg)"/><circle cx="11.5" cy="17.5" r="1.2" fill="rgba(255,255,255,.3)"/><rect x="8" y="8" width="3" height="1.5" rx=".75" fill="#ef9999" opacity=".7"/><rect x="8" y="11" width="3" height="1.5" rx=".75" fill="#ef9999" opacity=".7"/><rect x="8" y="14" width="3" height="1.5" rx=".75" fill="#ef9999" opacity=".7"/></svg>`,
+  'Pression SLP': `<svg viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="13" cy="13" r="9" stroke="#5a8fc4" stroke-width="1.5" fill="none" opacity=".5"/><circle cx="13" cy="13" r="6" stroke="#7ab0dd" stroke-width="1" fill="none" opacity=".6"/><circle cx="13" cy="13" r="3" stroke="#9acaf0" stroke-width="1" fill="none" opacity=".7"/><path d="M13 4 L13 6 M13 20 L13 22 M4 13 L6 13 M20 13 L22 13" stroke="#8ab8d8" stroke-width="1.5" stroke-linecap="round"/><circle cx="13" cy="13" r="1.5" fill="#7ab0dd"/></svg>`,
+  'Vent': `<svg viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 10 Q10 8 16 10 Q20 11.5 22 10 Q20 8.5 17 8.5 a3 3 0 0 1 0-6 a3 3 0 0 1 2.5 4.5" stroke="#7ab8d8" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M3 14 Q12 12 18 14 Q22 15.5 24 14 Q22 12.5 20 12.5 a2.5 2.5 0 0 1 0-5 a2.5 2.5 0 0 1 2 4" stroke="#5aa4c8" stroke-width="1.8" fill="none" stroke-linecap="round" opacity=".7"/><path d="M3 18 Q8 16.5 13 18" stroke="#4a94bc" stroke-width="1.8" fill="none" stroke-linecap="round" opacity=".5"/></svg>`,
+  'Vis. obs.': `<svg viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="vog" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#60d8f8"/><stop offset="100%" stop-color="#1a7aaa"/></radialGradient></defs><path d="M3 13 Q13 4 23 13 Q13 22 3 13 Z" stroke="#5ab8d8" stroke-width="1.5" fill="none" opacity=".7"/><circle cx="13" cy="13" r="4.5" fill="url(#vog)" opacity=".9"/><circle cx="11.5" cy="11.5" r="1.5" fill="rgba(255,255,255,.4)"/><circle cx="13" cy="13" r="1.5" fill="#0a4a6a"/></svg>`,
+  'Vis. maritime': `<svg viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 18 Q7 15 13 18 Q19 21 23 18" stroke="#5ab8d8" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M13 5 L8 15 L18 15 Z" stroke="#7acce0" stroke-width="1.5" fill="rgba(90,180,220,.2)" stroke-linejoin="round"/><path d="M3 21 Q7 19 13 21 Q19 23 23 21" stroke="#4a9ab8" stroke-width="1.5" fill="none" stroke-linecap="round" opacity=".6"/></svg>`,
+  'Vis. mi-trajet': `<svg viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 13 Q13 4 23 13 Q13 22 3 13 Z" stroke="#5ab8d8" stroke-width="1.5" fill="none" opacity=".5"/><circle cx="13" cy="13" r="4.5" fill="rgba(56,189,248,.15)"/><line x1="13" y1="5" x2="13" y2="21" stroke="#38bdf8" stroke-width="1" stroke-dasharray="2,2" opacity=".5"/><circle cx="13" cy="13" r="2" fill="#38bdf8" opacity=".8"/></svg>`,
+  'Précipitations': `<svg viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg"><ellipse cx="13" cy="10" rx="7" ry="5" fill="#8ab8d8" opacity=".7"/><ellipse cx="8" cy="11" rx="4.5" ry="3.5" fill="#9acce0" opacity=".7"/><line x1="9" y1="17" x2="7" y2="21" stroke="#60b8e8" stroke-width="1.8" stroke-linecap="round"/><line x1="13" y1="17" x2="11" y2="21" stroke="#50aade" stroke-width="1.8" stroke-linecap="round"/><line x1="17" y1="17" x2="15" y2="21" stroke="#60b8e8" stroke-width="1.8" stroke-linecap="round"/></svg>`
+};
+
+function getMbIcon(name) {
+  for(const k of Object.keys(MB_ICONS)) { if(name.includes(k)||k.includes(name)) return MB_ICONS[k]; }
+  return `<svg viewBox="0 0 26 26" fill="none"><circle cx="13" cy="13" r="8" stroke="#5a8fa8" stroke-width="1.5" fill="rgba(56,189,248,.1)"/></svg>`;
+}
+
+function renderMeteoButtons(items) {
+  return items.map(it => {
+    const state = it.elim ? 'elim' : it.color==='amber' ? 'warn' : 'ok';
+    const icon = getMbIcon(it.name);
+    const badge = it.elim ? '<span class="mb-badge">ÉLIM</span>' : '';
+    return `<div class="mb ${state}">
+      ${badge}
+      <div class="mb-icon">${icon}</div>
+      <div class="mb-lbl">${it.name}</div>
+      <div class="mb-val">${it.val}${it.unit}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderNewCurveBlock(spot, k_default) {
+  const k = (k_default !== undefined && k_default !== null) ? k_default : 0.17;
+  const d = _calcBislin(spot, k);
+  const visClass = d.visible > 0 ? 'vc-ok' : 'vc-ko';
+  const svgStr = renderCurvatureSVG(spot, k);
+  return `<div class="dr-curve">
+    <div class="dr-curve-title">🌍 <span style="color:var(--text2)">${spot.name} → ${spot.target}</span></div>
+    <div class="dr-curve-svg" onclick="openCurveOverlay('${spot.id}', ${k.toFixed(3)})" title="Cliquer pour agrandir">${svgStr}</div>
+    <div class="dr-curve-info">
+      <div class="dr-ci"><span class="dr-ci-lbl">h1 obs.</span><span class="dr-ci-val">${d.h1.toLocaleString()} m</span></div>
+      <div class="dr-ci"><span class="dr-ci-lbl">h2 cible</span><span class="dr-ci-val">${d.h2.toLocaleString()} m</span></div>
+      <div class="dr-ci ${visClass}"><span class="dr-ci-lbl">✅ Visible</span><span class="dr-ci-val">${d.visible>0?Math.round(d.visible).toLocaleString()+' m':'0 m'}</span></div>
+      <div class="dr-ci"><span class="dr-ci-lbl">❌ Caché</span><span class="dr-ci-val" style="color:#f87171">${Math.round(Math.max(d.hidden,0)).toLocaleString()} m</span></div>
+    </div>
+    <div class="dr-curve-hint">🔍 Cliquer · slider k interactif</div>
+  </div>`;
+}
+
+function renderKMini(k, h) {
+  if (k === undefined || k === null) return `<div class="dr-k"><div class="dr-k-main"><span class="dr-k-eq" style="color:var(--text3)">K = —</span></div></div>`;
+  let kColor='var(--text3)', kVerdict='—';
+  if(k>0.4){kColor='#22d3ee';kVerdict='Super-réfraction 🌊';}
+  else if(k>0.2){kColor='var(--green)';kVerdict='Réfraction favorable';}
+  else if(k>0.1){kColor='var(--amber)';kVerdict='Standard';}
+  else if(k>0){kColor='var(--text3)';kVerdict='Faible';}
+  else{kColor='var(--red)';kVerdict='Anti-réfraction ⚠️';}
+  const dTdh = h.dTdh;
+  return `<div class="dr-k">
+    <div class="dr-k-main">
+      <span class="dr-k-eq" style="color:${kColor}">K = ${k.toFixed(3)}</span>
+      <span class="dr-k-verdict" style="color:${kColor}">${kVerdict}</span>
+    </div>
+    ${dTdh!==undefined?`<div class="dr-k-sub">dT/dh = ${(dTdh*1000).toFixed(2)} °C/100m</div>`:''}
   </div>`;
 }
 
