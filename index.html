@@ -2429,7 +2429,7 @@ function scoreDay(spot, h) {
     const capePts = capeElim?0:cape<10?10:cape<100?7:3;
     add('CAPE', cape, 'J/kg', capePts, 10,
       capeElim?'red':cape<100?'green':'amber',
-      capeElim?'❌ ÉLIM >300':cape<10?'⭐ Ultra stable':cape<100?'✅ Stable':'⚠️ Convection', capeElim);
+      capeElim?'ELIM >300':cape<10?'Ultra stable':cape<100?'Stable':'Convection', capeElim);
   }
 
   // Dust
@@ -2439,7 +2439,7 @@ function scoreDay(spot, h) {
     const dustPts = dustElim?0:dust<0.1?5:dust<0.3?3:1;
     add('Poussières', dust, 'AOD', dustPts, 5,
       dustElim?'red':dust<0.1?'green':'amber',
-      dustElim?'❌ ÉLIM Sahara':dust<0.1?'✅ Air pur':'⚠️ Voile saharien');
+    dustElim?'ELIM Sahara':dust<0.1?'Air pur':'Voile saharien');
   }
 
     const pct = maxScore>0 ? Math.round((score/maxScore)*100) : 0;
