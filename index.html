@@ -2442,7 +2442,7 @@ async function fetchSpot(spot) {
 ].join(',');
    const base = `https://api.open-meteo.com/v1/forecast?forecast_days=7&daily=sunrise,sunset&timezone=auto`;
   const urlObs = `${base}&latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=${params}`;
-  const urlMid = `${base}&latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=visibility,cloud_cover_low,relative_humidity_2m`,cape,wind_speed_80m,wind_speed_120m;
+  const urlMid = `${base}&latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=visibility,cloud_cover_low,relative_humidity_2m,cape,wind_speed_80m,wind_speed_120m`;
   const [r1,r2] = await Promise.all([fetch(urlObs),fetch(urlMid)]);
   const [d1,d2] = await Promise.all([r1.json(),r2.json()]);
   const daily = [];
