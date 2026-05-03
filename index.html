@@ -1255,6 +1255,227 @@ tbody tr:last-child td{border-bottom:none}
   .cfg-inp.w-lg{width:120px}
   .scard-name{font-size:18px}
 }
+
+/* ── ONGLET ALERTES ─────────────────────────────────────────────── */
+.al-wrap{
+  max-width:680px;
+  margin:1.25rem auto;
+  display:flex;
+  flex-direction:column;
+  gap:1.1rem;
+  padding:0 .5rem 2rem;
+}
+
+.al-section-lbl{
+  font-family:var(--font);
+  font-size:12px;
+  letter-spacing:.12em;
+  color:var(--text3);
+  padding-bottom:.4rem;
+  border-bottom:1px solid var(--border);
+  margin-top:.2rem;
+}
+
+/* Carte info */
+.al-info-card{
+  background:var(--surface);
+  border:1px solid var(--border2);
+  border-radius:14px;
+  overflow:hidden;
+}
+.al-info-header{
+  display:flex;
+  align-items:center;
+  gap:.9rem;
+  padding:.9rem 1.1rem .75rem;
+  background:linear-gradient(135deg,rgba(56,189,248,.08),rgba(56,189,248,.02));
+  border-bottom:1px solid var(--border);
+}
+.al-info-icon{font-size:28px;line-height:1}
+.al-info-title{
+  font-family:var(--font);
+  font-size:16px;
+  letter-spacing:.07em;
+  color:var(--cyan);
+}
+.al-info-sub{font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:2px}
+.al-info-body{
+  padding:.8rem 1.1rem .9rem;
+  display:flex;
+  flex-direction:column;
+  gap:.55rem;
+}
+.al-info-row{
+  display:flex;
+  align-items:flex-start;
+  gap:.65rem;
+  font-size:12.5px;
+  font-family:var(--serif);
+  color:rgba(220,235,250,.9);
+  line-height:1.55;
+}
+.al-info-dot{
+  width:7px;height:7px;
+  border-radius:50%;
+  flex-shrink:0;
+  margin-top:4px;
+}
+
+/* Étapes */
+.al-steps{
+  display:flex;
+  flex-direction:column;
+  gap:.6rem;
+}
+.al-step{
+  display:flex;
+  align-items:flex-start;
+  gap:.85rem;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:.75rem 1rem;
+  transition:border-color .2s;
+}
+.al-step:hover{border-color:var(--border3)}
+.al-step-num{
+  width:28px;height:28px;
+  border-radius:50%;
+  background:linear-gradient(135deg,rgba(56,189,248,.2),rgba(56,189,248,.08));
+  border:1px solid rgba(56,189,248,.3);
+  color:var(--cyan);
+  font-family:var(--font);
+  font-size:15px;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+  letter-spacing:.04em;
+}
+.al-step-title{
+  font-family:var(--serif);
+  font-size:14px;
+  font-weight:600;
+  color:#ffffff;
+  margin-bottom:.3rem;
+}
+.al-step-desc{
+  font-size:11.5px;
+  color:rgba(200,220,240,.8);
+  line-height:1.6;
+  font-family:var(--serif);
+}
+.al-link{color:var(--cyan);text-decoration:none}
+.al-link:hover{text-decoration:underline}
+.al-code{
+  font-family:var(--mono);
+  font-size:10px;
+  background:rgba(56,189,248,.1);
+  border:1px solid rgba(56,189,248,.2);
+  border-radius:4px;
+  padding:1px 6px;
+  color:var(--cyan);
+}
+.al-code-block{
+  display:flex;
+  flex-wrap:wrap;
+  gap:.4rem;
+  margin-top:.5rem;
+  padding:.5rem .6rem;
+  background:rgba(0,0,0,.25);
+  border-radius:7px;
+  border:1px solid var(--border);
+}
+.al-var{
+  font-family:var(--mono);
+  font-size:10px;
+  color:#a78bfa;
+  background:rgba(167,139,250,.1);
+  border:1px solid rgba(167,139,250,.2);
+  border-radius:4px;
+  padding:2px 7px;
+}
+
+/* Formulaire */
+.al-form-card{
+  background:var(--surface);
+  border:1px solid var(--border2);
+  border-radius:14px;
+  padding:1rem 1.1rem 1.1rem;
+  display:flex;
+  flex-direction:column;
+  gap:.85rem;
+}
+.al-field-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:.65rem;
+}
+@media(max-width:520px){.al-field-grid{grid-template-columns:1fr}}
+.al-field{display:flex;flex-direction:column;gap:.3rem}
+.al-lbl{
+  font-size:10px;
+  font-family:var(--mono);
+  color:var(--text3);
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+.al-inp{
+  background:var(--bg2);
+  border:1px solid var(--border2);
+  border-radius:8px;
+  padding:.5rem .75rem;
+  color:var(--text);
+  font-family:var(--mono);
+  font-size:12px;
+  outline:none;
+  transition:border-color .2s,box-shadow .2s;
+}
+.al-inp:focus{
+  border-color:var(--cyan);
+  box-shadow:0 0 0 2px rgba(56,189,248,.12);
+}
+.al-inp::placeholder{color:var(--text3);opacity:.6}
+.al-seuil-row{border-top:1px solid var(--border);padding-top:.7rem}
+.al-field-sm{max-width:220px}
+.al-seuil-wrap{display:flex;align-items:center;gap:.75rem}
+.al-inp-num{width:80px;text-align:center;font-size:16px;font-family:var(--font);letter-spacing:.05em}
+.al-seuil-hint{font-size:10px;color:var(--text3);font-family:var(--mono);line-height:1.4}
+.al-btn-row{
+  display:flex;
+  gap:.65rem;
+  flex-wrap:wrap;
+  border-top:1px solid var(--border);
+  padding-top:.85rem;
+}
+.al-btn-send{
+  flex:1;
+  min-width:180px;
+  font-family:var(--font);
+  font-size:13px;
+  letter-spacing:.08em;
+  padding:.65rem 1.1rem;
+  border-radius:9px;
+  border:none;
+  background:linear-gradient(135deg,rgba(0,229,180,.18),rgba(0,229,180,.08));
+  border:1px solid rgba(0,229,180,.35);
+  color:#00e5b4;
+  cursor:pointer;
+  transition:all .2s;
+}
+.al-btn-send:hover{background:linear-gradient(135deg,rgba(0,229,180,.28),rgba(0,229,180,.14));box-shadow:0 0 14px rgba(0,229,180,.2)}
+.al-btn-test{
+  font-family:var(--font);
+  font-size:13px;
+  letter-spacing:.08em;
+  padding:.65rem 1.1rem;
+  border-radius:9px;
+  background:var(--surface2);
+  border:1px solid var(--border2);
+  color:var(--text2);
+  cursor:pointer;
+  transition:all .2s;
+}
+.al-btn-test:hover{border-color:var(--border3);color:var(--text)}
+
 </style>
 </head>
 <body>
@@ -1329,6 +1550,7 @@ tbody tr:last-child td{border-bottom:none}
   <div class="tab-nav">
     <button class="tab-btn active" onclick="switchTab('accueil')" id="tab-btn-accueil">🏔️ ACCUEIL</button>
     <button class="tab-btn" onclick="switchTab('creator')" id="tab-btn-creator">🛠️ CRÉATEUR DE SPOT</button>
+    <button class="tab-btn" onclick="switchTab('alertes')" id="tab-btn-alertes">📨 ALERTES</button>
   </div>
 
   <!-- ═══════════════════════════════════════════ -->
@@ -1340,27 +1562,8 @@ tbody tr:last-child td{border-bottom:none}
   <!-- LOAD ROW -->
   <div class="load-row">
     <button class="load-btn" id="fetch-btn" onclick="fetchAll()">⟳ PRÉVISIONS 7 JOURS</button>
-    <button class="load-btn secondary" onclick="sendAlert(true)">Test email</button>
     <div class="prog" id="prog"><div class="prog-fill" id="prog-fill"></div></div>
     <div class="status-txt" id="status-txt">Prêt · 6 spots chargés</div>
-  </div>
-
-  <!-- EMAIL CONFIG -->
-  <div class="cfg-row">
-    <div class="cfg-group"><div class="cfg-lbl">EmailJS Service</div><input class="cfg-inp w-lg" id="ej-svc" placeholder="service_xxx" oninput="saveCfg()"></div>
-    <div class="cfg-group"><div class="cfg-lbl">Template ID</div><input class="cfg-inp w-lg" id="ej-tpl" placeholder="template_xxx" oninput="saveCfg()"></div>
-    <div class="cfg-group"><div class="cfg-lbl">Public Key</div><input class="cfg-inp w-lg" id="ej-key" placeholder="xxxxxxxx" oninput="saveCfg()"></div>
-    <div class="cfg-group"><div class="cfg-lbl">Email</div><input class="cfg-inp w-lg" id="ej-mail" type="email" placeholder="toi@mail.com" oninput="saveCfg()"></div>
-    <div class="cfg-group"><div class="cfg-lbl">Seuil /100</div><input class="cfg-inp w-sm" id="threshold" type="number" value="65" oninput="saveCfg()"></div>
-    <button class="send-alert" onclick="sendAlert(false)">📨 Alerte</button>
-  </div>
-
-  <div class="ej-tip">
-    <details><summary>📘 Config EmailJS (gratuit · 200 emails/mois)</summary>
-    1. <a href="https://emailjs.com" target="_blank">emailjs.com</a> → compte → ajouter un Service (Gmail…) → <em>Service ID</em><br>
-    2. Créer Template avec : <code>{{subject}}</code> <code>{{best_spots}}</code> <code>{{details}}</code> <code>{{date}}</code><br>
-    3. Copier <em>Template ID</em> + <em>Public Key</em> (onglet Account) → remplir ci-dessus<br>
-    4. Alerte auto dès qu'un spot dépasse le seuil</details>
   </div>
 
   <!-- BANNER FENÊTRES -->
@@ -1448,7 +1651,7 @@ tbody tr:last-child td{border-bottom:none}
   <div class="section-lbl">🏔 Détail par spot</div>
   <div class="spot-cards" id="spot-cards"></div>
 
-  <div class="log-box" id="log-box"></div>
+  <div style="height:.5rem"></div>
 
   <!-- ══════════════════════════════════════════ -->
   <!-- CHECKLISTS PAR PAYS                        -->
@@ -1720,6 +1923,129 @@ tbody tr:last-child td{border-bottom:none}
 
     </div>
   </div><!-- /tab-creator -->
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- ONGLET ALERTES                             -->
+  <!-- ══════════════════════════════════════════ -->
+  <div class="tab-content" id="tab-alertes">
+    <div class="al-wrap">
+
+      <!-- SECTION 1 — INFO -->
+      <div class="al-info-card">
+        <div class="al-info-header">
+          <span class="al-info-icon">📨</span>
+          <div>
+            <div class="al-info-title">Alertes email automatiques</div>
+            <div class="al-info-sub">Reçois un email dès qu'une fenêtre VLD favorable se présente</div>
+          </div>
+        </div>
+        <div class="al-info-body">
+          <div class="al-info-row">
+            <span class="al-info-dot" style="background:var(--cyan)"></span>
+            <span><strong style="color:var(--text2)">EmailJS</strong> — service gratuit, <strong style="color:var(--cyan)">200 emails/mois</strong>, aucun serveur requis. Fonctionne directement depuis le navigateur.</span>
+          </div>
+          <div class="al-info-row">
+            <span class="al-info-dot" style="background:var(--green)"></span>
+            <span>Un email est envoyé automatiquement dès qu'un spot dépasse ton <strong style="color:var(--text2)">seuil /100</strong> configuré.</span>
+          </div>
+          <div class="al-info-row">
+            <span class="al-info-dot" style="background:var(--amber)"></span>
+            <span>Le récap contient les <strong style="color:var(--text2)">fenêtres favorables de la semaine</strong> avec les scores et les verdicts par spot.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 2 — GUIDE 4 ÉTAPES -->
+      <div class="al-section-lbl">📘 Guide de configuration EmailJS</div>
+      <div class="al-steps">
+
+        <div class="al-step">
+          <div class="al-step-num">1</div>
+          <div class="al-step-body">
+            <div class="al-step-title">Créer un compte EmailJS</div>
+            <div class="al-step-desc">Va sur <a href="https://emailjs.com" target="_blank" class="al-link">emailjs.com</a> → crée un compte gratuit → <strong>Add New Service</strong> → choisis Gmail (ou autre) → note le <span class="al-code">Service ID</span></div>
+          </div>
+        </div>
+
+        <div class="al-step">
+          <div class="al-step-num">2</div>
+          <div class="al-step-body">
+            <div class="al-step-title">Créer un Template d'email</div>
+            <div class="al-step-desc">Dans <strong>Email Templates</strong> → New Template → insère ces variables dans le corps du mail :</div>
+            <div class="al-code-block">
+              <span class="al-var">{{subject}}</span>
+              <span class="al-var">{{best_spots}}</span>
+              <span class="al-var">{{details}}</span>
+              <span class="al-var">{{date}}</span>
+            </div>
+            <div class="al-step-desc" style="margin-top:.4rem">Note le <span class="al-code">Template ID</span></div>
+          </div>
+        </div>
+
+        <div class="al-step">
+          <div class="al-step-num">3</div>
+          <div class="al-step-body">
+            <div class="al-step-title">Récupérer la Public Key</div>
+            <div class="al-step-desc">Onglet <strong>Account</strong> → section <strong>API Keys</strong> → copie ta <span class="al-code">Public Key</span></div>
+          </div>
+        </div>
+
+        <div class="al-step">
+          <div class="al-step-num">4</div>
+          <div class="al-step-body">
+            <div class="al-step-title">Remplir le formulaire ci-dessous</div>
+            <div class="al-step-desc">Les alertes se déclencheront automatiquement à chaque chargement des prévisions si un spot dépasse ton seuil.</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- SECTION 3 — FORMULAIRE -->
+      <div class="al-section-lbl">⚙️ Configuration</div>
+      <div class="al-form-card">
+
+        <div class="al-field-grid">
+          <div class="al-field">
+            <label class="al-lbl">Service ID</label>
+            <input class="al-inp" id="ej-svc" placeholder="service_xxxxxxx" oninput="saveCfg()">
+          </div>
+          <div class="al-field">
+            <label class="al-lbl">Template ID</label>
+            <input class="al-inp" id="ej-tpl" placeholder="template_xxxxxxx" oninput="saveCfg()">
+          </div>
+          <div class="al-field">
+            <label class="al-lbl">Public Key</label>
+            <input class="al-inp" id="ej-key" placeholder="xxxxxxxxxxxxxxxxxxxx" oninput="saveCfg()">
+          </div>
+          <div class="al-field">
+            <label class="al-lbl">Email destinataire</label>
+            <input class="al-inp" id="ej-mail" type="email" placeholder="toi@gmail.com" oninput="saveCfg()">
+          </div>
+        </div>
+
+        <div class="al-seuil-row">
+          <div class="al-field al-field-sm">
+            <label class="al-lbl">Seuil d'alerte /100</label>
+            <div class="al-seuil-wrap">
+              <input class="al-inp al-inp-num" id="threshold" type="number" value="65" min="0" max="100" oninput="saveCfg()">
+              <span class="al-seuil-hint">Alerte si score ≥ cette valeur</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="al-btn-row">
+          <button class="al-btn-send" onclick="sendAlert(false)">📨 Envoyer l'alerte semaine</button>
+          <button class="al-btn-test" onclick="sendAlert(true)">🧪 Email de test</button>
+        </div>
+
+      </div>
+
+      <!-- SECTION 4 — LOG -->
+      <div class="al-section-lbl">📋 Journal d'activité</div>
+      <div class="log-box" id="log-box" style="display:block;min-height:48px"></div>
+
+    </div>
+  </div><!-- /tab-alertes -->
 
   
   </div><!-- /wrap -->
