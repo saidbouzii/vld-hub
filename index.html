@@ -2777,8 +2777,7 @@ function renderKMini(k, h) {
       <span class="dr-k-eq" style="color:${kColor}">K = ${k.toFixed(3)}</span>
       <span class="dr-k-verdict" style="color:${kColor}">${kVerdict}</span>
     </div>
-   <div class="dr-k-sub">dT/dh = ${dTdh!==undefined?(dTdh*1000).toFixed(2):'—'} °C/100m${h.kSource?` · <span style="color:${h.kSource==='sondage'?'#22d3ee':'var(--text3)'}">${h.kSource==='sondage'?'📡 Sondage réel':'Modèle'}</span>`:''}</div>
-  </div>`;
+    <div class="dr-k-sub">dT/dh = ${dTdh!==undefined?(dTdh*1000).toFixed(2):'—'} °C/100m${h.kSource?` · <span style="color:${h.kSource==='sondage'?'#22d3ee':'var(--text3)'}">${h.kSource==='sondage'?'📡 Sondage réel':'Modèle'}</span>`:''}</div>
   </div>`;
 }
 
