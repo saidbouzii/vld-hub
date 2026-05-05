@@ -2462,7 +2462,8 @@ async function fetchSST(lat, lon) {
     const d = new Date(); d.setDate(d.getDate()-1);
     const ds = d.toISOString().split('T')[0]+'T09:00:00Z';
     const url = `https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.json?analysed_sst%5B(${ds})%5D%5B(${lat.toFixed(2)})%5D%5B(${lon.toFixed(2)})%5D`;
-    const r = await fetch(url); const j = await r.json();
+  const r = await Promise.race([fetch(url), new Promise((_,reject)=>setTimeout(()=>reject('timeout'),2000))]);
+    const j = await r.json();
     const sst = j.table?.rows?.[0]?.[2];
     return sst !== null && sst !== undefined ? parseFloat(sst) : null;
   } catch(e) { return null; }
@@ -2530,7 +2531,7 @@ wind: avg(d1.hourly?.wind_speed_10m),
     const sunriseStr = d1.daily?.sunrise?.[day];
     const sunriseHour = sunriseStr ? new Date(sunriseStr).getHours() + new Date(sunriseStr).getMinutes()/60 : 7;
     const hourlyScores = {};
-    const timeOffsets = [0, 0.5, 1, 1.5, 2, 3, 4, 5];
+   const results = await Promise.allSettled(SPOTS.map(s=>fetchSpot(s)));
     for (const offset of timeOffsets) {
       const hourIdx = day*24 + Math.floor(sunriseHour + offset);
       const tH = d1.hourly?.temperature_2m?.[hourIdx];
