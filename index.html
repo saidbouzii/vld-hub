@@ -2681,7 +2681,7 @@ function renderCards(loading) {
               s.type==='mediterranee_marin'?' · Maritime très strict':
               ' · CAPE élim >300 J/kg'}
           </div>
-          ${fc.map((dayData,di)=>renderDayRow(dayData,days[di],s)).join('')}
+          <div class="drow-right">${renderNewCurveBlock(spot,k)}${renderKMini(k,h,spot)}${renderExternalLinks(spot)}</div>
         </div>`;
     return `<div class="scard ${bestSc>=65?'best-card':''}" id="sc-${s.id}">
       <div class="scard-hdr" onclick="toggleCard('${s.id}')">
@@ -2750,6 +2750,18 @@ function renderMeteoButtons(items) {
     const state = it.elim ? 'elim' : it.color==='amber' ? 'warn' : 'ok';
     const icon = getMbIcon(it.name);
     const badge = it.elim ? '<span class="mb-badge">ÉLIM</span>' : '';
+function renderExternalLinks(spot) {
+  const lat=spot.obs.lat.toFixed(4), lon=spot.obs.lon.toFixed(4);
+  const links=[
+    {label:'🌤 Clearoutside',url:`https://clearoutside.com/forecast/${lat}/${lon}`},
+    {label:'🌬 Windy',url:`https://www.windy.com/${lat}/${lon}?temp,${lat},${lon},8`},
+    {label:'🇫🇷 Météociel',url:`https://www.meteociel.fr/previsions-meteo-heure-heure/${lat}N${lon}E.htm`},
+    {label:'🛰 Sat IR',url:`https://www.sat24.com/fr/eu`},
+  ];
+  return `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
+    ${links.map(l=>`<a href="${l.url}" target="_blank" rel="noopener" style="font-size:9px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,.07);color:var(--text2);text-decoration:none;border:1px solid rgba(255,255,255,.1)">${l.label}</a>`).join('')}
+  </div>`;
+}
     return `<div class="mb ${state}">
       ${badge}
       <div class="mb-icon">${icon}</div>
