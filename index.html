@@ -2457,7 +2457,18 @@ const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${
 // ═══════════════════════════════════════════════════
 // FETCH
 // ═══════════════════════════════════════════════════
+async function fetchSST(lat, lon) {
+  try {
+    const d = new Date(); d.setDate(d.getDate()-1);
+    const ds = d.toISOString().split('T')[0]+'T09:00:00Z';
+    const url = `https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.json?analysed_sst%5B(${ds})%5D%5B(${lat.toFixed(2)})%5D%5B(${lon.toFixed(2)})%5D`;
+    const r = await fetch(url); const j = await r.json();
+    const sst = j.table?.rows?.[0]?.[2];
+    return sst !== null && sst !== undefined ? parseFloat(sst) : null;
+  } catch(e) { return null; }
+}
 async function fetchSpot(spot) {
+  
  const params = [
   'visibility','wind_speed_10m','cloud_cover_low','cloud_cover_mid','cloud_cover_high',
   'relative_humidity_2m','dew_point_2m','temperature_2m','surface_pressure',
@@ -2468,7 +2479,7 @@ async function fetchSpot(spot) {
   const urlObs = `${base}&latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=${params}`;
   const urlMid = `${base}&latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=visibility,cloud_cover_low,relative_humidity_2m,cape,wind_speed_80m,wind_speed_120m`;
  const urlDust = 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude='+spot.mid.lat+'&longitude='+spot.mid.lon+'&hourly=dust&timezone=auto';
- const [r1,r2,r3,dwdResult] = await Promise.all([fetch(urlObs),fetch(urlMid),fetch(urlDust),fetchDWDSounding(spot.obs.lat,spot.obs.lon)]);
+ const [r1,r2,r3,dwdResult,sst] = await Promise.all([fetch(urlObs),fetch(urlMid),fetch(urlDust),fetchDWDSounding(spot.obs.lat,spot.obs.lon),fetchSST(spot.mid.lat,spot.mid.lon)]);
  const [d1,d2,d3] = await Promise.all([r1.json(),r2.json(),r3.json()]);
   const daily = [];
   for (let day=0; day<7; day++) {
@@ -2510,6 +2521,7 @@ dust: avg(d3.hourly?.dust),
 wind: avg(d1.hourly?.wind_speed_10m),
       vis: (avg(d1.hourly?.visibility)??0)/1000,
       temp, dTdh, k_bislin, lift_m, kSource,
+      sst, sstBonus: (sst!==null && temp!==null && (sst-temp)<-5),
      vis_mid: (avg(d2.hourly?.visibility)??0)/1000,
     };
     h.cn2 = (()=>{const ws=h.wind_shear||0.1;const dT=h.dTdh||-0.0065;const alt=spot.obs.alt||500;return 3.8e-14*Math.pow(Math.abs(dT+0.0098),2)*Math.pow(ws+0.01,2)/Math.pow(alt+1,0.67);})();
@@ -2781,7 +2793,8 @@ function renderKMini(k, h) {
     </div>
     <div class="dr-k-sub">dT/dh = ${dTdh!==undefined?(dTdh*1000).toFixed(2):'—'} °C/100m${h.kSource?` · <span style="color:${h.kSource==='sondage'?'#22d3ee':'var(--text3)'}">${h.kSource==='sondage'?'📡 Sondage réel':'Modèle'}</span>`:''}</div>
   ${h.cn2!==undefined?`<div class="dr-k-sub">Cn² = ${h.cn2.toExponential(1)} m⁻²/³ · ${h.cn2>1e-13?'🔴 Turbulence forte':h.cn2>1e-14?'🟡 Modérée':'🟢 Faible'}</div>`:''}
-    </div>`;
+  ${h.sst!==null&&h.sst!==undefined?`<div class="dr-k-sub">SST = ${h.sst.toFixed(1)}°C${h.sstBonus?' · <span style="color:#22d3ee">🌊 Inversion marine forte</span>':''}</div>`:''} 
+  </div>`;
 }
 
 function toggleCard(id){
