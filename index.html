@@ -2512,6 +2512,7 @@ wind: avg(d1.hourly?.wind_speed_10m),
       temp, dTdh, k_bislin, lift_m, kSource,
      vis_mid: (avg(d2.hourly?.visibility)??0)/1000,
     };
+    h.cn2 = (()=>{const ws=h.wind_shear||0.1;const dT=h.dTdh||-0.0065;const alt=spot.obs.alt||500;return 3.8e-14*Math.pow(Math.abs(dT+0.0098),2)*Math.pow(ws+0.01,2)/Math.pow(alt+1,0.67);})();
     const dt=new Date(); dt.setDate(dt.getDate()+day);
         // TIME SLICER - Sunrise & scoring par heure
     const sunriseStr = d1.daily?.sunrise?.[day];
@@ -2779,7 +2780,8 @@ function renderKMini(k, h) {
       <span class="dr-k-verdict" style="color:${kColor}">${kVerdict}</span>
     </div>
     <div class="dr-k-sub">dT/dh = ${dTdh!==undefined?(dTdh*1000).toFixed(2):'—'} °C/100m${h.kSource?` · <span style="color:${h.kSource==='sondage'?'#22d3ee':'var(--text3)'}">${h.kSource==='sondage'?'📡 Sondage réel':'Modèle'}</span>`:''}</div>
-  </div>`;
+  ${h.cn2!==undefined?`<div class="dr-k-sub">Cn² = ${h.cn2.toExponential(1)} m⁻²/³ · ${h.cn2>1e-13?'🔴 Turbulence forte':h.cn2>1e-14?'🟡 Modérée':'🟢 Faible'}</div>`:''}
+    </div>`;
 }
 
 function toggleCard(id){
