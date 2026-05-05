@@ -2433,7 +2433,27 @@ const ws=h.wind_shear??null;
   const finalScore = hasElim ? Math.min(pct, 35) : pct;
   return { score: finalScore, items, hasElim };
 }
-
+async function fetchDWDSounding(lat, lon) {
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_500hPa,temperature_700hPa,temperature_850hPa,temperature_925hPa,geopotential_height_500hPa,geopotential_height_700hPa,geopotential_height_850hPa,geopotential_height_925hPa,dewpoint_depression_850hPa&forecast_days=1&timezone=auto`;
+    const r = await fetch(url); const d = await r.json();
+    const h = d.hourly; const i = 6; // 06h UTC
+    const levels = [
+      {p:925, T:h.temperature_925hPa?.[i], Z:h.geopotential_height_925hPa?.[i]},
+      {p:850, T:h.temperature_850hPa?.[i], Z:h.geopotential_height_850hPa?.[i]},
+      {p:700, T:h.temperature_700hPa?.[i], Z:h.geopotential_height_700hPa?.[i]},
+      {p:500, T:h.temperature_500hPa?.[i], Z:h.geopotential_height_500hPa?.[i]},
+    ].filter(l=>l.T!==null&&l.T!==undefined&&l.Z!==null&&l.Z!==undefined);
+    if(levels.length < 2) return null;
+    // dT/dh moyen sur les niveaux bas (925-850)
+    const l0=levels[0], l1=levels[1];
+    const dTdh = (l1.T - l0.T) / (l1.Z - l0.Z);
+    const P_mean = (l0.p + l1.p) / 2;
+    const T_K = ((l0.T + l1.T) / 2) + 273.15;
+    const k = 503 * (P_mean / (T_K * T_K)) * (0.0343 + dTdh);
+    return { k, dTdh };
+  } catch(e) { return null; }
+}
 // ═══════════════════════════════════════════════════
 // FETCH
 // ═══════════════════════════════════════════════════
@@ -2448,7 +2468,7 @@ async function fetchSpot(spot) {
   const urlObs = `${base}&latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=${params}`;
   const urlMid = `${base}&latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=visibility,cloud_cover_low,relative_humidity_2m,cape,wind_speed_80m,wind_speed_120m`;
  const urlDust = 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude='+spot.mid.lat+'&longitude='+spot.mid.lon+'&hourly=dust&timezone=auto';
-  const [r1,r2,r3] = await Promise.all([fetch(urlObs),fetch(urlMid),fetch(urlDust)]);
+ const [r1,r2,r3,dwdResult] = await Promise.all([fetch(urlObs),fetch(urlMid),fetch(urlDust),fetchDWDSounding(spot.obs.lat,spot.obs.lon)]);
  const [d1,d2,d3] = await Promise.all([r1.json(),r2.json(),r3.json()]);
   const daily = [];
   for (let day=0; day<7; day++) {
@@ -2464,13 +2484,15 @@ async function fetchSpot(spot) {
     const T850 = avg(d1.hourly?.temperature_850hPa);
     const H850 = avg(d1.hourly?.geopotential_height_850hPa);
     // dT/dh entre sol et 850hPa (en °C/m)
-    let dTdh = -0.0065; // lapse rate standard
+  let dTdh = -0.0065;
     if (T850 !== null && temp !== null && H850 !== null && H850 > (spot.obs.alt||0) + 50) {
       dTdh = (T850 - temp) / (H850 - (spot.obs.alt||0));
     }
-    // Bislin eq.(2) : k = 503 * (P/T²) * (0.0343 + dT/dh)  [T en Kelvin]
     const T_K = (temp !== null ? temp : 15) + 273.15;
-    const k_bislin = 503 * (P_mbar / (T_K * T_K)) * (0.0343 + dTdh);
+    const k_model = 503 * (P_mbar / (T_K * T_K)) * (0.0343 + dTdh);
+    const k_bislin = dwdResult ? dwdResult.k : k_model;
+    const kSource = dwdResult ? 'sondage' : 'modele';
+    if(dwdResult) dTdh = dwdResult.dTdh;
     // eq.(7) : lift = k * d² / (2R)  [mètres]
     const dist_m = (spot.dist_km || 300) * 1000;
     const lift_m = hiddenByEarth(dist_m) - hiddenWithRefraction(dist_m, k_bislin);
@@ -2487,10 +2509,8 @@ wind_shear: (()=>{const w80=avg(d2.hourly?.wind_speed_80m);const w120=avg(d2.hou
 dust: avg(d3.hourly?.dust),     
 wind: avg(d1.hourly?.wind_speed_10m),
       vis: (avg(d1.hourly?.visibility)??0)/1000,
-      precip: avg(d1.hourly?.precipitation_probability),
+      temp, dTdh, k_bislin, lift_m, kSource,
       vis_mid: (avg(d2.hourly?.visibility)??0)/1000,
-      temp, dTdh, k_bislin, lift_m,
-    };
     const dt=new Date(); dt.setDate(dt.getDate()+day);
         // TIME SLICER - Sunrise & scoring par heure
     const sunriseStr = d1.daily?.sunrise?.[day];
@@ -2757,7 +2777,8 @@ function renderKMini(k, h) {
       <span class="dr-k-eq" style="color:${kColor}">K = ${k.toFixed(3)}</span>
       <span class="dr-k-verdict" style="color:${kColor}">${kVerdict}</span>
     </div>
-    ${dTdh!==undefined?`<div class="dr-k-sub">dT/dh = ${(dTdh*1000).toFixed(2)} °C/100m</div>`:''}
+   <div class="dr-k-sub">dT/dh = ${dTdh!==undefined?(dTdh*1000).toFixed(2):'—'} °C/100m${h.kSource?` · <span style="color:${h.kSource==='sondage'?'#22d3ee':'var(--text3)'}">${h.kSource==='sondage'?'📡 Sondage réel':'Modèle'}</span>`:''}</div>
+  </div>`;
   </div>`;
 }
 
