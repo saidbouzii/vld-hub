@@ -2504,7 +2504,7 @@ async function fetchSpot(spot) {
     const k_bislin = dwdResult ? dwdResult.k : k_model;
     const kSource = dwdResult ? 'sondage' : 'modele';
     if(dwdResult) dTdh = dwdResult.dTdh;
-    // eq.(7) : lift = k * d² / (2R)  [mètres]
+    // eq.(7) : lift = k * d² / (2R)  [mètres].
     const dist_m = (spot.dist_km || 300) * 1000;
     const lift_m = hiddenByEarth(dist_m) - hiddenWithRefraction(dist_m, k_bislin);
     const h = {
