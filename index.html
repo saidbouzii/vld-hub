@@ -2510,7 +2510,8 @@ dust: avg(d3.hourly?.dust),
 wind: avg(d1.hourly?.wind_speed_10m),
       vis: (avg(d1.hourly?.visibility)??0)/1000,
       temp, dTdh, k_bislin, lift_m, kSource,
-      vis_mid: (avg(d2.hourly?.visibility)??0)/1000,
+     vis_mid: (avg(d2.hourly?.visibility)??0)/1000,
+    };
     const dt=new Date(); dt.setDate(dt.getDate()+day);
         // TIME SLICER - Sunrise & scoring par heure
     const sunriseStr = d1.daily?.sunrise?.[day];
