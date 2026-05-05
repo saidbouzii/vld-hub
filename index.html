@@ -2435,7 +2435,7 @@ const ws=h.wind_shear??null;
 }
 async function fetchDWDSounding(lat, lon) {
   try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_500hPa,temperature_700hPa,temperature_850hPa,temperature_925hPa,geopotential_height_500hPa,geopotential_height_700hPa,geopotential_height_850hPa,geopotential_height_925hPa,dewpoint_depression_850hPa&forecast_days=1&timezone=auto`;
+const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_500hPa,temperature_700hPa,temperature_850hPa,temperature_925hPa,geopotential_height_500hPa,geopotential_height_700hPa,geopotential_height_850hPa,geopotential_height_925hPa&forecast_days=1&timezone=auto`;
     const r = await fetch(url); const d = await r.json();
     const h = d.hourly; const i = 6; // 06h UTC
     const levels = [
