@@ -2753,7 +2753,7 @@ function renderNewCurveBlock(spot, k_default) {
   return `<div class="dr-curve">
     <div class="dr-curve-title">🌍 <span style="color:var(--text2)">${spot.name} → ${spot.target}</span></div>
     <div class="dr-curve-svg" onclick="openCurveOverlay('${spot.id}', ${k.toFixed(3)})" title="Cliquer pour agrandir">${svgStr}</div>
-    <div class="dr-k-sub">dT/dh = ${dTdh!==undefined?(dTdh*1000).toFixed(2):'—'} °C/100m${h.kSource?` · <span style="color:${h.kSource==='sondage'?'#22d3ee':'var(--text3)'}">${h.kSource==='sondage'?'📡 Sondage réel':'Modèle'}</span>`:''}</div>
+    <div class="dr-curve-info">
       <div class="dr-ci"><span class="dr-ci-lbl">h1 obs.</span><span class="dr-ci-val">${d.h1.toLocaleString()} m</span></div>
       <div class="dr-ci"><span class="dr-ci-lbl">h2 cible</span><span class="dr-ci-val">${d.h2.toLocaleString()} m</span></div>
       <div class="dr-ci ${visClass}"><span class="dr-ci-lbl">✅ Visible</span><span class="dr-ci-val">${d.visible>0?Math.round(d.visible).toLocaleString()+' m':'0 m'}</span></div>
