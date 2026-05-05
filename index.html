@@ -2479,7 +2479,8 @@ async function fetchSpot(spot) {
   const urlObs = `${base}&latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=${params}`;
   const urlMid = `${base}&latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=visibility,cloud_cover_low,relative_humidity_2m,cape,wind_speed_80m,wind_speed_120m`;
  const urlDust = 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude='+spot.mid.lat+'&longitude='+spot.mid.lon+'&hourly=dust&timezone=auto';
- const [r1,r2,r3,dwdResult,sst] = await Promise.all([fetch(urlObs),fetch(urlMid),fetch(urlDust),fetchDWDSounding(spot.obs.lat,spot.obs.lon),fetchSST(spot.mid.lat,spot.mid.lon)]);
+const [r1,r2,r3,dwdResult] = await Promise.all([fetch(urlObs),fetch(urlMid),fetch(urlDust),fetchDWDSounding(spot.obs.lat,spot.obs.lon)]);
+const sst = null;
  const [d1,d2,d3] = await Promise.all([r1.json(),r2.json(),r3.json()]);
   const daily = [];
   for (let day=0; day<7; day++) {
