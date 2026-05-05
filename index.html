@@ -2424,7 +2424,11 @@ function scoreDay(spot, h) {
     precip<10?'✅ Sec':'⚠️ Possible');
     const cape=h.cape??null;
 if(cape!==null){const capeElim=cape>300;const capePts=capeElim?0:cape<10?10:cape<100?7:3;add('CAPE',cape,'J/kg',capePts,10,capeElim?'red':cape<100?'green':'amber',capeElim?'ELIM >300':cape<10?'Ultra stable':cape<100?'Stable':'Convection',capeElim);}
+const ws=h.wind_shear??null;
+  if(ws!==null){const wsElim=ws>1.5;const wsPts=wsElim?0:ws<0.3?8:ws<0.7?6:ws<1.2?3:1;add('Cisaillement',ws,'m/s/100m',wsPts,8,wsElim?'red':ws<0.3?'green':ws<0.7?'green':'amber',wsElim?'❌ ÉLIM >1.5':ws<0.3?'⭐ Calme':ws<0.7?'✅ Bon':'⚠️ Modéré',wsElim);}
 
+  const dust=h.dust??null;
+  if(dust!==null){const dustElim=dust>200;const dustPts=dustElim?0:dust<20?8:dust<80?5:dust<200?2:0;add('Poussières',dust,'µg/m³',dustPts,8,dustElim?'red':dust<20?'green':dust<80?'amber':'red',dustElim?'❌ ÉLIM >200':dust<20?'⭐ Air pur':dust<80?'⚠️ Voile':'🔴 Chargé',dustElim);}
   const pct = maxScore>0 ? Math.round((score/maxScore)*100) : 0;
   const finalScore = hasElim ? Math.min(pct, 35) : pct;
   return { score: finalScore, items, hasElim };
