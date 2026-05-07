@@ -2481,6 +2481,7 @@ async function fetchSpot(spot) {
  const urlDust = 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude='+spot.mid.lat+'&longitude='+spot.mid.lon+'&hourly=dust&timezone=auto';
 const [r1,r2,r3] = await Promise.all([fetch(urlObs),fetch(urlMid),fetch(urlDust)]);
 const dwdResult = null;
+
 const sst = null;
  const [d1,d2,d3] = await Promise.all([r1.json(),r2.json(),r3.json()]);
   const daily = [];
@@ -2529,10 +2530,10 @@ wind: avg(d1.hourly?.wind_speed_10m),
     h.cn2 = (()=>{const ws=h.wind_shear||0.1;const dT=h.dTdh||-0.0065;const alt=spot.obs.alt||500;return 3.8e-14*Math.pow(Math.abs(dT+0.0098),2)*Math.pow(ws+0.01,2)/Math.pow(alt+1,0.67);})();
     const dt=new Date(); dt.setDate(dt.getDate()+day);
         // TIME SLICER - Sunrise & scoring par heure
-    const sunriseStr = d1.daily?.sunrise?.[day];
+
     const sunriseHour = sunriseStr ? new Date(sunriseStr).getHours() + new Date(sunriseStr).getMinutes()/60 : 7;
     const hourlyScores = {};
-   const results = await Promise.allSettled(SPOTS.map(s=>fetchSpot(s)));
+   
     for (const offset of timeOffsets) {
       const hourIdx = day*24 + Math.floor(sunriseHour + offset);
       const tH = d1.hourly?.temperature_2m?.[hourIdx];
@@ -2570,7 +2571,12 @@ async function fetchAll() {
   document.getElementById('prog').style.display='block';
   setStatus('Interrogation Open-Meteo…');
   renderMatrix(true); renderCards(true);
-  const results = await Promise.allSettled(SPOTS.map(s=>fetchSpot(s)));
+ const results = [];
+  for(const s of SPOTS){
+    const r = await fetchSpot(s).then(v=>({status:'fulfilled',value:v})).catch(e=>({status:'rejected',reason:e}));
+    results.push(r);
+    await new Promise(r=>setTimeout(r,600));
+  }
   results.forEach((r,i)=>{
     const s=SPOTS[i];
     if(r.status==='fulfilled'){forecasts[s.id]=r.value;log(`✅ ${s.name}`,'ok');}
