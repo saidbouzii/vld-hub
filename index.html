@@ -2574,7 +2574,8 @@ async function fetchAll() {
  const results = []; 
 
   for(const s of SPOTS){
-    const r = await fetchSpot(s).then(v=>({status:'fulfilled',value:v})).catch(e=>({status:'rejected',reason:e}));
+   const r = await fetchSpot(s).then(v=>({status:'fulfilled',value:v})).catch(e=>({status:'rejected',reason:e}));
+    console.log('spot done', s.name, r.status, r.reason||'');
     results.push(r);
     await new Promise(r=>setTimeout(r,600));
   }
