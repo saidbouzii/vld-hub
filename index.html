@@ -2424,51 +2424,16 @@ function scoreDay(spot, h) {
     precip<10?'✅ Sec':'⚠️ Possible');
     const cape=h.cape??null;
 if(cape!==null){const capeElim=cape>300;const capePts=capeElim?0:cape<10?10:cape<100?7:3;add('CAPE',cape,'J/kg',capePts,10,capeElim?'red':cape<100?'green':'amber',capeElim?'ELIM >300':cape<10?'Ultra stable':cape<100?'Stable':'Convection',capeElim);}
-const ws=h.wind_shear??null;
-  if(ws!==null){const wsElim=ws>1.5;const wsPts=wsElim?0:ws<0.3?8:ws<0.7?6:ws<1.2?3:1;add('Cisaillement',ws,'m/s/100m',wsPts,8,wsElim?'red':ws<0.3?'green':ws<0.7?'green':'amber',wsElim?'❌ ÉLIM >1.5':ws<0.3?'⭐ Calme':ws<0.7?'✅ Bon':'⚠️ Modéré',wsElim);}
 
-  const dust=h.dust??null;
-  if(dust!==null){const dustElim=dust>200;const dustPts=dustElim?0:dust<20?8:dust<80?5:dust<200?2:0;add('Poussières',dust,'µg/m³',dustPts,8,dustElim?'red':dust<20?'green':dust<80?'amber':'red',dustElim?'❌ ÉLIM >200':dust<20?'⭐ Air pur':dust<80?'⚠️ Voile':'🔴 Chargé',dustElim);}
   const pct = maxScore>0 ? Math.round((score/maxScore)*100) : 0;
   const finalScore = hasElim ? Math.min(pct, 35) : pct;
   return { score: finalScore, items, hasElim };
 }
-async function fetchDWDSounding(lat, lon) {
-  try {
-const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_500hPa,temperature_700hPa,temperature_850hPa,temperature_925hPa,geopotential_height_500hPa,geopotential_height_700hPa,geopotential_height_850hPa,geopotential_height_925hPa&forecast_days=1&timezone=auto`;
-    const r = await fetch(url); const d = await r.json();
-    const h = d.hourly; const i = 6; // 06h UTC
-    const levels = [
-      {p:925, T:h.temperature_925hPa?.[i], Z:h.geopotential_height_925hPa?.[i]},
-      {p:850, T:h.temperature_850hPa?.[i], Z:h.geopotential_height_850hPa?.[i]},
-      {p:700, T:h.temperature_700hPa?.[i], Z:h.geopotential_height_700hPa?.[i]},
-      {p:500, T:h.temperature_500hPa?.[i], Z:h.geopotential_height_500hPa?.[i]},
-    ].filter(l=>l.T!==null&&l.T!==undefined&&l.Z!==null&&l.Z!==undefined);
-    if(levels.length < 2) return null;
-    // dT/dh moyen sur les niveaux bas (925-850)
-    const l0=levels[0], l1=levels[1];
-    const dTdh = (l1.T - l0.T) / (l1.Z - l0.Z);
-    const P_mean = (l0.p + l1.p) / 2;
-    const T_K = ((l0.T + l1.T) / 2) + 273.15;
-    const k = 503 * (P_mean / (T_K * T_K)) * (0.0343 + dTdh);
-    return { k, dTdh };
-  } catch(e) { return null; }
-}
+
 // ═══════════════════════════════════════════════════
 // FETCH
 // ═══════════════════════════════════════════════════
-async function fetchSST(lat, lon) {
-  try {
-    const d = new Date(); d.setDate(d.getDate()-1);
-    const ds = d.toISOString().split('T')[0]+'T09:00:00Z';
-    const url = `https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.json?analysed_sst%5B(${ds})%5D%5B(${lat.toFixed(2)})%5D%5B(${lon.toFixed(2)})%5D`;
-  const r = await Promise.race([fetch(url),new Promise((_,rej)=>setTimeout(()=>rej('timeout'),2000))]); const j = await r.json();
-    const sst = j.table?.rows?.[0]?.[2];
-    return sst !== null && sst !== undefined ? parseFloat(sst) : null;
-  } catch(e) { return null; }
-}
 async function fetchSpot(spot) {
-  
  const params = [
   'visibility','wind_speed_10m','cloud_cover_low','cloud_cover_mid','cloud_cover_high',
   'relative_humidity_2m','dew_point_2m','temperature_2m','surface_pressure',
@@ -2479,10 +2444,7 @@ async function fetchSpot(spot) {
   const urlObs = `${base}&latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=${params}`;
   const urlMid = `${base}&latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=visibility,cloud_cover_low,relative_humidity_2m,cape,wind_speed_80m,wind_speed_120m`;
  const urlDust = 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude='+spot.mid.lat+'&longitude='+spot.mid.lon+'&hourly=dust&timezone=auto';
-const [r1,r2,r3] = await Promise.all([fetch(urlObs),fetch(urlMid),fetch(urlDust)]);
-const dwdResult = null;
-
-const sst = null;
+  const [r1,r2,r3] = await Promise.all([fetch(urlObs),fetch(urlMid),fetch(urlDust)]);
  const [d1,d2,d3] = await Promise.all([r1.json(),r2.json(),r3.json()]);
   const daily = [];
   for (let day=0; day<7; day++) {
@@ -2498,15 +2460,13 @@ const sst = null;
     const T850 = avg(d1.hourly?.temperature_850hPa);
     const H850 = avg(d1.hourly?.geopotential_height_850hPa);
     // dT/dh entre sol et 850hPa (en °C/m)
-  let dTdh = -0.0065;
+    let dTdh = -0.0065; // lapse rate standard
     if (T850 !== null && temp !== null && H850 !== null && H850 > (spot.obs.alt||0) + 50) {
       dTdh = (T850 - temp) / (H850 - (spot.obs.alt||0));
     }
+    // Bislin eq.(2) : k = 503 * (P/T²) * (0.0343 + dT/dh)  [T en Kelvin]
     const T_K = (temp !== null ? temp : 15) + 273.15;
-    const k_model = 503 * (P_mbar / (T_K * T_K)) * (0.0343 + dTdh);
-    const k_bislin = dwdResult ? dwdResult.k : k_model;
-    const kSource = dwdResult ? 'sondage' : 'modele';
-    if(dwdResult) dTdh = dwdResult.dTdh;
+    const k_bislin = 503 * (P_mbar / (T_K * T_K)) * (0.0343 + dTdh);
     // eq.(7) : lift = k * d² / (2R)  [mètres]
     const dist_m = (spot.dist_km || 300) * 1000;
     const lift_m = hiddenByEarth(dist_m) - hiddenWithRefraction(dist_m, k_bislin);
@@ -2523,17 +2483,16 @@ wind_shear: (()=>{const w80=avg(d2.hourly?.wind_speed_80m);const w120=avg(d2.hou
 dust: avg(d3.hourly?.dust),     
 wind: avg(d1.hourly?.wind_speed_10m),
       vis: (avg(d1.hourly?.visibility)??0)/1000,
-      temp, dTdh, k_bislin, lift_m, kSource,
-      sst, sstBonus: (sst!==null && temp!==null && (sst-temp)<-5),
-     vis_mid: (avg(d2.hourly?.visibility)??0)/1000,
+      precip: avg(d1.hourly?.precipitation_probability),
+      vis_mid: (avg(d2.hourly?.visibility)??0)/1000,
+      temp, dTdh, k_bislin, lift_m,
     };
-    h.cn2 = (()=>{const ws=h.wind_shear||0.1;const dT=h.dTdh||-0.0065;const alt=spot.obs.alt||500;return 3.8e-14*Math.pow(Math.abs(dT+0.0098),2)*Math.pow(ws+0.01,2)/Math.pow(alt+1,0.67);})();
     const dt=new Date(); dt.setDate(dt.getDate()+day);
         // TIME SLICER - Sunrise & scoring par heure
-const sunriseStr = d1.daily?.sunrise?.[day];
+    const sunriseStr = d1.daily?.sunrise?.[day];
     const sunriseHour = sunriseStr ? new Date(sunriseStr).getHours() + new Date(sunriseStr).getMinutes()/60 : 7;
     const hourlyScores = {};
-   
+    const timeOffsets = [0, 0.5, 1, 1.5, 2, 3, 4, 5];
     for (const offset of timeOffsets) {
       const hourIdx = day*24 + Math.floor(sunriseHour + offset);
       const tH = d1.hourly?.temperature_2m?.[hourIdx];
@@ -2571,14 +2530,7 @@ async function fetchAll() {
   document.getElementById('prog').style.display='block';
   setStatus('Interrogation Open-Meteo…');
   renderMatrix(true); renderCards(true);
- const results = []; 
-
-  for(const s of SPOTS){
-   const r = await fetchSpot(s).then(v=>({status:'fulfilled',value:v})).catch(e=>({status:'rejected',reason:e}));
-    console.log('spot done', s.name, r.status, r.reason||'');
-    results.push(r);
-    await new Promise(r=>setTimeout(r,600));
-  }
+  const results = await Promise.allSettled(SPOTS.map(s=>fetchSpot(s)));
   results.forEach((r,i)=>{
     const s=SPOTS[i];
     if(r.status==='fulfilled'){forecasts[s.id]=r.value;log(`✅ ${s.name}`,'ok');}
@@ -2691,7 +2643,7 @@ function renderCards(loading) {
               s.type==='mediterranee_marin'?' · Maritime très strict':
               ' · CAPE élim >300 J/kg'}
           </div>
-          <div class="drow-right">${renderNewCurveBlock(spot,k)}${renderKMini(k,h,spot)}${renderExternalLinks(spot)}</div>
+          ${fc.map((dayData,di)=>renderDayRow(dayData,days[di],s)).join('')}
         </div>`;
     return `<div class="scard ${bestSc>=65?'best-card':''}" id="sc-${s.id}">
       <div class="scard-hdr" onclick="toggleCard('${s.id}')">
@@ -2760,18 +2712,6 @@ function renderMeteoButtons(items) {
     const state = it.elim ? 'elim' : it.color==='amber' ? 'warn' : 'ok';
     const icon = getMbIcon(it.name);
     const badge = it.elim ? '<span class="mb-badge">ÉLIM</span>' : '';
-function renderExternalLinks(spot) {
-  const lat=spot.obs.lat.toFixed(4), lon=spot.obs.lon.toFixed(4);
-  const links=[
-    {label:'🌤 Clearoutside',url:`https://clearoutside.com/forecast/${lat}/${lon}`},
-    {label:'🌬 Windy',url:`https://www.windy.com/${lat}/${lon}?temp,${lat},${lon},8`},
-    {label:'🇫🇷 Météociel',url:`https://www.meteociel.fr/previsions-meteo-heure-heure/${lat}N${lon}E.htm`},
-    {label:'🛰 Sat IR',url:`https://www.sat24.com/fr/eu`},
-  ];
-  return `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
-    ${links.map(l=>`<a href="${l.url}" target="_blank" rel="noopener" style="font-size:9px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,.07);color:var(--text2);text-decoration:none;border:1px solid rgba(255,255,255,.1)">${l.label}</a>`).join('')}
-  </div>`;
-}
     return `<div class="mb ${state}">
       ${badge}
       <div class="mb-icon">${icon}</div>
@@ -2813,9 +2753,7 @@ function renderKMini(k, h) {
       <span class="dr-k-eq" style="color:${kColor}">K = ${k.toFixed(3)}</span>
       <span class="dr-k-verdict" style="color:${kColor}">${kVerdict}</span>
     </div>
-    <div class="dr-k-sub">dT/dh = ${dTdh!==undefined?(dTdh*1000).toFixed(2):'—'} °C/100m${h.kSource?` · <span style="color:${h.kSource==='sondage'?'#22d3ee':'var(--text3)'}">${h.kSource==='sondage'?'📡 Sondage réel':'Modèle'}</span>`:''}</div>
-  ${h.cn2!==undefined?`<div class="dr-k-sub">Cn² = ${h.cn2.toExponential(1)} m⁻²/³ · ${h.cn2>1e-13?'🔴 Turbulence forte':h.cn2>1e-14?'🟡 Modérée':'🟢 Faible'}</div>`:''}
-  ${h.sst!==null&&h.sst!==undefined?`<div class="dr-k-sub">SST = ${h.sst.toFixed(1)}°C${h.sstBonus?' · <span style="color:#22d3ee">🌊 Inversion marine forte</span>':''}</div>`:''} 
+    ${dTdh!==undefined?`<div class="dr-k-sub">dT/dh = ${(dTdh*1000).toFixed(2)} °C/100m</div>`:''}
   </div>`;
 }
 
