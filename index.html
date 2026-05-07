@@ -2572,7 +2572,7 @@ async function fetchAll() {
   setStatus('Interrogation Open-Meteo…');
   renderMatrix(true); renderCards(true);
  const results = []; 
- console.log('fetchAll start', SPOTS.length, 'spots');S
+ console.log('fetchAll start', SPOTS.length, 'spots');
   for(const s of SPOTS){
     const r = await fetchSpot(s).then(v=>({status:'fulfilled',value:v})).catch(e=>({status:'rejected',reason:e}));
     results.push(r);
