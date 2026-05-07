@@ -2530,7 +2530,7 @@ wind: avg(d1.hourly?.wind_speed_10m),
     h.cn2 = (()=>{const ws=h.wind_shear||0.1;const dT=h.dTdh||-0.0065;const alt=spot.obs.alt||500;return 3.8e-14*Math.pow(Math.abs(dT+0.0098),2)*Math.pow(ws+0.01,2)/Math.pow(alt+1,0.67);})();
     const dt=new Date(); dt.setDate(dt.getDate()+day);
         // TIME SLICER - Sunrise & scoring par heure
-
+const sunriseStr = d1.daily?.sunrise?.[day];
     const sunriseHour = sunriseStr ? new Date(sunriseStr).getHours() + new Date(sunriseStr).getMinutes()/60 : 7;
     const hourlyScores = {};
    
