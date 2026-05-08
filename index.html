@@ -2423,7 +2423,8 @@ function scoreDay(spot, h) {
     precip<10?'✅ Sec':'⚠️ Possible');
     const cape=h.cape??null;
 if(cape!==null){const capeElim=cape>300;const capePts=capeElim?0:cape<10?10:cape<100?7:3;add('CAPE',cape,'J/kg',capePts,10,capeElim?'red':cape<100?'green':'amber',capeElim?'ELIM >300':cape<10?'Ultra stable':cape<100?'Stable':'Convection',capeElim);}
-
+const dust=h.dust??null;
+  if(dust!==null){const dustElim=dust>200;const dustPts=dustElim?0:dust<20?10:dust<100?6:2;const dustLabel=dustElim?'ELIM >200':dust<20?'Clair':'Voile partiel';add('Dust',Math.round(dust),'\u00b5g/m\u00b3',dustPts,10,dustElim?'red':dust<20?'green':'amber',dustLabel,dustElim);}
   const pct = maxScore>0 ? Math.round((score/maxScore)*100) : 0;
   const finalScore = hasElim ? Math.min(pct, 35) : pct;
   return { score: finalScore, items, hasElim };
