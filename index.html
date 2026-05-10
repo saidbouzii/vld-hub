@@ -2136,6 +2136,7 @@ tbody tr:last-child td{border-bottom:none}
   <!-- Leaflet — U5 Carte visées -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/eruda"></script><script>eruda.init();</script>
 </head>
 <body>
 
@@ -2225,6 +2226,7 @@ tbody tr:last-child td{border-bottom:none}
     <div class="prog" id="prog"><div class="prog-fill" id="prog-fill"></div></div>
     <div class="status-txt" id="status-txt">Prêt · 6 spots chargés</div>
   </div>
+  <div id="err-banner" style="display:none;background:rgba(239,68,68,.15);border:1px solid #ef4444;border-radius:8px;padding:8px 12px;margin:6px 0;font-family:monospace;font-size:11px;color:#fca5a5;white-space:pre-wrap;"></div>
 
   <!-- BANNER FENÊTRES -->
   <div class="best-banner" id="best-banner">
@@ -2751,6 +2753,27 @@ tbody tr:last-child td{border-bottom:none}
 // ═══════════════════════════════════════════════════
 // SPOTS CONFIG
 // ═══════════════════════════════════════════════════
+window.onerror = function(msg, src, line, col, err) {
+  const box = document.getElementById('log-box');
+  if(box) {
+    box.style.display = 'block';
+    const sp = document.createElement('span');
+    sp.className = 'lerr';
+    sp.textContent = `[JS ERROR] ${msg} (ligne ${line})`;
+    box.appendChild(sp); box.appendChild(document.createElement('br'));
+  }
+  console.error('Global error:', msg, src, line, col, err);
+};
+window.onunhandledrejection = function(e) {
+  const box = document.getElementById('log-box');
+  if(box) {
+    box.style.display = 'block';
+    const sp = document.createElement('span');
+    sp.className = 'lerr';
+    sp.textContent = `[PROMISE] ${e.reason}`;
+    box.appendChild(sp); box.appendChild(document.createElement('br'));
+  }
+};
 const SPOTS = [
   {
     id: 'cret', name: 'Crêt de la Perdrix', target: '→ Pyrénées', color: '#38bdf8',
@@ -2977,36 +3000,83 @@ async function fetchSpot(spot) {
  const params = [
   'visibility','wind_speed_10m','cloud_cover_low','cloud_cover_mid','cloud_cover_high',
   'relative_humidity_2m','dew_point_2m','temperature_2m','surface_pressure',
-  'precipitation_probability',
-  'temperature_850hPa','temperature_700hPa','geopotential_height_850hPa','geopotential_height_700hPa'
+  'precipitation_probability'
 ].join(',');
    const base = `https://api.open-meteo.com/v1/forecast?forecast_days=7&daily=sunrise,sunset&timezone=auto`;
   const urlObs = `${base}&latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=${params}`;
   const urlMid = `${base}&latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=visibility,cloud_cover_low,relative_humidity_2m,cape,wind_speed_80m,wind_speed_120m`;
  const urlDust = 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude='+spot.mid.lat+'&longitude='+spot.mid.lon+'&hourly=dust&timezone=auto';
-  const [r1,r2,r3] = await Promise.all([fetch(urlObs),fetch(urlMid),fetch(urlDust)]);
- const [d1,d2,d3] = await Promise.all([r1.json(),r2.json(),r3.json()]);
+  // U2 — ERA5 pressure levels pour calcul κ ITU-R P.453
+  const urlPres = `https://api.open-meteo.com/v1/forecast?latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=temperature_1000hPa,temperature_925hPa,temperature_850hPa,temperature_700hPa,temperature_600hPa,temperature_500hPa,temperature_400hPa,temperature_300hPa,relative_humidity_1000hPa,relative_humidity_925hPa,relative_humidity_850hPa,relative_humidity_700hPa,relative_humidity_600hPa,relative_humidity_500hPa,relative_humidity_400hPa,relative_humidity_300hPa,geopotential_height_1000hPa,geopotential_height_925hPa,geopotential_height_850hPa,geopotential_height_700hPa,geopotential_height_600hPa,geopotential_height_500hPa,geopotential_height_400hPa,geopotential_height_300hPa&forecast_days=7&timezone=auto`;
+  const [r1,r2,r3,r4] = await Promise.all([fetch(urlObs),fetch(urlMid),fetch(urlDust),fetch(urlPres).catch(e=>{console.warn('urlPres fetch failed:',e);return null;})]);
+  if(!r1.ok) throw new Error(`urlObs HTTP ${r1.status}`);
+  if(!r2.ok) throw new Error(`urlMid HTTP ${r2.status}`);
+  const [d1,d2,d3] = await Promise.all([r1.json().catch(()=>null),r2.json().catch(()=>null),r3?.json().catch(()=>null)]);
+  if(!d1||d1.error) throw new Error(`urlObs: ${d1?.reason||'réponse invalide'}`);
+  if(!d2||d2.error) throw new Error(`urlMid: ${d2?.reason||'réponse invalide'}`);
+  const d4 = r4 ? await r4.json().catch(()=>null) : null;
+  if(d4?.error) console.warn('urlPres ERA5:', d4.reason);
   const daily = [];
   for (let day=0; day<7; day++) {
     const s=day*24+5, e=day*24+11;
     const avg = arr => {
       if(!arr || !Array.isArray(arr)) return null;
-     const v = arr.slice(s,e).filter(x=>x!==null&&x!==undefined&&!isNaN(x)&&x<900);
+     const v = arr.slice(s,e).filter(x=>x!==null&&x!==undefined&&!isNaN(x));
       return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null;
     };
     const temp=avg(d1.hourly?.temperature_2m);
     const dew=avg(d1.hourly?.dew_point_2m);
     const P_mbar = avg(d1.hourly?.surface_pressure) || 1013.25;
-    const T850 = avg(d1.hourly?.temperature_850hPa);
-    const H850 = avg(d1.hourly?.geopotential_height_850hPa);
-    // dT/dh entre sol et 850hPa (en °C/m)
-    let dTdh = -0.0065; // lapse rate standard
-    if (T850 !== null && temp !== null && H850 !== null && H850 > (spot.obs.alt||0) + 50) {
-      dTdh = (T850 - temp) / (H850 - (spot.obs.alt||0));
+    const T850 = (()=>{const a=d4?.hourly?.temperature_850hPa;if(!a)return null;const v=a.slice(day*24+5,day*24+11).filter(x=>x!=null&&!isNaN(x));return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;})();
+    const H850 = (()=>{const a=d4?.hourly?.geopotential_height_850hPa;if(!a)return null;const v=a.slice(day*24+5,day*24+11).filter(x=>x!=null&&!isNaN(x));return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;})();
+
+    // ── U2 — κ ERA5 multi-niveaux ITU-R P.453 ──────────────────
+    let k_bislin;
+    let k_source = 'bislin';
+    try {
+      const levels = [1000,925,850,700,600,500,400,300];
+      const hPres = d4?.hourly;
+      // Heure centrale fenêtre matin jour J (idx 7h du jour)
+      const hi = day*24 + 7;
+      const pts = levels.map(P => {
+        const alt = hPres?.[`geopotential_height_${P}hPa`]?.[hi];
+        const T_C = hPres?.[`temperature_${P}hPa`]?.[hi];
+        const RH  = hPres?.[`relative_humidity_${P}hPa`]?.[hi];
+        if (alt==null||T_C==null||RH==null) return null;
+        const T_K = T_C + 273.15;
+        // Pression vapeur saturante (Magnus)
+        const es = 6.112 * Math.exp(17.67 * T_C / (T_C + 243.5));
+        const e  = (RH/100) * es; // hPa
+        // ITU-R P.453 refractivity N
+        const N = 77.6 * P / T_K + 3.73e5 * e / (T_K * T_K);
+        return { alt, N };
+      }).filter(Boolean);
+
+      if (pts.length >= 4) {
+        // Régression OLS : N = a + b*alt → dN/dh = b
+        const n = pts.length;
+        const sumX  = pts.reduce((s,p)=>s+p.alt,0);
+        const sumY  = pts.reduce((s,p)=>s+p.N,0);
+        const sumXY = pts.reduce((s,p)=>s+p.alt*p.N,0);
+        const sumX2 = pts.reduce((s,p)=>s+p.alt*p.alt,0);
+        const dNdh  = (n*sumXY - sumX*sumY) / (n*sumX2 - sumX*sumX); // N-units/m
+        const R_earth = 6371000;
+        k_bislin = -R_earth * dNdh * 1e-6;
+        k_bislin = Math.max(0.05, Math.min(0.45, k_bislin)); // garde-fou physique
+        k_source = 'era5';
+      } else {
+        throw new Error('not enough levels');
+      }
+    } catch(_) {
+      // Fallback Bislin 2 niveaux
+      let dTdh = -0.0065;
+      if (T850!==null&&temp!==null&&H850!==null&&H850>(spot.obs.alt||0)+50)
+        dTdh = (T850-temp)/(H850-(spot.obs.alt||0));
+      const T_K = (temp!==null?temp:15)+273.15;
+      k_bislin = 503*(P_mbar/(T_K*T_K))*(0.0343+dTdh);
+      k_source = 'bislin';
     }
-    // Bislin eq.(2) : k = 503 * (P/T²) * (0.0343 + dT/dh)  [T en Kelvin]
-    const T_K = (temp !== null ? temp : 15) + 273.15;
-    const k_bislin = 503 * (P_mbar / (T_K * T_K)) * (0.0343 + dTdh);
+    // ────────────────────────────────────────────────────────────
     // eq.(7) : lift = k * d² / (2R)  [mètres]
     const dist_m = (spot.dist_km || 300) * 1000;
     const lift_m = hiddenByEarth(dist_m) - hiddenWithRefraction(dist_m, k_bislin);
@@ -3025,7 +3095,7 @@ wind: avg(d1.hourly?.wind_speed_10m),
       vis: (avg(d1.hourly?.visibility)??0)/1000,
       precip: avg(d1.hourly?.precipitation_probability),
       vis_mid: (avg(d2.hourly?.visibility)??0)/1000,
-      temp, dTdh, k_bislin, lift_m,
+      temp, dTdh, k_bislin, lift_m, k_source,
     };
     const dt=new Date(); dt.setDate(dt.getDate()+day);
         // TIME SLICER - Sunrise & scoring par heure
@@ -3071,12 +3141,16 @@ async function fetchAll() {
   setStatus('Interrogation Open-Meteo…');
   renderMatrix(true); renderCards(true);
   const results = await Promise.allSettled(SPOTS.map(s=>fetchSpot(s)));
+  const errors = [];
   results.forEach((r,i)=>{
     const s=SPOTS[i];
     if(r.status==='fulfilled'){forecasts[s.id]=r.value;log(`✅ ${s.name}`,'ok');}
-    else{forecasts[s.id]=null;log(`❌ ${s.name}: ${r.reason}`,'err');}
+    else{forecasts[s.id]=null;log(`❌ ${s.name}: ${r.reason}`,'err');errors.push(`${s.name}: ${r.reason}`);}
     setProgress(Math.round((i+1)/SPOTS.length*100));
   });
+  const eb = document.getElementById('err-banner');
+  if(errors.length){ eb.style.display='block'; eb.textContent='⚠️ Erreurs:\n'+errors.join('\n'); }
+  else { eb.style.display='none'; }
   // U5 — meilleur score semaine par spot pour la carte
   window._lastScores = {};
   SPOTS.forEach(s => {
@@ -3381,9 +3455,13 @@ function renderKMini(k, h) {
   else if(k>0){kColor='var(--text3)';kVerdict='Faible';}
   else{kColor='var(--red)';kVerdict='Anti-réfraction ⚠️';}
   const dTdh = h.dTdh;
+  const sourceBadge = h.k_source === 'era5'
+    ? `<span style="font-size:9px;font-family:var(--mono);padding:1px 6px;border-radius:3px;background:rgba(0,212,255,.12);border:1px solid rgba(0,212,255,.3);color:var(--cyan);margin-left:6px">ERA5 réel</span>`
+    : `<span style="font-size:9px;font-family:var(--mono);padding:1px 6px;border-radius:3px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);color:var(--amber);margin-left:6px">Bislin</span>`;
   return `<div class="dr-k">
     <div class="dr-k-main">
       <span class="dr-k-eq" style="color:${kColor}">K = ${k.toFixed(3)}</span>
+      ${sourceBadge}
       <span class="dr-k-verdict" style="color:${kColor}">${kVerdict}</span>
     </div>
     ${dTdh!==undefined?`<div class="dr-k-sub">dT/dh = ${(dTdh*1000).toFixed(2)} °C/100m</div>`:''}
