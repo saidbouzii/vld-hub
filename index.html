@@ -674,7 +674,91 @@ body::after{
   color:var(--text3);
   letter-spacing:.06em;
   text-transform:uppercase;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
 }
+.dms-btn{
+  font-family:var(--mono);
+  font-size:9px;
+  padding:1px 6px;
+  border:1px solid var(--border2);
+  border-radius:4px;
+  background:var(--surface2);
+  color:var(--cyan);
+  cursor:pointer;
+  letter-spacing:.03em;
+  text-transform:none;
+  transition:border-color .2s,background .2s;
+  white-space:nowrap;
+}
+.dms-btn:hover{border-color:var(--cyan);background:rgba(56,189,248,.1);}
+/* Popup DMS */
+#dms-overlay{
+  display:none;
+  position:fixed;
+  inset:0;
+  z-index:9999;
+  background:rgba(2,6,9,.85);
+  backdrop-filter:blur(4px);
+  align-items:center;
+  justify-content:center;
+}
+#dms-overlay.open{display:flex;}
+#dms-box{
+  background:var(--surface);
+  border:1px solid var(--border3);
+  border-radius:14px;
+  padding:1.25rem 1.5rem;
+  width:min(420px,90vw);
+  box-shadow:0 0 40px rgba(56,189,248,.15);
+}
+#dms-title{
+  font-family:var(--font);
+  font-size:14px;
+  letter-spacing:.1em;
+  color:var(--cyan);
+  margin-bottom:.5rem;
+}
+#dms-sub{
+  font-size:10px;
+  color:var(--text3);
+  margin-bottom:.85rem;
+  line-height:1.6;
+}
+#dms-input{
+  width:100%;
+  background:var(--bg3);
+  border:1px solid var(--border2);
+  color:var(--text);
+  font-family:var(--mono);
+  font-size:12px;
+  padding:.55rem .8rem;
+  border-radius:6px;
+  outline:none;
+  margin-bottom:.6rem;
+}
+#dms-input:focus{border-color:var(--cyan);}
+#dms-result{
+  font-size:11px;
+  min-height:1.5rem;
+  margin-bottom:.85rem;
+  font-family:var(--mono);
+}
+#dms-btn-row{display:flex;gap:.6rem;justify-content:flex-end;}
+.dms-action{
+  font-family:var(--font);
+  font-size:12px;
+  letter-spacing:.08em;
+  padding:.4rem .9rem;
+  border-radius:6px;
+  border:none;
+  cursor:pointer;
+}
+.dms-action.ok{background:var(--cyan);color:#050810;}
+.dms-action.ok:hover{background:#7dd8fb;}
+.dms-action.cancel{background:var(--surface2);color:var(--text3);border:1px solid var(--border);}
+.dms-action.cancel:hover{color:var(--text);border-color:var(--border3);}
 .creator-field input,
 .creator-field select,
 .creator-field textarea{
@@ -747,6 +831,339 @@ body::after{
   background:rgba(255,69,96,.08);
   border-color:rgba(255,69,96,.3);
   color:var(--red);
+}
+
+/* ── UX2 — Auto-détection & suggestions ── */
+#ux2-suggestions{
+  display:none;
+  margin-bottom:1rem;
+  padding:.85rem 1rem;
+  background:rgba(0,229,180,.07);
+  border:1px solid rgba(0,229,180,.35);
+  border-radius:8px;
+  animation:fadeIn .3s ease;
+}
+#ux2-suggestions .ux2-title{
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--green);
+  letter-spacing:.08em;
+  margin-bottom:.5rem;
+}
+#ux2-suggestions .ux2-tags{
+  display:flex;
+  flex-wrap:wrap;
+  gap:.4rem;
+  margin-bottom:.6rem;
+}
+.ux2-tag{
+  font-size:10px;
+  font-family:var(--mono);
+  padding:2px 8px;
+  border-radius:4px;
+  background:rgba(0,229,180,.15);
+  border:1px solid rgba(0,229,180,.4);
+  color:var(--green);
+}
+#ux2-apply-btn{
+  font-family:var(--mono);
+  font-size:10px;
+  padding:4px 12px;
+  border:1px solid var(--green);
+  border-radius:5px;
+  background:rgba(0,229,180,.1);
+  color:var(--green);
+  cursor:pointer;
+  transition:background .2s;
+}
+#ux2-apply-btn:hover{background:rgba(0,229,180,.22);}
+#ux2-anticyclone{
+  display:none;
+  margin-bottom:1rem;
+  padding:.8rem 1rem;
+  background:rgba(255,138,0,.07);
+  border:1px solid rgba(255,138,0,.35);
+  border-radius:8px;
+  font-size:11px;
+  color:var(--text2);
+  line-height:1.6;
+  animation:fadeIn .3s ease;
+}
+#ux2-anticyclone strong{color:var(--amber);}
+#ux2-anticyclone a{color:var(--cyan);text-decoration:none;}
+#ux2-anticyclone a:hover{text-decoration:underline;}
+.part-mistral-wrap{transition:opacity .3s;}
+.part-mistral-wrap.hidden{display:none;}
+
+/* ── UX4 — Modal Import enrichie ── */
+#import-modal-overlay{
+  display:none;
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.75);
+  z-index:9000;
+  align-items:center;
+  justify-content:center;
+  padding:1rem;
+}
+#import-modal-overlay.open{display:flex;}
+#import-modal{
+  background:var(--surface);
+  border:1px solid var(--border2);
+  border-radius:14px;
+  width:100%;
+  max-width:640px;
+  max-height:90vh;
+  overflow-y:auto;
+  padding:1.5rem;
+  position:relative;
+}
+#import-modal .im-close{
+  position:absolute;
+  top:.9rem;right:1rem;
+  background:none;border:none;
+  color:var(--text3);font-size:18px;
+  cursor:pointer;line-height:1;
+}
+#import-modal .im-close:hover{color:var(--text1);}
+#import-modal .im-title{
+  font-family:var(--mono);
+  font-size:16px;
+  color:var(--cyan);
+  letter-spacing:.08em;
+  margin-bottom:1.2rem;
+}
+.im-section{
+  background:var(--bg2);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:1rem;
+  margin-bottom:1rem;
+}
+.im-section-title{
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.1em;
+  color:var(--text2);
+  margin-bottom:.6rem;
+  display:flex;align-items:center;gap:.5rem;
+}
+.im-section-title span.im-badge{
+  font-size:9px;
+  padding:1px 7px;
+  border-radius:10px;
+  background:rgba(56,189,248,.15);
+  border:1px solid rgba(56,189,248,.3);
+  color:var(--cyan);
+  letter-spacing:.04em;
+}
+.im-desc{
+  font-size:11px;
+  color:var(--text3);
+  line-height:1.6;
+  margin-bottom:.75rem;
+}
+.im-desc strong{color:var(--text2);}
+.im-desc .im-pill{
+  display:inline-block;
+  font-size:9px;
+  font-family:var(--mono);
+  padding:1px 7px;
+  border-radius:4px;
+  margin:1px;
+}
+.im-pill.green{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);color:var(--green);}
+.im-pill.amber{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:var(--amber);}
+.im-pill.cyan{background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);}
+.im-btn-row{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem;}
+.im-btn{
+  font-family:var(--mono);
+  font-size:10px;
+  padding:6px 14px;
+  border-radius:6px;
+  cursor:pointer;
+  border:1px solid var(--border2);
+  background:var(--surface2);
+  color:var(--text2);
+  transition:all .2s;
+}
+.im-btn:hover{border-color:var(--cyan);color:var(--cyan);}
+.im-btn.primary{
+  background:rgba(56,189,248,.1);
+  border-color:var(--cyan);
+  color:var(--cyan);
+}
+.im-btn.primary:hover{background:rgba(56,189,248,.22);}
+.im-btn.green{
+  background:rgba(34,197,94,.1);
+  border-color:var(--green);
+  color:var(--green);
+}
+.im-btn.green:hover{background:rgba(34,197,94,.22);}
+#im-json-area{
+  width:100%;
+  min-height:120px;
+  background:var(--bg);
+  border:1px solid var(--border2);
+  border-radius:6px;
+  color:var(--cyan);
+  font-family:var(--mono);
+  font-size:10px;
+  padding:.6rem;
+  resize:vertical;
+  box-sizing:border-box;
+  margin-top:.6rem;
+}
+#im-json-area:focus{border-color:var(--cyan);outline:none;}
+#im-json-feedback{
+  font-size:10px;
+  font-family:var(--mono);
+  margin-top:.4rem;
+  min-height:16px;
+}
+.im-prompt-box{
+  background:var(--bg);
+  border:1px solid var(--border2);
+  border-radius:6px;
+  padding:.7rem;
+  font-size:9.5px;
+  font-family:var(--mono);
+  color:var(--text2);
+  line-height:1.6;
+  margin-top:.6rem;
+  white-space:pre-wrap;
+  word-break:break-word;
+}
+
+/* ── U5 — Carte Leaflet ── */
+#tab-carte{padding:.5rem 0;}
+#vld-map{
+  height:calc(100vh - 160px);
+  min-height:400px;
+  border-radius:10px;
+  border:1px solid var(--border2);
+  z-index:1;
+}
+.leaflet-container{background:#0a1a2b !important;}
+.map-legend{
+  display:flex;flex-wrap:wrap;gap:.4rem;
+  padding:.5rem .25rem;
+  font-size:10px;font-family:var(--mono);color:var(--text3);
+}
+.map-legend-item{display:flex;align-items:center;gap:4px;}
+.map-legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+/* Popup Leaflet custom */
+.leaflet-popup-content-wrapper{
+  background:var(--surface) !important;
+  border:1px solid var(--border2) !important;
+  border-radius:8px !important;
+  color:var(--text1) !important;
+  box-shadow:0 4px 20px rgba(0,0,0,.5) !important;
+}
+.leaflet-popup-tip{background:var(--surface) !important;}
+.leaflet-popup-content{margin:10px 14px !important;font-size:12px;line-height:1.6;}
+.lp-name{font-family:var(--mono);font-size:12px;font-weight:700;margin-bottom:4px;}
+.lp-score{font-size:20px;font-weight:900;font-family:var(--mono);}
+.lp-meta{font-size:10px;color:var(--text3);margin-top:3px;}
+.map-no-data{
+  text-align:center;padding:3rem 1rem;
+  color:var(--text3);font-family:var(--mono);font-size:12px;
+}
+
+/* ── Terrain overlay — U5-bis profil ── */
+#terrain-overlay{
+  display:none;
+  position:fixed;
+  inset:0;
+  z-index:9999;
+  background:rgba(2,6,9,0.92);
+  backdrop-filter:blur(6px);
+  cursor:zoom-out;
+  align-items:center;
+  justify-content:center;
+  padding:1.5rem;
+}
+#terrain-overlay.open{display:flex;}
+#terrain-overlay-inner{
+  width:100%;
+  max-width:900px;
+  background:#080f1a;
+  border:1px solid rgba(34,197,94,.3);
+  border-radius:16px;
+  padding:1.25rem 1.5rem 1rem;
+  box-shadow:0 0 60px rgba(34,197,94,.1);
+  position:relative;
+}
+#terrain-overlay-title{
+  font-family:var(--font);
+  font-size:15px;font-weight:800;
+  letter-spacing:.06em;color:#fff;
+  margin-bottom:.75rem;
+}
+#terrain-overlay-svg{
+  width:100%;border-radius:8px;
+  background:#020609;overflow:hidden;
+}
+#terrain-overlay-svg svg{width:100%;height:auto;display:block;}
+#terrain-overlay-close{
+  position:absolute;top:.75rem;right:.75rem;
+  background:none;border:1px solid var(--border);
+  color:#fff;border-radius:6px;padding:.2rem .6rem;
+  font-size:13px;font-weight:700;cursor:pointer;
+}
+#terrain-overlay-close:hover{border-color:#fff;}
+#terrain-overlay-stats{
+  display:grid;grid-template-columns:1fr 1fr;
+  gap:.75rem;margin-top:.75rem;
+}
+.terrain-stat-box{
+  background:rgba(255,255,255,.03);
+  border:1px solid var(--border);
+  border-radius:8px;padding:.6rem .8rem;
+}
+.terrain-stat-label{font-size:9px;color:var(--text3);font-family:var(--mono);letter-spacing:.06em;}
+.terrain-stat-val{font-size:15px;font-weight:800;font-family:var(--mono);margin-top:2px;}
+#terrain-overlay-loading{
+  text-align:center;padding:2.5rem;
+  color:var(--text3);font-family:var(--mono);font-size:12px;
+}
+
+/* ── U5-bis — HeyWhatsThat ── */
+.hwt-block{
+  margin-top:.75rem;
+  padding:.7rem;
+  background:var(--bg);
+  border:1px solid var(--border2);
+  border-radius:8px;
+}
+.hwt-title{
+  font-family:var(--mono);font-size:10px;
+  color:var(--text3);letter-spacing:.06em;
+  margin-bottom:.5rem;
+}
+.hwt-btn{
+  font-family:var(--mono);font-size:10px;
+  padding:5px 11px;border-radius:5px;cursor:pointer;
+  border:1px solid var(--border2);background:var(--surface2);
+  color:var(--text2);transition:all .2s;margin-right:.4rem;margin-bottom:.3rem;
+}
+.hwt-btn:hover{border-color:var(--cyan);color:var(--cyan);}
+.hwt-result{
+  margin-top:.5rem;font-size:10px;
+  font-family:var(--mono);line-height:1.6;
+}
+.hwt-ok{color:var(--green);}
+.hwt-warn{color:var(--amber);}
+.hwt-err{color:var(--text3);}
+.hwt-obstacle{
+  display:inline-block;padding:1px 6px;border-radius:3px;
+  background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);
+  color:#f87171;font-size:9px;margin:1px;
+}
+.hwt-clear{
+  display:inline-block;padding:1px 6px;border-radius:3px;
+  background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);
+  color:var(--green);font-size:9px;
 }
 
 /* Liste des spots personnalisés */
@@ -1716,6 +2133,9 @@ tbody tr:last-child td{border-bottom:none}
 .al-btn-test:hover{border-color:var(--border3);color:var(--text)}
 
 </style>
+  <!-- Leaflet — U5 Carte visées -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 </head>
 <body>
 
@@ -1788,6 +2208,7 @@ tbody tr:last-child td{border-bottom:none}
   <!-- ═══════════════════════════════════════════ -->
   <div class="tab-nav">
     <button class="tab-btn active" onclick="switchTab('accueil')" id="tab-btn-accueil">🏔️ ACCUEIL</button>
+    <button class="tab-btn" onclick="switchTab('carte')" id="tab-btn-carte">🗺️ CARTE</button>
     <button class="tab-btn" onclick="switchTab('creator')" id="tab-btn-creator">🛠️ CRÉATEUR DE SPOT</button>
     <button class="tab-btn" onclick="switchTab('alertes')" id="tab-btn-alertes">📨 ALERTES</button>
   </div>
@@ -1878,6 +2299,8 @@ tbody tr:last-child td{border-bottom:none}
   <div style="margin-top:.75rem;padding-top:.6rem;border-top:1px solid #eee;font-size:10px;color:#888;">
     ⚠️ Les critères éliminatoires (<span style="color:#ff4560;">élim</span>) annulent le score indépendamment des autres paramètres. Un score de 0–35 signifie qu'au moins un critère éliminatoire est actif — le score est plafonné à 35 indépendamment des autres paramètres.
 </div>
+</div><!-- /score-legend-panel -->
+
   <div class="matrix-wrap"><div class="matrix-scroll">
     <table id="matrix-table">
       <thead id="matrix-head"></thead>
@@ -2016,6 +2439,23 @@ tbody tr:last-child td{border-bottom:none}
   </div><!-- /tab-accueil -->
 
   <!-- ═══════════════════════════════════════════ -->
+  <!-- ONGLET CARTE — U5 Lignes de visée           -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="tab-content" id="tab-carte">
+    <div class="map-legend" id="map-legend">
+      <span class="map-legend-item"><span class="map-legend-dot" style="background:#22c55e"></span>Score ≥ 60</span>
+      <span class="map-legend-item"><span class="map-legend-dot" style="background:#f59e0b"></span>Score 35–59</span>
+      <span class="map-legend-item"><span class="map-legend-dot" style="background:#ef4444"></span>Score &lt; 35</span>
+      <span class="map-legend-item"><span class="map-legend-dot" style="background:#38bdf8"></span>Non chargé</span>
+      <span style="margin-left:auto;color:var(--text3);font-size:9px;">Tap une ligne pour le détail · A = observateur · B = cible</span>
+    </div>
+    <div id="vld-map"></div>
+    <div id="map-no-data" class="map-no-data" style="display:none">
+      Lance <strong>⟳ PRÉVISIONS 7 JOURS</strong> depuis l'accueil pour voir les scores sur la carte.
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
   <!-- ONGLET CRÉATEUR DE SPOT                      -->
   <!-- ═══════════════════════════════════════════ -->
   <div class="tab-content" id="tab-creator">
@@ -2058,12 +2498,12 @@ tbody tr:last-child td{border-bottom:none}
         <div class="creator-section-title">👁️ POINT D'OBSERVATION</div>
         <div class="creator-grid cols3">
           <div class="creator-field">
-            <label>Latitude (°)</label>
-            <input type="number" step="0.0001" id="new-obs-lat" placeholder="45.4167">
+            <label>Latitude (°)<button type="button" class="dms-btn" onclick="openDMS('new-obs-lat')">DMS →°</button></label>
+            <input type="number" step="0.0001" id="new-obs-lat" placeholder="45.4167" oninput="runUX2Detection()">
           </div>
           <div class="creator-field">
-            <label>Longitude (°)</label>
-            <input type="number" step="0.0001" id="new-obs-lon" placeholder="4.2167">
+            <label>Longitude (°)<button type="button" class="dms-btn" onclick="openDMS('new-obs-lon')">DMS →°</button></label>
+            <input type="number" step="0.0001" id="new-obs-lon" placeholder="4.2167" oninput="runUX2Detection()">
           </div>
           <div class="creator-field">
             <label>Altitude (m)</label>
@@ -2077,16 +2517,16 @@ tbody tr:last-child td{border-bottom:none}
         <div class="creator-section-title">🎯 POINT CIBLE</div>
         <div class="creator-grid cols3">
           <div class="creator-field">
-            <label>Latitude (°)</label>
-            <input type="number" step="0.0001" id="new-tgt-lat" placeholder="42.655">
+            <label>Latitude (°)<button type="button" class="dms-btn" onclick="openDMS('new-tgt-lat')">DMS →°</button></label>
+            <input type="number" step="0.0001" id="new-tgt-lat" placeholder="42.655" oninput="runUX2Detection()">
           </div>
           <div class="creator-field">
-            <label>Longitude (°)</label>
-            <input type="number" step="0.0001" id="new-tgt-lon" placeholder="0.730">
+            <label>Longitude (°)<button type="button" class="dms-btn" onclick="openDMS('new-tgt-lon')">DMS →°</button></label>
+            <input type="number" step="0.0001" id="new-tgt-lon" placeholder="0.730" oninput="runUX2Detection()">
           </div>
           <div class="creator-field">
             <label>Altitude (m)</label>
-            <input type="number" id="new-tgt-alt" placeholder="3143">
+            <input type="number" id="new-tgt-alt" placeholder="3143" oninput="runUX2Detection()">
           </div>
         </div>
       </div>
@@ -2096,11 +2536,11 @@ tbody tr:last-child td{border-bottom:none}
         <div class="creator-section-title">📍 POINT MILIEU DE TRAJET (pour météo mi-parcours)</div>
         <div class="creator-grid">
           <div class="creator-field">
-            <label>Latitude milieu (°)</label>
+            <label>Latitude milieu (°)<button type="button" class="dms-btn" onclick="openDMS('new-mid-lat')">DMS →°</button></label>
             <input type="number" step="0.0001" id="new-mid-lat" placeholder="44.02">
           </div>
           <div class="creator-field">
-            <label>Longitude milieu (°)</label>
+            <label>Longitude milieu (°)<button type="button" class="dms-btn" onclick="openDMS('new-mid-lon')">DMS →°</button></label>
             <input type="number" step="0.0001" id="new-mid-lon" placeholder="2.60">
           </div>
         </div>
@@ -2112,7 +2552,7 @@ tbody tr:last-child td{border-bottom:none}
         <div class="creator-grid cols3">
           <div class="creator-field">
             <label>Distance (km)</label>
-            <input type="number" step="0.1" id="new-dist" placeholder="395">
+            <input type="number" step="0.1" id="new-dist" placeholder="395" oninput="runUX2Detection()">
           </div>
           <div class="creator-field">
             <label>Azimut (°)</label>
@@ -2120,7 +2560,7 @@ tbody tr:last-child td{border-bottom:none}
           </div>
           <div class="creator-field">
             <label>Type de trajet</label>
-            <select id="new-type">
+            <select id="new-type" onchange="runUX2Detection()">
               <option value="montagne_pyrenees">⛰️ Montagne</option>
               <option value="mediterranee_corse">🌊 Maritime méditerranéen</option>
               <option value="mediterranee_marin">⛵ Marin côtier (strict)</option>
@@ -2129,11 +2569,30 @@ tbody tr:last-child td{border-bottom:none}
         </div>
       </div>
 
+      <!-- UX2 — Bandeau suggestions auto -->
+      <div id="ux2-suggestions">
+        <div class="ux2-title">💡 SUGGESTIONS AUTO-DÉTECTÉES</div>
+        <div class="ux2-tags" id="ux2-tags-list"></div>
+        <button id="ux2-apply-btn" onclick="applyUX2Suggestions()">✓ Appliquer les suggestions</button>
+      </div>
+
+      <!-- UX2-bis — Message anticyclone -->
+      <div id="ux2-anticyclone">
+        <strong>🔵 Conseil anticyclone :</strong> Pour une analyse complète, vérifiez la position de l'anticyclone (H) et le gradient isobarique sur votre trajet.<br>
+        <span style="font-size:10px;color:var(--text3)">
+          • Isobares <strong>espacées</strong> = air stable = favorable &nbsp;|&nbsp;
+          Isobares <strong>serrées</strong> = vent perturbateur<br>
+          • H centré sur Méditerranée centrale = idéal &nbsp;|&nbsp;
+          H sur Tunisie &gt; 72h = risque haze<br>
+          → <a href="https://www.windy.com/?mslp,45,5,5" target="_blank" id="ux2-windy-link">Ouvrir Windy SLP (pression mer) ↗</a>
+        </span>
+      </div>
+
       <!-- PARTICULARITÉS -->
       <div class="creator-section">
         <div class="creator-section-title">⚡ PARTICULARITÉS (pour adapter les seuils)</div>
         <div class="creator-checkbox-grid">
-          <label class="creator-checkbox"><input type="checkbox" id="part-mistral"> Mistral requis</label>
+          <label class="creator-checkbox part-mistral-wrap" id="part-mistral-wrap"><input type="checkbox" id="part-mistral"> Mistral requis</label>
           <label class="creator-checkbox"><input type="checkbox" id="part-anticyclone"> Anticyclone obligatoire</label>
           <label class="creator-checkbox"><input type="checkbox" id="part-inversion"> Inversion marine</label>
           <label class="creator-checkbox"><input type="checkbox" id="part-sst"> SST importante</label>
@@ -2147,7 +2606,7 @@ tbody tr:last-child td{border-bottom:none}
         <button class="creator-btn primary" onclick="createSpot()">💾 AJOUTER AU DASHBOARD</button>
         <button class="creator-btn secondary" onclick="resetCreatorForm()">🔄 Réinitialiser</button>
         <button class="creator-btn secondary" onclick="exportSpots()">📥 Exporter spots (HTML)</button>
-        <button class="creator-btn secondary" onclick="document.getElementById('import-file').click()">📤 Importer spots</button>
+        <button class="creator-btn secondary" onclick="openImportModal()">📤 Importer spots</button>
         <input type="file" id="import-file" accept=".html,.json" style="display:none" onchange="importSpots(event)">
       </div>
 
@@ -2618,10 +3077,17 @@ async function fetchAll() {
     else{forecasts[s.id]=null;log(`❌ ${s.name}: ${r.reason}`,'err');}
     setProgress(Math.round((i+1)/SPOTS.length*100));
   });
+  // U5 — meilleur score semaine par spot pour la carte
+  window._lastScores = {};
+  SPOTS.forEach(s => {
+    const fc = forecasts[s.id];
+    if (fc) window._lastScores[s.id] = Math.max(...fc.map(d => d.score || 0));
+  });
   renderMatrix(false); renderCards(false); renderBanner(); checkAutoAlert();
   btn.disabled=false; btn.textContent='⟳ PRÉVISIONS 7 JOURS';
   setStatus(`Actualisé ${new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}`);
   document.getElementById('prog').style.display='none';
+  updateMapIfVisible();
 }
 
 function getDays(){ return Array.from({length:7},(_,i)=>{ const d=new Date(); d.setDate(d.getDate()+i); return d; }); }
@@ -2762,7 +3228,7 @@ function renderDayRow(dayData, date, spot) {
     </div>
     <div class="drow-body" id="${did}">
       <div class="drow-left">${renderMeteoButtons(items)}</div>
-      <div class="drow-right">${renderNewCurveBlock(spot,k)}${renderKMini(k,h)}</div>
+      <div class="drow-right">${renderNewCurveBlock(spot,k)}${renderKMini(k,h)}${renderHWTBlock(spot)}</div>
     </div>
   </div>`;
 }
@@ -3241,6 +3707,7 @@ function switchTab(tabId) {
   document.getElementById('tab-' + tabId).classList.add('active');
   document.getElementById('tab-btn-' + tabId).classList.add('active');
   if (tabId === 'creator') renderCustomSpotsList();
+  if (tabId === 'carte') initVLDMap();
 }
 
 // ═══════════════════════════════════════════════════
@@ -3289,6 +3756,464 @@ function getCriteriaByType(type, particularites) {
   if (particularites.inversion) { c.rh_exc = c.rh_exc - 5; c.spread_exc = c.spread_exc + 2; }
   
   return c;
+}
+
+// ═══════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+// U5-bis — PROFIL TERRAIN (Open-Meteo elevation)
+// ═══════════════════════════════════════════════════
+function renderHWTBlock(spot) {
+  return `<div class="hwt-block">
+    <div class="hwt-title">🏔️ RELIEF INTERMÉDIAIRE</div>
+    <button class="hwt-btn" onclick="openTerrainOverlay('${spot.id}')">
+      🔍 Profil terrain
+    </button>
+  </div>`;
+}
+
+let _terrainSpot = null;
+
+function openTerrainOverlay(spotId) {
+  _terrainSpot = SPOTS.find(s => s.id === spotId);
+  if (!_terrainSpot) return;
+  document.getElementById('terrain-overlay-title').textContent =
+    `🏔️ ${_terrainSpot.name} ${_terrainSpot.target} · Profil terrain`;
+  document.getElementById('terrain-overlay-svg').innerHTML =
+    '<div id="terrain-overlay-loading">⏳ Chargement profil terrain…</div>';
+  document.getElementById('terrain-overlay-stats').innerHTML = '';
+  document.getElementById('terrain-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  fetchAndRenderTerrain(_terrainSpot);
+}
+
+function closeTerrainOverlay(e) {
+  if (e && e.target !== document.getElementById('terrain-overlay')) return;
+  document.getElementById('terrain-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// Interpoler N points entre obs et cible sur la grande-cercle
+function interpolatePoints(lat1, lon1, lat2, lon2, n) {
+  const pts = [];
+  for (let i = 0; i <= n; i++) {
+    const f = i / n;
+    pts.push({ lat: lat1 + (lat2 - lat1) * f, lon: lon1 + (lon2 - lon1) * f, f });
+  }
+  return pts;
+}
+
+async function fetchAndRenderTerrain(spot) {
+  const svgDiv  = document.getElementById('terrain-overlay-svg');
+  const statDiv = document.getElementById('terrain-overlay-stats');
+  try {
+    const N = 50;
+    const obsAlt = spot.obs.alt || 0;
+    const tgtAlt = spot.tgt.alt || 0;
+    const distM  = spot.dist_km * 1000;
+
+    // Générer les points intermédiaires
+    const pts = interpolatePoints(spot.obs.lat, spot.obs.lon, spot.tgt.lat, spot.tgt.lon, N);
+    const lats = pts.map(p => p.lat.toFixed(6)).join(',');
+    const lons = pts.map(p => p.lon.toFixed(6)).join(',');
+
+    // Open-Meteo elevation API — CORS OK, gratuit, sans clé
+    const url = `https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lons}`;
+    const resp = await fetch(url, {signal: AbortSignal.timeout(12000)});
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    if (!data.elevation || !data.elevation.length) throw new Error('no_data');
+
+    const elevations = data.elevation;
+    const points = pts.map((p, i) => ({
+      dist: p.f * distM,
+      elev: elevations[i],
+    }));
+
+    const totalDist = distM;
+    const k = 0.17;
+    const R = 6371000;
+    const losElev = d => obsAlt + (tgtAlt - obsAlt) * (d / totalDist);
+    const losRefr = d => losElev(d) + (d * (totalDist - d)) / (2 * R / (1 - k));
+
+    const obstacles = points.filter((p,i) => i>0 && i<points.length-1 && p.elev > losRefr(p.dist));
+    const maxObs = obstacles.length ? obstacles.reduce((a,b) =>
+      (a.elev - losRefr(a.dist)) > (b.elev - losRefr(b.dist)) ? a : b) : null;
+
+    const minElev = Math.min(...elevations, obsAlt, tgtAlt) - 50;
+    const maxElev = Math.max(...elevations, obsAlt, tgtAlt) + 150;
+
+    const W=800, H=260, PAD={t:24,r:20,b:40,l:55};
+    const iW = W-PAD.l-PAD.r, iH = H-PAD.t-PAD.b;
+    const sx = d => PAD.l + (d/totalDist)*iW;
+    const sy = e => PAD.t + iH - ((e-minElev)/(maxElev-minElev))*iH;
+
+    const terrainPts = points.map(p => `${sx(p.dist).toFixed(1)},${sy(p.elev).toFixed(1)}`).join(' ');
+    const terrainPoly = `${sx(0)},${sy(minElev)} ${terrainPts} ${sx(totalDist)},${sy(minElev)}`;
+    const losLine = `${sx(0)},${sy(obsAlt)} ${sx(totalDist)},${sy(tgtAlt)}`;
+    const refrPts = points.map(p => `${sx(p.dist).toFixed(1)},${sy(losRefr(p.dist)).toFixed(1)}`).join(' ');
+
+    let obsZones = '';
+    obstacles.forEach(p => {
+      const x=sx(p.dist); const top=sy(p.elev); const bot=sy(losRefr(p.dist));
+      obsZones += `<line x1="${x}" y1="${top}" x2="${x}" y2="${bot}" stroke="#ef4444" stroke-width="2.5" opacity="0.8"/>`;
+    });
+
+    const distLabels = [0,0.25,0.5,0.75,1].map(f => {
+      const d=f*totalDist, km=(d/1000).toFixed(0);
+      return `<text x="${sx(d).toFixed(1)}" y="${H-8}" fill="#4a6a80" font-size="9" text-anchor="middle" font-family="monospace">${km}km</text>`;
+    }).join('');
+
+    const elevRange = maxElev-minElev;
+    const elevStep = elevRange>3000?1000:elevRange>1000?500:elevRange>400?200:100;
+    let elevLabels='';
+    for(let e=Math.ceil(minElev/elevStep)*elevStep; e<=maxElev; e+=elevStep){
+      const y=sy(e).toFixed(1);
+      elevLabels+=`<text x="${PAD.l-6}" y="${y}" fill="#4a6a80" font-size="9" text-anchor="end" dominant-baseline="middle" font-family="monospace">${e}m</text>`;
+      elevLabels+=`<line x1="${PAD.l}" y1="${y}" x2="${W-PAD.r}" y2="${y}" stroke="#1a3050" stroke-width="0.5"/>`;
+    }
+
+    const mA=`<circle cx="${sx(0)}" cy="${sy(obsAlt)}" r="5" fill="#38bdf8"/><text x="${sx(0)+8}" y="${sy(obsAlt)-7}" fill="#38bdf8" font-size="9" font-family="monospace">A ${obsAlt}m</text>`;
+    const mB=`<circle cx="${sx(totalDist)}" cy="${sy(tgtAlt)}" r="5" fill="#38bdf8"/><text x="${sx(totalDist)-8}" y="${sy(tgtAlt)-7}" fill="#38bdf8" font-size="9" font-family="monospace" text-anchor="end">B ${tgtAlt}m</text>`;
+
+    const Lx=PAD.l; const Ly=PAD.t+2;
+    const legend=`
+      <rect x="${Lx}" y="${Ly-2}" width="10" height="4" fill="#22c55e" opacity="0.7"/>
+      <text x="${Lx+13}" y="${Ly+2}" fill="#22c55e" font-size="8" font-family="monospace">Terrain</text>
+      <line x1="${Lx+55}" y1="${Ly}" x2="${Lx+65}" y2="${Ly}" stroke="rgba(255,255,255,0.3)" stroke-width="1" stroke-dasharray="3,2"/>
+      <text x="${Lx+68}" y="${Ly+2}" fill="#8899aa" font-size="8" font-family="monospace">LOS géom.</text>
+      <line x1="${Lx+120}" y1="${Ly}" x2="${Lx+130}" y2="${Ly}" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="3,2"/>
+      <text x="${Lx+133}" y="${Ly+2}" fill="#38bdf8" font-size="8" font-family="monospace">LOS κ=0.17</text>
+      ${obstacles.length?`<line x1="${Lx+185}" y1="${Ly-2}" x2="${Lx+185}" y2="${Ly+4}" stroke="#ef4444" stroke-width="2.5" opacity="0.8"/><text x="${Lx+190}" y="${Ly+2}" fill="#f87171" font-size="8" font-family="monospace">Obstacle</text>`:''}`;
+
+    const svg=`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+      <rect width="${W}" height="${H}" fill="#020609"/>
+      ${elevLabels}${distLabels}
+      <polygon points="${terrainPoly}" fill="rgba(34,197,94,0.15)" stroke="none"/>
+      <polyline points="${terrainPts}" fill="none" stroke="#22c55e" stroke-width="1.8"/>
+      ${obsZones}
+      <polyline points="${losLine}" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1" stroke-dasharray="5,3"/>
+      <polyline points="${refrPts}" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="4,2"/>
+      ${mA}${mB}
+      ${legend}
+    </svg>`;
+
+    svgDiv.innerHTML = svg;
+
+    const verdict = obstacles.length===0
+      ? `<span style="color:var(--green)">✅ Couloir dégagé</span>`
+      : `<span style="color:#f87171">⚠️ ${obstacles.length} obstacle(s)</span>`;
+    const maxExcess = maxObs ? Math.round(maxObs.elev - losRefr(maxObs.dist)) : 0;
+
+    statDiv.innerHTML=`
+      <div class="terrain-stat-box">
+        <div class="terrain-stat-label">VERDICT TERRAIN</div>
+        <div class="terrain-stat-val" style="font-size:13px">${verdict}</div>
+      </div>
+      <div class="terrain-stat-box">
+        <div class="terrain-stat-label">DISTANCE</div>
+        <div class="terrain-stat-val" style="color:var(--cyan)">${(totalDist/1000).toFixed(1)} km</div>
+      </div>
+      <div class="terrain-stat-box">
+        <div class="terrain-stat-label">MAX OBSTACLE / LOS</div>
+        <div class="terrain-stat-val" style="color:${maxObs?'#f87171':'var(--green)'}">
+          ${maxObs?'+'+maxExcess+' m à '+(maxObs.dist/1000).toFixed(0)+'km':'—'}
+        </div>
+      </div>
+      <div class="terrain-stat-box">
+        <div class="terrain-stat-label">SOURCE</div>
+        <div class="terrain-stat-val" style="color:var(--text2);font-size:10px">Open-Meteo · ${points.length} pts</div>
+      </div>`;
+
+  } catch(err) {
+    svgDiv.innerHTML=`<div style="padding:2rem;text-align:center;color:var(--text3);font-family:var(--mono);font-size:11px">
+      ❌ Impossible de charger le profil terrain (${err.message})
+    </div>`;
+    statDiv.innerHTML='';
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// U5 — CARTE LEAFLET LIGNES DE VISÉE
+
+// ═══════════════════════════════════════════════════
+let _vldMap = null;
+let _mapLayers = [];
+
+function scoreColor(score) {
+  if (score === null || score === undefined) return '#38bdf8';
+  if (score >= 60) return '#22c55e';
+  if (score >= 35) return '#f59e0b';
+  return '#ef4444';
+}
+
+function initVLDMap() {
+  // Init carte une seule fois
+  if (!_vldMap) {
+    _vldMap = L.map('vld-map', {
+      center: [44, 8],
+      zoom: 5,
+      zoomControl: true,
+      attributionControl: false,
+    });
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      maxZoom: 19,
+    }).addTo(_vldMap);
+    L.control.attribution({prefix: false}).addTo(_vldMap);
+  }
+  renderMapSpots();
+}
+
+function renderMapSpots() {
+  if (!_vldMap) return;
+  // Supprimer anciens layers
+  _mapLayers.forEach(l => _vldMap.removeLayer(l));
+  _mapLayers = [];
+
+  const bounds = [];
+  let hasSpots = false;
+
+  SPOTS.forEach(spot => {
+    if (!spot.obs || !spot.tgt) return;
+    hasSpots = true;
+
+    // Score du jour le plus récent disponible
+    let score = null;
+    if (window._lastScores && window._lastScores[spot.id] !== undefined) {
+      score = window._lastScores[spot.id];
+    }
+    const color = scoreColor(score);
+    const obsLL  = [spot.obs.lat, spot.obs.lon];
+    const tgtLL  = [spot.tgt.lat, spot.tgt.lon];
+    const midLL  = spot.mid ? [spot.mid.lat, spot.mid.lon]
+                             : [(spot.obs.lat+spot.tgt.lat)/2, (spot.obs.lon+spot.tgt.lon)/2];
+
+    bounds.push(obsLL);
+    bounds.push(tgtLL);
+
+    // Ligne de visée
+    const line = L.polyline([obsLL, tgtLL], {
+      color, weight: 2.5, opacity: 0.85, dashArray: score === null ? '6,4' : null,
+    }).addTo(_vldMap);
+
+    // Popup
+    const scoreStr = score !== null ? `<span class="lp-score" style="color:${color}">${score}</span><span style="font-size:11px;color:var(--text3)">/100</span>` : `<span style="color:#38bdf8;font-size:11px">Non chargé — lance ⟳</span>`;
+    const popup = `<div class="lp-name" style="color:${color}">${spot.name}</div>
+<div>${spot.target} · ${spot.dist_km} km</div>
+${scoreStr}
+<div class="lp-meta">Az. ${spot.azimut} · Obs ${spot.obs.alt}m → Cible ${spot.tgt.alt}m</div>
+`;
+    line.bindPopup(popup, {maxWidth: 220});
+    _mapLayers.push(line);
+
+    // Marqueur A — observateur
+    const iconA = L.divIcon({
+      html: `<div style="background:${color};color:#050b12;font-family:monospace;font-size:9px;font-weight:900;padding:1px 4px;border-radius:3px;white-space:nowrap;">A</div>`,
+      className:'', iconAnchor:[6,8],
+    });
+    const mA = L.marker(obsLL, {icon: iconA}).addTo(_vldMap);
+    mA.bindTooltip(spot.name, {permanent:false, direction:'top', className:'leaflet-tooltip'});
+    _mapLayers.push(mA);
+
+    // Marqueur B — cible
+    const iconB = L.divIcon({
+      html: `<div style="background:var(--surface,#0a1a2b);color:${color};border:1px solid ${color};font-family:monospace;font-size:9px;font-weight:900;padding:1px 4px;border-radius:3px;">B</div>`,
+      className:'', iconAnchor:[6,8],
+    });
+    const mB = L.marker(tgtLL, {icon: iconB}).addTo(_vldMap);
+    mB.bindTooltip(spot.target || 'Cible', {permanent:false, direction:'top'});
+    _mapLayers.push(mB);
+  });
+
+  // Ajuster vue sur tous les spots
+  if (bounds.length > 1) {
+    _vldMap.fitBounds(bounds, {padding: [30, 30]});
+  }
+
+  // Message si aucun spot
+  const noData = document.getElementById('map-no-data');
+  if (noData) noData.style.display = hasSpots ? 'none' : 'block';
+
+  // Invalider taille (fix rendu mobile)
+  setTimeout(() => _vldMap && _vldMap.invalidateSize(), 120);
+}
+
+// Hook : après fetchAll, mettre à jour la carte si elle est visible
+function updateMapIfVisible() {
+  const carteTab = document.getElementById('tab-carte');
+  if (carteTab && carteTab.classList.contains('active')) renderMapSpots();
+}
+
+// ═══════════════════════════════════════════════════
+// UX4 — MODAL IMPORT ENRICHIE
+// ═══════════════════════════════════════════════════
+function openImportModal() {
+  document.getElementById('import-modal-overlay').classList.add('open');
+}
+function closeImportModal() {
+  document.getElementById('import-modal-overlay').classList.remove('open');
+}
+
+function copyImportPrompt() {
+  const text = document.getElementById('im-prompt-text').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const fb = document.getElementById('im-copy-feedback');
+    fb.textContent = '✓ Prompt copié dans le presse-papiers !';
+    setTimeout(() => fb.textContent = '', 2500);
+  }).catch(() => {
+    // Fallback sélection manuelle
+    const range = document.createRange();
+    range.selectNode(document.getElementById('im-prompt-text'));
+    window.getSelection().removeAllRanges();
+    window.getSelection().addRange(range);
+    document.getElementById('im-copy-feedback').textContent = '→ Texte sélectionné, copie avec Ctrl+C';
+  });
+}
+
+function importFromJSON() {
+  const raw = document.getElementById('im-json-area').value.trim();
+  const fb  = document.getElementById('im-json-feedback');
+  if (!raw) { fb.style.color='var(--amber)'; fb.textContent='⚠ Colle d\'abord le JSON généré par Claude.'; return; }
+  try {
+    // Nettoyer les backticks éventuels
+    const clean = raw.replace(/^```[a-z]*\n?/,'').replace(/\n?```$/,'').trim();
+    let data = JSON.parse(clean);
+    // Accepte objet seul ou tableau
+    if (!Array.isArray(data)) data = [data];
+    if (!data.length) throw new Error('JSON vide');
+    let added = 0;
+    data.forEach(spot => {
+      // Validation champs minimaux
+      if (!spot.name || !spot.obs || !spot.tgt || !spot.mid) throw new Error('Champs manquants (name, obs, tgt, mid requis)');
+      spot.custom = true;
+      if (!spot.id) spot.id = 'custom_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
+      if (!SPOTS.find(s => s.id === spot.id)) { SPOTS.push(spot); added++; }
+    });
+    saveCustomSpots();
+    renderCustomSpotsList();
+    fb.style.color = 'var(--green)';
+    fb.textContent = `✅ ${added} spot(s) importé(s) ! Lance "⟳ PRÉVISIONS 7 JOURS" pour charger la météo.`;
+    document.getElementById('im-json-area').value = '';
+    setTimeout(closeImportModal, 2200);
+  } catch(err) {
+    fb.style.color = 'var(--red, #ff4560)';
+    fb.textContent = '❌ Erreur : ' + err.message;
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// UX2 — AUTO-DÉTECTION PARTICULARITÉS + ANTICYCLONE
+// ═══════════════════════════════════════════════════
+let _ux2Suggestions = {}; // cache des suggestions courantes
+
+function isMistralRelevant(obsLat, obsLon, type) {
+  // Mistral pertinent : lat > 42N, lon entre 3E et 9E, trajet maritime
+  const isMaritime = type === 'mediterranee_corse' || type === 'mediterranee_marin';
+  return obsLat > 42 && obsLon >= 3 && obsLon <= 9 && isMaritime;
+}
+
+function runUX2Detection() {
+  const obsLat = parseFloat(document.getElementById('new-obs-lat').value);
+  const obsLon = parseFloat(document.getElementById('new-obs-lon').value);
+  const tgtLat = parseFloat(document.getElementById('new-tgt-lat').value);
+  const tgtLon = parseFloat(document.getElementById('new-tgt-lon').value);
+  const tgtAlt = parseInt(document.getElementById('new-tgt-alt').value);
+  const dist   = parseFloat(document.getElementById('new-dist').value);
+  const type   = document.getElementById('new-type').value;
+
+  // Pas assez de données → masquer tout
+  if (isNaN(obsLat) || isNaN(obsLon)) {
+    document.getElementById('ux2-suggestions').style.display = 'none';
+    document.getElementById('ux2-anticyclone').style.display = 'none';
+    return;
+  }
+
+  const isMaritime = type === 'mediterranee_corse' || type === 'mediterranee_marin';
+  const suggestions = {};
+
+  // ── Règles de détection ──
+  // Inversion marine + SST : lon < 10E + trajet maritime
+  if (obsLon < 10 && isMaritime) {
+    suggestions['inversion'] = '🌊 Inversion marine';
+    suggestions['sst']       = '🌡️ SST importante';
+  }
+  // Anticyclone : méditerranée lat 43–44N
+  if (obsLat >= 43 && obsLat <= 44 && isMaritime) {
+    suggestions['anticyclone'] = '🔵 Anticyclone obligatoire';
+  }
+  // Poussières sahariennes : lat < 37
+  if (obsLat < 37) {
+    suggestions['dust'] = '🟤 Poussières sahariennes';
+  }
+  // CAPE : cible > 2000m
+  if (!isNaN(tgtAlt) && tgtAlt > 2000) {
+    suggestions['cape'] = '⚡ CAPE à surveiller';
+  }
+  // Mistral conditionnel
+  if (isMistralRelevant(obsLat, obsLon, type)) {
+    suggestions['mistral'] = '💨 Mistral requis';
+  }
+
+  // ── Visibilité checkbox Mistral ──
+  const mistralWrap = document.getElementById('part-mistral-wrap');
+  if (mistralWrap) {
+    if (isMistralRelevant(obsLat, obsLon, type)) {
+      mistralWrap.classList.remove('hidden');
+    } else {
+      mistralWrap.classList.add('hidden');
+      document.getElementById('part-mistral').checked = false;
+    }
+  }
+
+  // ── Bandeau suggestions ──
+  _ux2Suggestions = suggestions;
+  const keys = Object.keys(suggestions);
+  const banner = document.getElementById('ux2-suggestions');
+  if (keys.length > 0) {
+    const tagsEl = document.getElementById('ux2-tags-list');
+    tagsEl.innerHTML = keys.map(k => `<span class="ux2-tag">${suggestions[k]}</span>`).join('');
+    banner.style.display = 'block';
+  } else {
+    banner.style.display = 'none';
+  }
+
+  // ── Message anticyclone ──
+  const showAnti = (!isNaN(dist) && dist > 80) ||
+                   (!isNaN(tgtAlt) && tgtAlt > 1500) ||
+                   isMaritime;
+  const antiEl = document.getElementById('ux2-anticyclone');
+  if (showAnti) {
+    // Mettre à jour le lien Windy centré sur le midpoint si possible
+    const midLat = !isNaN(obsLat) && !isNaN(tgtLat) ? ((obsLat + tgtLat) / 2).toFixed(1) : 45;
+    const midLon = !isNaN(obsLon) && !isNaN(tgtLon) ? ((obsLon + tgtLon) / 2).toFixed(1) : 5;
+    const windyLink = document.getElementById('ux2-windy-link');
+    if (windyLink) windyLink.href = `https://www.windy.com/?mslp,${midLat},${midLon},6`;
+    antiEl.style.display = 'block';
+  } else {
+    antiEl.style.display = 'none';
+  }
+}
+
+function applyUX2Suggestions() {
+  const map = {
+    mistral:     'part-mistral',
+    anticyclone: 'part-anticyclone',
+    inversion:   'part-inversion',
+    sst:         'part-sst',
+    dust:        'part-dust',
+    cape:        'part-cape',
+  };
+  Object.keys(_ux2Suggestions).forEach(k => {
+    const el = document.getElementById(map[k]);
+    if (el) el.checked = true;
+  });
+  // Feedback visuel
+  const btn = document.getElementById('ux2-apply-btn');
+  btn.textContent = '✓ Appliqué !';
+  btn.style.background = 'rgba(0,229,180,.3)';
+  setTimeout(() => {
+    btn.textContent = '✓ Appliquer les suggestions';
+    btn.style.background = '';
+  }, 1800);
 }
 
 // ═══════════════════════════════════════════════════
@@ -3455,6 +4380,12 @@ function resetCreatorForm() {
   document.getElementById('new-dist').value = '';
   document.getElementById('new-azimut').value = '';
   document.querySelectorAll('.creator-checkbox input').forEach(c => c.checked = false);
+  // UX2 reset
+  _ux2Suggestions = {};
+  document.getElementById('ux2-suggestions').style.display = 'none';
+  document.getElementById('ux2-anticyclone').style.display = 'none';
+  const mw = document.getElementById('part-mistral-wrap');
+  if (mw) mw.classList.remove('hidden');
 }
 
 // ═══════════════════════════════════════════════════
@@ -3638,6 +4569,212 @@ document.getElementById('score-legend-chevron').style.transform = open ? 'rotate
   </div>
   <button id="install-btn" onclick="installApp()">INSTALLER</button>
   <button id="install-close" onclick="closeBanner()">✕</button>
+</div>
+
+<!-- ── POPUP DMS ── -->
+<div id="dms-overlay" onclick="if(event.target===this)closeDMS()">
+  <div id="dms-box">
+    <div id="dms-title">🌐 Convertisseur DMS → Décimal</div>
+    <div id="dms-sub">
+      Colle une coordonnée Google Earth, Maps ou PeakFinder.<br>
+      Formats acceptés : <code>43°21'53.74"N</code> &nbsp;·&nbsp; <code>43 21 53.74 N</code> &nbsp;·&nbsp; <code>-4.35048</code>
+    </div>
+    <input id="dms-input" type="text" placeholder='Ex: 43°21&apos;53.74"N  ou  4°35&apos;04.32"E' oninput="previewDMS()" onkeydown="if(event.key==='Enter')applyDMS()">
+    <div id="dms-result"></div>
+    <div id="dms-btn-row">
+      <button class="dms-action cancel" onclick="closeDMS()">Annuler</button>
+      <button class="dms-action ok" onclick="applyDMS()">✓ Appliquer</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── UX1 — CONVERTISSEUR DMS ────────────────────────────────────────────────
+let _dmsTarget = null;
+let _dmsParsed = null;
+
+function openDMS(targetId) {
+  _dmsTarget = targetId;
+  _dmsParsed = null;
+  const overlay = document.getElementById('dms-overlay');
+  const input = document.getElementById('dms-input');
+  const result = document.getElementById('dms-result');
+  input.value = '';
+  result.textContent = '';
+  result.style.color = 'var(--text3)';
+  overlay.classList.add('open');
+  setTimeout(() => input.focus(), 80);
+}
+
+function closeDMS() {
+  document.getElementById('dms-overlay').classList.remove('open');
+  _dmsTarget = null;
+  _dmsParsed = null;
+}
+
+function parseDMS(str) {
+  if (!str || !str.trim()) return null;
+  str = str.trim();
+
+  // Déjà décimal
+  const dec = parseFloat(str);
+  if (!isNaN(dec) && !/[°'"NSEW]/i.test(str)) return dec;
+
+  // Détection hémisphère
+  const hemi = str.match(/[NSEW]/i);
+  const neg = hemi && /[SW]/i.test(hemi[0]);
+
+  // Nettoyage : retire les lettres hémi, remplace séparateurs
+  let clean = str.replace(/[NSEW°'"]/gi, ' ').replace(/\s+/g, ' ').trim();
+  const parts = clean.split(' ').map(Number).filter(x => !isNaN(x));
+
+  let dd = null;
+  if (parts.length === 1) dd = parts[0];
+  else if (parts.length === 2) dd = parts[0] + parts[1] / 60;
+  else if (parts.length >= 3) dd = parts[0] + parts[1] / 60 + parts[2] / 3600;
+
+  if (dd === null || isNaN(dd)) return null;
+  return neg ? -dd : dd;
+}
+
+function previewDMS() {
+  const input = document.getElementById('dms-input').value;
+  const result = document.getElementById('dms-result');
+  const val = parseDMS(input);
+  if (val === null) {
+    _dmsParsed = null;
+    result.textContent = input.length > 2 ? '⚠ Format non reconnu' : '';
+    result.style.color = 'var(--amber)';
+  } else {
+    _dmsParsed = val;
+    result.textContent = '→ ' + val.toFixed(6) + '°';
+    result.style.color = 'var(--green)';
+  }
+}
+
+function applyDMS() {
+  if (_dmsParsed === null) {
+    // Tenter un dernier parse
+    _dmsParsed = parseDMS(document.getElementById('dms-input').value);
+  }
+  if (_dmsParsed === null) {
+    document.getElementById('dms-result').textContent = '⚠ Impossible de convertir — vérifie le format';
+    document.getElementById('dms-result').style.color = 'var(--red)';
+    return;
+  }
+  const field = document.getElementById(_dmsTarget);
+  if (field) {
+    field.value = _dmsParsed.toFixed(6);
+    field.dispatchEvent(new Event('input', {bubbles:true}));
+    field.style.borderColor = 'var(--green)';
+    setTimeout(() => field.style.borderColor = '', 1500);
+  }
+  closeDMS();
+}
+</script>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- U5-bis — MODAL PROFIL TERRAIN            -->
+<!-- ══════════════════════════════════════════ -->
+<div id="terrain-overlay" onclick="closeTerrainOverlay(event)">
+  <div id="terrain-overlay-inner" onclick="event.stopPropagation()">
+    <button id="terrain-overlay-close" onclick="document.getElementById('terrain-overlay').classList.remove('open');document.body.style.overflow=''">✕ Fermer</button>
+    <div id="terrain-overlay-title">🏔️ Profil terrain</div>
+    <div id="terrain-overlay-svg"></div>
+    <div id="terrain-overlay-stats"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- UX4 — MODAL IMPORT ENRICHIE              -->
+<!-- ══════════════════════════════════════════ -->
+<div id="import-modal-overlay" onclick="if(event.target===this)closeImportModal()">
+  <div id="import-modal">
+    <button class="im-close" onclick="closeImportModal()">✕</button>
+    <div class="im-title">📤 IMPORTER DES SPOTS</div>
+
+    <!-- SECTION 1 — TRANSFERT SÉCURISÉ -->
+    <div class="im-section">
+      <div class="im-section-title">
+        💾 TRANSFERT SÉCURISÉ
+        <span class="im-badge">USB · Hors-ligne · Zéro login</span>
+      </div>
+      <div class="im-desc">
+        Transporte tes spots d'un appareil à l'autre sans aucun compte, sans serveur, sans connexion internet.<br><br>
+        <strong>Comment ça marche :</strong><br>
+        <span class="im-pill green">1. Exporte</span> tes spots depuis le bouton "Exporter spots (HTML)" → un fichier <code style="color:var(--cyan)">.html</code> est téléchargé.<br>
+        <span class="im-pill green">2. Copie</span> ce fichier sur ta clé USB, ton cloud perso, ou envoie-le par email.<br>
+        <span class="im-pill green">3. Importe</span> ce fichier ici sur ton nouvel appareil → tous tes spots réapparaissent instantanément.<br><br>
+        <span class="im-pill amber">🔒 Confidentialité</span> Aucune donnée n'est envoyée sur un serveur. Tout reste en local sur ton appareil.
+      </div>
+      <div class="im-btn-row">
+        <button class="im-btn primary" onclick="document.getElementById('import-file').click()">📂 Choisir un fichier (.html / .json)</button>
+      </div>
+    </div>
+
+    <!-- SECTION 2 — SPOTS IA -->
+    <div class="im-section">
+      <div class="im-section-title">
+        🤖 IMPORTER UN SPOT GÉNÉRÉ PAR IA
+        <span class="im-badge">Claude · ChatGPT</span>
+      </div>
+      <div class="im-desc">
+        Décris ton spot à Claude, il génère le JSON prêt à coller ici. En quelques secondes tu as un spot complet avec tous ses paramètres configurés.<br>
+        <span class="im-pill cyan">Copie le prompt ci-dessous</span> et colle-le dans Claude avec la description de ton spot.
+      </div>
+      <div class="im-prompt-box" id="im-prompt-text">Tu es un assistant pour VLD Hub, un outil de veille atmosphérique longue distance (100–500 km).
+
+Génère un spot JSON valide pour VLD Hub à partir de ma description.
+
+FORMAT EXACT ATTENDU (respecte tous les champs) :
+{
+  "id": "custom_[timestamp]",
+  "name": "Nom du spot",
+  "target": "→ Cible observée",
+  "color": "#38bdf8",
+  "country": "france",
+  "custom": true,
+  "obs": { "lat": 0.0000, "lon": 0.0000, "alt": 0 },
+  "mid": { "lat": 0.0000, "lon": 0.0000 },
+  "tgt": { "lat": 0.0000, "lon": 0.0000, "alt": 0 },
+  "dist_km": 0,
+  "azimut": "000°",
+  "type": "montagne_pyrenees",
+  "particularites": {
+    "mistral": false,
+    "anticyclone": false,
+    "inversion": false,
+    "sst": false,
+    "dust": false,
+    "cape": false
+  }
+}
+
+RÈGLES :
+- "type" : "montagne_pyrenees" | "mediterranee_corse" | "mediterranee_marin"
+- "mid" = point milieu géographique entre obs et tgt
+- "particularites" : active les flags pertinents selon la géographie
+- "id" : remplace [timestamp] par les ms actuelles (ex: custom_1715000000000)
+- Réponds UNIQUEMENT avec le JSON, sans texte avant ni après, sans backticks.
+
+MA DESCRIPTION DU SPOT :
+[DÉCRIS ICI : lieu obs, cible, distance, type de trajet, pays]</div>
+      <div class="im-btn-row">
+        <button class="im-btn primary" onclick="copyImportPrompt()">📋 Copier le prompt</button>
+      </div>
+      <div id="im-copy-feedback" style="font-size:10px;color:var(--green);font-family:var(--mono);margin-top:.4rem;min-height:14px;"></div>
+      <div style="margin-top:.9rem;">
+        <div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-bottom:.3rem;">↓ Colle ici le JSON généré par Claude puis clique Importer</div>
+        <textarea id="im-json-area" placeholder='{ "id": "custom_...", "name": "...", ... }'></textarea>
+        <div id="im-json-feedback"></div>
+        <div class="im-btn-row">
+          <button class="im-btn green" onclick="importFromJSON()">✓ Importer ce spot</button>
+          <button class="im-btn" onclick="document.getElementById('im-json-area').value='';document.getElementById('im-json-feedback').textContent='';">🗑 Effacer</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
 </div>
 
 </body>
