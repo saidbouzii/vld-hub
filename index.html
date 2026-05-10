@@ -1128,6 +1128,50 @@ body::after{
   color:var(--text3);font-family:var(--mono);font-size:12px;
 }
 
+/* ── U5-MAP — Modal profil combiné carte ── */
+#map-profile-overlay{
+  display:none;position:fixed;inset:0;z-index:9999;
+  background:rgba(2,6,9,0.93);backdrop-filter:blur(6px);
+  cursor:zoom-out;align-items:center;justify-content:center;padding:1.5rem;
+}
+#map-profile-overlay.open{display:flex;}
+#map-profile-inner{
+  width:100%;max-width:960px;
+  background:#080f1a;border:1px solid rgba(56,189,248,.3);
+  border-radius:16px;padding:1.25rem 1.5rem 1rem;
+  box-shadow:0 0 60px rgba(56,189,248,.08);position:relative;
+  cursor:default;
+}
+#map-profile-title{
+  font-family:var(--font);font-size:14px;font-weight:800;
+  letter-spacing:.06em;color:#fff;margin-bottom:.5rem;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;
+}
+#map-profile-close{
+  position:absolute;top:.75rem;right:.75rem;
+  background:none;border:1px solid var(--border);
+  color:#fff;border-radius:6px;padding:.2rem .6rem;
+  font-size:13px;font-weight:700;cursor:pointer;
+}
+#map-profile-close:hover{border-color:#fff;}
+#map-profile-svg{width:100%;border-radius:8px;background:#020609;overflow:hidden;margin-bottom:.75rem;}
+#map-profile-svg svg{width:100%;height:auto;display:block;}
+#map-profile-slider-row{
+  display:flex;align-items:center;gap:1rem;padding:.5rem .75rem;
+  background:rgba(56,189,248,.05);border:1px solid rgba(56,189,248,.15);
+  border-radius:8px;margin-bottom:.75rem;flex-wrap:wrap;
+}
+#map-profile-slider-row label{font-family:var(--mono);font-size:11px;color:var(--cyan);white-space:nowrap;}
+#map-profile-k-slider{flex:1;min-width:120px;accent-color:var(--cyan);}
+#map-profile-k-val{font-family:var(--mono);font-size:13px;font-weight:800;color:var(--cyan);min-width:44px;}
+#map-profile-k-badge{font-family:var(--mono);font-size:9px;padding:2px 7px;border-radius:4px;background:rgba(56,189,248,.15);color:var(--cyan);border:1px solid rgba(56,189,248,.3);}
+#map-profile-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:.6rem;}
+@media(max-width:600px){#map-profile-stats{grid-template-columns:1fr 1fr;}}
+.mp-stat{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;padding:.5rem .7rem;}
+.mp-stat-label{font-size:9px;color:var(--text3);font-family:var(--mono);letter-spacing:.06em;}
+.mp-stat-val{font-size:14px;font-weight:800;font-family:var(--mono);margin-top:2px;}
+#map-profile-loading{text-align:center;padding:3rem;color:var(--text3);font-family:var(--mono);font-size:12px;}
+
+
 /* ── U5-bis — HeyWhatsThat ── */
 .hwt-block{
   margin-top:.75rem;
@@ -3140,13 +3184,21 @@ async function fetchAll() {
   document.getElementById('prog').style.display='block';
   setStatus('Interrogation Open-Meteo…');
   renderMatrix(true); renderCards(true);
-  const results = await Promise.allSettled(SPOTS.map(s=>fetchSpot(s)));
+  // Séquençage avec délai 350ms entre spots pour éviter les 429 Open-Meteo
+  const results = [];
+  for (let i = 0; i < SPOTS.length; i++) {
+    if (i > 0) await new Promise(r => setTimeout(r, 350));
+    const s = SPOTS[i];
+    setStatus(`Chargement ${s.name}… (${i+1}/${SPOTS.length})`);
+    const r = await Promise.allSettled([fetchSpot(s)]);
+    results.push(r[0]);
+    setProgress(Math.round((i+1)/SPOTS.length*100));
+  }
   const errors = [];
   results.forEach((r,i)=>{
     const s=SPOTS[i];
     if(r.status==='fulfilled'){forecasts[s.id]=r.value;log(`✅ ${s.name}`,'ok');}
     else{forecasts[s.id]=null;log(`❌ ${s.name}: ${r.reason}`,'err');errors.push(`${s.name}: ${r.reason}`);}
-    setProgress(Math.round((i+1)/SPOTS.length*100));
   });
   const eb = document.getElementById('err-banner');
   if(errors.length){ eb.style.display='block'; eb.textContent='⚠️ Erreurs:\n'+errors.join('\n'); }
@@ -3870,6 +3922,231 @@ function closeTerrainOverlay(e) {
   document.body.style.overflow = '';
 }
 
+// ═══════════════════════════════════════════════════
+// U5-MAP — Modal profil combiné (terrain + LOS) au clic sur ligne carte
+// ═══════════════════════════════════════════════════
+let _mapProfileSpot = null;
+let _mapProfilePoints = null; // cached terrain points
+let _mapProfileK = 0.17;
+
+function openMapProfile(spot) {
+  _mapProfileSpot = spot;
+  _mapProfilePoints = null;
+
+  // K ERA5 depuis les prévisions si dispo
+  const fc = (window.forecasts || {})[spot.id];
+  const todayRaw = fc?.[0]?.raw;
+  _mapProfileK = (todayRaw?.k_bislin != null) ? todayRaw.k_bislin : 0.17;
+  const kSource = todayRaw?.k_source || 'bislin';
+
+  const overlay = document.getElementById('map-profile-overlay');
+  document.getElementById('map-profile-title').innerHTML =
+    `🗺️ ${spot.name} <span style="color:var(--text3);font-size:11px;font-weight:400">→ ${spot.target} · ${spot.dist_km} km</span>`;
+  document.getElementById('map-profile-svg').innerHTML =
+    '<div id="map-profile-loading">⏳ Chargement profil terrain…</div>';
+  document.getElementById('map-profile-stats').innerHTML = '';
+
+  // Slider init
+  const slider = document.getElementById('map-profile-k-slider');
+  const kVal = document.getElementById('map-profile-k-val');
+  const kBadge = document.getElementById('map-profile-k-badge');
+  slider.value = _mapProfileK;
+  kVal.textContent = _mapProfileK.toFixed(3);
+  kBadge.textContent = kSource === 'era5' ? 'ERA5 réel' : 'Modèle';
+  kBadge.style.background = kSource === 'era5' ? 'rgba(56,189,248,.2)' : 'rgba(255,138,0,.15)';
+  kBadge.style.color = kSource === 'era5' ? 'var(--cyan)' : 'var(--orange)';
+  kBadge.style.borderColor = kSource === 'era5' ? 'rgba(56,189,248,.4)' : 'rgba(255,138,0,.3)';
+
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  fetchAndRenderMapProfile(spot, _mapProfileK);
+}
+
+function closeMapProfile(e) {
+  if (e && e.target !== document.getElementById('map-profile-overlay')) return;
+  document.getElementById('map-profile-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function onMapProfileSlider(val) {
+  _mapProfileK = parseFloat(val);
+  document.getElementById('map-profile-k-val').textContent = _mapProfileK.toFixed(3);
+  if (_mapProfilePoints) renderMapProfileSVG(_mapProfileSpot, _mapProfilePoints, _mapProfileK);
+}
+
+async function fetchAndRenderMapProfile(spot, k) {
+  const svgDiv = document.getElementById('map-profile-svg');
+  try {
+    const N = 50;
+    const pts = interpolatePoints(spot.obs.lat, spot.obs.lon, spot.tgt.lat, spot.tgt.lon, N);
+    const lats = pts.map(p => p.lat.toFixed(6)).join(',');
+    const lons = pts.map(p => p.lon.toFixed(6)).join(',');
+    const url = `https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lons}`;
+    const resp = await fetch(url, {signal: AbortSignal.timeout(12000)});
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    if (!data.elevation || !data.elevation.length) throw new Error('no_data');
+    const distM = spot.dist_km * 1000;
+    _mapProfilePoints = pts.map((p, i) => ({ dist: p.f * distM, elev: data.elevation[i] }));
+    renderMapProfileSVG(spot, _mapProfilePoints, _mapProfileK);
+  } catch(err) {
+    svgDiv.innerHTML = `<div style="padding:2.5rem;text-align:center;color:var(--text3);font-family:var(--mono);font-size:11px">❌ Profil terrain indisponible (${err.message})</div>`;
+  }
+}
+
+function renderMapProfileSVG(spot, points, k) {
+  const svgDiv = document.getElementById('map-profile-svg');
+  const statDiv = document.getElementById('map-profile-stats');
+  const obsAlt = spot.obs.alt || 0;
+  const tgtAlt = spot.tgt.alt || 0;
+  const totalDist = spot.dist_km * 1000;
+  const R = 6371000;
+  const Rp = R / (1 - k);
+
+  // LOS géométrique (droite entre A et B)
+  const losElev = d => obsAlt + (tgtAlt - obsAlt) * (d / totalDist);
+  // LOS avec réfraction : lift parabolique
+  const losRefr = d => losElev(d) + (d * (totalDist - d)) / (2 * Rp);
+
+  const elevations = points.map(p => p.elev);
+  const allY = [...elevations, obsAlt, tgtAlt, ...points.map(p => losRefr(p.dist))];
+  const minElev = Math.min(...allY) - 80;
+  const maxElev = Math.max(...allY) + 180;
+
+  const W = 860, H = 290, PAD = {t:28, r:22, b:44, l:58};
+  const iW = W - PAD.l - PAD.r, iH = H - PAD.t - PAD.b;
+  const sx = d => PAD.l + (d / totalDist) * iW;
+  const sy = e => PAD.t + iH - ((e - minElev) / (maxElev - minElev)) * iH;
+
+  // Obstacles (terrain > LOS réfractée)
+  const obstacles = points.filter((p, i) => i > 0 && i < points.length - 1 && p.elev > losRefr(p.dist));
+  const maxObs = obstacles.length ? obstacles.reduce((a, b) =>
+    (a.elev - losRefr(a.dist)) > (b.elev - losRefr(b.dist)) ? a : b) : null;
+
+  // Terrain polygon
+  const terrainPts = points.map(p => `${sx(p.dist).toFixed(1)},${sy(p.elev).toFixed(1)}`).join(' ');
+  const terrainPoly = `${sx(0)},${sy(minElev)} ${terrainPts} ${sx(totalDist)},${sy(minElev)}`;
+
+  // LOS lignes
+  const losGeoLine = `${sx(0)},${sy(obsAlt)} ${sx(totalDist)},${sy(tgtAlt)}`;
+  const losRefrPts = points.map(p => `${sx(p.dist).toFixed(1)},${sy(losRefr(p.dist)).toFixed(1)}`).join(' ');
+
+  // Zone visible (entre LOS réfractée et terrain quand terrain < LOS)
+  const clearPts = points.filter(p => p.elev < losRefr(p.dist));
+  let clearZone = '';
+  if (clearPts.length > 1) {
+    // Highlight visible corridor subtly
+    const topLine = points.map(p => `${sx(p.dist).toFixed(1)},${sy(losRefr(p.dist)).toFixed(1)}`).join(' ');
+    const botLine = points.map(p => `${sx(p.dist).toFixed(1)},${sy(Math.max(p.elev, minElev)).toFixed(1)}`).reverse().join(' ');
+    clearZone = `<polygon points="${topLine} ${botLine}" fill="rgba(56,189,248,0.06)" stroke="none"/>`;
+  }
+
+  // Obstacle zones
+  let obsZones = '';
+  obstacles.forEach(p => {
+    const x = sx(p.dist), top = sy(p.elev), bot = sy(losRefr(p.dist));
+    obsZones += `<line x1="${x}" y1="${top}" x2="${x}" y2="${bot}" stroke="#ef4444" stroke-width="2" opacity="0.75"/>`;
+  });
+
+  // Grid
+  const elevRange = maxElev - minElev;
+  const elevStep = elevRange > 4000 ? 1000 : elevRange > 1500 ? 500 : elevRange > 600 ? 200 : 100;
+  let elevLabels = '';
+  for (let e = Math.ceil(minElev / elevStep) * elevStep; e <= maxElev; e += elevStep) {
+    const y = sy(e).toFixed(1);
+    elevLabels += `<text x="${PAD.l - 6}" y="${y}" fill="#3a5570" font-size="9" text-anchor="end" dominant-baseline="middle" font-family="monospace">${e}m</text>`;
+    elevLabels += `<line x1="${PAD.l}" y1="${y}" x2="${W - PAD.r}" y2="${y}" stroke="#111f2e" stroke-width="0.7"/>`;
+  }
+  const distLabels = [0, 0.25, 0.5, 0.75, 1].map(f => {
+    const d = f * totalDist, km = (d / 1000).toFixed(0);
+    return `<text x="${sx(d).toFixed(1)}" y="${H - 10}" fill="#3a5570" font-size="9" text-anchor="middle" font-family="monospace">${km}km</text>`;
+  }).join('');
+
+  // Markers
+  const mA = `<circle cx="${sx(0)}" cy="${sy(obsAlt)}" r="5" fill="#38bdf8"/><text x="${sx(0) + 9}" y="${sy(obsAlt) - 7}" fill="#38bdf8" font-size="9" font-family="monospace">A ${obsAlt}m</text>`;
+  const mB = `<circle cx="${sx(totalDist)}" cy="${sy(tgtAlt)}" r="5" fill="#38bdf8"/><text x="${sx(totalDist) - 9}" y="${sy(tgtAlt) - 7}" fill="#38bdf8" font-size="9" font-family="monospace" text-anchor="end">B ${tgtAlt}m</text>`;
+
+  // Lift annotation
+  const lift_m = Math.round((totalDist * totalDist) / (2 * R) - (totalDist * totalDist) / (2 * Rp));
+  const liftX = sx(totalDist * 0.5), liftY = sy(losRefr(totalDist * 0.5));
+  const liftLabel = `<text x="${liftX}" y="${liftY - 10}" fill="#38bdf8" font-size="9" font-family="monospace" text-anchor="middle">+${lift_m}m lift κ=${k.toFixed(3)}</text>`;
+
+  // Horizon check
+  const d_H = Math.sqrt((Rp + obsAlt) ** 2 - Rp ** 2);
+  let verdictColor, verdictText;
+  if (d_H >= totalDist) {
+    const visibleM = Math.max(0, tgtAlt - (Math.sqrt((totalDist - d_H < 0 ? 0 : (totalDist - d_H) ** 2 + Rp ** 2) - Rp)));
+    verdictText = obstacles.length === 0 ? `✅ Visible · +${Math.round(visibleM)}m` : `⚠️ Terrain obstacle`;
+    verdictColor = obstacles.length === 0 ? '#22c55e' : '#f59e0b';
+  } else {
+    const inner = totalDist - d_H;
+    const hh = Math.sqrt(inner * inner + Rp * Rp) - Rp;
+    const visible = Math.max(0, tgtAlt - hh);
+    if (visible > 0) {
+      verdictText = `✅ ${Math.round(visible)}m visible`;
+      verdictColor = '#22c55e';
+    } else {
+      verdictText = `❌ Caché · ${Math.round(hh - tgtAlt)}m sous horizon`;
+      verdictColor = '#f87171';
+    }
+    if (obstacles.length > 0) { verdictText += ` + terrain`; verdictColor = '#f87171'; }
+  }
+
+  // Legend
+  const Lx = PAD.l, Ly = PAD.t + 4;
+  const legend = `
+    <rect x="${Lx}" y="${Ly - 3}" width="12" height="5" fill="#22c55e" opacity="0.5"/>
+    <text x="${Lx + 15}" y="${Ly + 2}" fill="#22c55e" font-size="8" font-family="monospace">Terrain</text>
+    <line x1="${Lx + 62}" y1="${Ly}" x2="${Lx + 74}" y2="${Ly}" stroke="rgba(255,255,255,0.25)" stroke-width="1" stroke-dasharray="3,2"/>
+    <text x="${Lx + 77}" y="${Ly + 2}" fill="#6688aa" font-size="8" font-family="monospace">LOS géom.</text>
+    <line x1="${Lx + 133}" y1="${Ly}" x2="${Lx + 145}" y2="${Ly}" stroke="#38bdf8" stroke-width="1.5"/>
+    <text x="${Lx + 148}" y="${Ly + 2}" fill="#38bdf8" font-size="8" font-family="monospace">LOS réfractée κ=${k.toFixed(3)}</text>
+    ${obstacles.length ? `<line x1="${Lx + 230}" y1="${Ly - 3}" x2="${Lx + 230}" y2="${Ly + 4}" stroke="#ef4444" stroke-width="2.5" opacity="0.8"/>
+    <text x="${Lx + 235}" y="${Ly + 2}" fill="#f87171" font-size="8" font-family="monospace">Obstacle</text>` : ''}
+    <rect x="${Lx + (obstacles.length ? 275 : 230)}" y="${Ly - 3}" width="12" height="5" fill="rgba(56,189,248,0.15)"/>
+    <text x="${Lx + (obstacles.length ? 290 : 245)}" y="${Ly + 2}" fill="#38bdf8" font-size="8" font-family="monospace">Couloir</text>
+  `;
+
+  const svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+    <rect width="${W}" height="${H}" fill="#020609"/>
+    ${elevLabels}${distLabels}
+    ${clearZone}
+    <polygon points="${terrainPoly}" fill="rgba(34,197,94,0.12)" stroke="none"/>
+    <polyline points="${terrainPts}" fill="none" stroke="#22c55e" stroke-width="1.8"/>
+    ${obsZones}
+    <polyline points="${losGeoLine}" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1" stroke-dasharray="5,3"/>
+    <polyline points="${losRefrPts}" fill="none" stroke="#38bdf8" stroke-width="2"/>
+    ${liftLabel}
+    ${mA}${mB}
+    ${legend}
+  </svg>`;
+
+  svgDiv.innerHTML = svg;
+
+  // Stats
+  const maxExcess = maxObs ? Math.round(maxObs.elev - losRefr(maxObs.dist)) : 0;
+  statDiv.innerHTML = `
+    <div class="mp-stat">
+      <div class="mp-stat-label">VERDICT</div>
+      <div class="mp-stat-val" style="color:${verdictColor};font-size:12px">${verdictText}</div>
+    </div>
+    <div class="mp-stat">
+      <div class="mp-stat-label">LIFT RÉFRACTION</div>
+      <div class="mp-stat-val" style="color:var(--cyan)">+${lift_m} m</div>
+    </div>
+    <div class="mp-stat">
+      <div class="mp-stat-label">MAX OBSTACLE / LOS</div>
+      <div class="mp-stat-val" style="color:${maxObs ? '#f87171' : 'var(--green)'}">
+        ${maxObs ? '+' + maxExcess + 'm à ' + (maxObs.dist / 1000).toFixed(0) + 'km' : '—'}
+      </div>
+    </div>
+    <div class="mp-stat">
+      <div class="mp-stat-label">SOURCE TERRAIN</div>
+      <div class="mp-stat-val" style="color:var(--text2);font-size:10px">Open-Meteo · ${points.length} pts</div>
+    </div>`;
+}
+
+
 // Interpoler N points entre obs et cible sur la grande-cercle
 function interpolatePoints(lat1, lon1, lat2, lon2, n) {
   const pts = [];
@@ -3908,7 +4185,9 @@ async function fetchAndRenderTerrain(spot) {
     }));
 
     const totalDist = distM;
-    const k = 0.17;
+    // Utilise K ERA5 du jour si disponible
+    const fc0 = (window.forecasts || {})[spot.id]?.[0]?.raw;
+    const k = (fc0?.k_bislin != null) ? fc0.k_bislin : 0.17;
     const R = 6371000;
     const losElev = d => obsAlt + (tgtAlt - obsAlt) * (d / totalDist);
     const losRefr = d => losElev(d) + (d * (totalDist - d)) / (2 * R / (1 - k));
@@ -4073,14 +4352,23 @@ function renderMapSpots() {
       color, weight: 2.5, opacity: 0.85, dashArray: score === null ? '6,4' : null,
     }).addTo(_vldMap);
 
-    // Popup
+    // Clic sur la ligne → modal profil combiné
+    line.on('click', (e) => {
+      L.DomEvent.stopPropagation(e);
+      openMapProfile(spot);
+    });
+    line.getElement && line.on('mouseover', () => { line.setStyle({weight: 4, opacity: 1}); });
+    line.on('mouseout', () => { line.setStyle({weight: 2.5, opacity: 0.85}); });
+
+    // Popup au clic droit / long press (info rapide)
     const scoreStr = score !== null ? `<span class="lp-score" style="color:${color}">${score}</span><span style="font-size:11px;color:var(--text3)">/100</span>` : `<span style="color:#38bdf8;font-size:11px">Non chargé — lance ⟳</span>`;
     const popup = `<div class="lp-name" style="color:${color}">${spot.name}</div>
 <div>${spot.target} · ${spot.dist_km} km</div>
 ${scoreStr}
 <div class="lp-meta">Az. ${spot.azimut} · Obs ${spot.obs.alt}m → Cible ${spot.tgt.alt}m</div>
+<div style="margin-top:6px;font-size:9px;color:var(--text3);font-family:var(--mono)">🗺️ Clic sur la ligne → profil complet</div>
 `;
-    line.bindPopup(popup, {maxWidth: 220});
+    line.bindPopup(popup, {maxWidth: 240});
     _mapLayers.push(line);
 
     // Marqueur A — observateur
@@ -4754,6 +5042,26 @@ function applyDMS() {
 <!-- ══════════════════════════════════════════ -->
 <!-- U5-bis — MODAL PROFIL TERRAIN            -->
 <!-- ══════════════════════════════════════════ -->
+<!-- ══════════════════════════════════════════ -->
+<!-- U5-MAP — Modal profil combiné carte      -->
+<!-- ══════════════════════════════════════════ -->
+<div id="map-profile-overlay" onclick="closeMapProfile(event)">
+  <div id="map-profile-inner" onclick="event.stopPropagation()">
+    <button id="map-profile-close" onclick="document.getElementById('map-profile-overlay').classList.remove('open');document.body.style.overflow=''">✕ Fermer</button>
+    <div id="map-profile-title">🗺️ Profil de trajet</div>
+    <div id="map-profile-svg"></div>
+    <div id="map-profile-slider-row">
+      <label>κ réfraction :</label>
+      <input id="map-profile-k-slider" type="range" min="0.05" max="0.45" step="0.001"
+        oninput="onMapProfileSlider(this.value)" style="flex:1;min-width:120px"/>
+      <span id="map-profile-k-val">0.170</span>
+      <span id="map-profile-k-badge">ERA5 réel</span>
+      <span style="font-size:9px;color:var(--text3);font-family:var(--mono)">← glisser pour simuler</span>
+    </div>
+    <div id="map-profile-stats"></div>
+  </div>
+</div>
+
 <div id="terrain-overlay" onclick="closeTerrainOverlay(event)">
   <div id="terrain-overlay-inner" onclick="event.stopPropagation()">
     <button id="terrain-overlay-close" onclick="document.getElementById('terrain-overlay').classList.remove('open');document.body.style.overflow=''">✕ Fermer</button>
