@@ -3008,12 +3008,12 @@ async function fetchSpot(spot) {
  const urlDust = 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude='+spot.mid.lat+'&longitude='+spot.mid.lon+'&hourly=dust&timezone=auto';
   // U2 — ERA5 pressure levels pour calcul κ ITU-R P.453
   const urlPres = `https://api.open-meteo.com/v1/forecast?latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=temperature_1000hPa,temperature_925hPa,temperature_850hPa,temperature_700hPa,temperature_600hPa,temperature_500hPa,temperature_400hPa,temperature_300hPa,relative_humidity_1000hPa,relative_humidity_925hPa,relative_humidity_850hPa,relative_humidity_700hPa,relative_humidity_600hPa,relative_humidity_500hPa,relative_humidity_400hPa,relative_humidity_300hPa,geopotential_height_1000hPa,geopotential_height_925hPa,geopotential_height_850hPa,geopotential_height_700hPa,geopotential_height_600hPa,geopotential_height_500hPa,geopotential_height_400hPa,geopotential_height_300hPa&forecast_days=7&timezone=auto`;
-  const [r1,r2,r3,r4] = await Promise.all([fetch(urlObs),fetch(urlMid),fetch(urlDust),fetch(urlPres).catch(e=>{console.warn('urlPres fetch failed:',e);return null;})]);
+  const [r1,r2,r3,r4] = await Promise.all([fetch(urlObs),fetch(urlMid).catch(e=>{console.warn('urlMid fetch failed:',e);return null;}),fetch(urlDust),fetch(urlPres).catch(e=>{console.warn('urlPres fetch failed:',e);return null;})]);
   if(!r1.ok) throw new Error(`urlObs HTTP ${r1.status}`);
-  if(!r2.ok) throw new Error(`urlMid HTTP ${r2.status}`);
-  const [d1,d2,d3] = await Promise.all([r1.json().catch(()=>null),r2.json().catch(()=>null),r3?.json().catch(()=>null)]);
+  if(r2&&!r2.ok) console.warn(`urlMid HTTP ${r2.status}`);
+  const [d1,d2,d3] = await Promise.all([r1.json().catch(()=>null),(r2&&r2.ok)?r2.json().catch(()=>null):Promise.resolve(null),r3?.json().catch(()=>null)]);
   if(!d1||d1.error) throw new Error(`urlObs: ${d1?.reason||'réponse invalide'}`);
-  if(!d2||d2.error) throw new Error(`urlMid: ${d2?.reason||'réponse invalide'}`);
+  if(d2?.error) console.warn(`urlMid: ${d2.reason}`);
   const d4 = r4 ? await r4.json().catch(()=>null) : null;
   if(d4?.error) console.warn('urlPres ERA5:', d4.reason);
   const daily = [];
@@ -3033,6 +3033,9 @@ async function fetchSpot(spot) {
     // ── U2 — κ ERA5 multi-niveaux ITU-R P.453 ──────────────────
     let k_bislin;
     let k_source = 'bislin';
+    let dTdh = -0.0065;
+    if (T850!==null&&temp!==null&&H850!==null&&H850>(spot.obs.alt||0)+50)
+      dTdh = (T850-temp)/(H850-(spot.obs.alt||0));
     try {
       const levels = [1000,925,850,700,600,500,400,300];
       const hPres = d4?.hourly;
@@ -3068,10 +3071,7 @@ async function fetchSpot(spot) {
         throw new Error('not enough levels');
       }
     } catch(_) {
-      // Fallback Bislin 2 niveaux
-      let dTdh = -0.0065;
-      if (T850!==null&&temp!==null&&H850!==null&&H850>(spot.obs.alt||0)+50)
-        dTdh = (T850-temp)/(H850-(spot.obs.alt||0));
+      // Fallback Bislin 2 niveaux (dTdh déjà calculé ci-dessus)
       const T_K = (temp!==null?temp:15)+273.15;
       k_bislin = 503*(P_mbar/(T_K*T_K))*(0.0343+dTdh);
       k_source = 'bislin';
