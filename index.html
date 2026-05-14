@@ -66,6 +66,123 @@ if ('serviceWorker' in navigator) {
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/eruda"></script><script>eruda.init();</script>
+
+<!-- ═══ FIREBASE AUTH + FIRESTORE ═══ -->
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import { getFirestore, doc, setDoc, getDocs, deleteDoc, collection }
+  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+// ── 🔧 REMPLACE CES VALEURS par celles de ta console Firebase ──
+const firebaseConfig = {
+  apiKey:            "AIzaSyAd9qZ-3Pqo93N7YtfdzcHxMhAZbP3XoVA",
+  authDomain:        "vld-hub.firebaseapp.com",
+  projectId:         "vld-hub",
+  storageBucket:     "vld-hub.firebasestorage.app",
+  messagingSenderId: "764866875809",
+  appId:             "1:764866875809:web:d612a66bcbe1b79cf1fbe0",
+  measurementId:     "G-V8E5S295H6"
+};
+
+const app  = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db   = getFirestore(app);
+const provider = new GoogleAuthProvider();
+
+let currentUser = null;
+
+// ── Écoute changement d'état auth ──
+onAuthStateChanged(auth, async user => {
+  currentUser = user;
+  const btn    = document.getElementById('auth-btn');
+  const status = document.getElementById('auth-status');
+  if (user) {
+    const firstName = user.displayName ? user.displayName.split(' ')[0] : 'Compte';
+    btn.textContent   = `👤 ${firstName}`;
+    btn.title         = 'Cliquer pour se déconnecter';
+    btn.style.borderColor = 'rgba(74,222,128,0.4)';
+    btn.style.color       = '#4ade80';
+    status.textContent = '☁️ Synchro active';
+    status.style.color = '#4ade80';
+    // Charger les spots depuis Firestore au login
+    await window._loadSpotsFromFirestore();
+  } else {
+    btn.textContent   = '🔑 Connexion Google';
+    btn.title         = 'Se connecter pour synchroniser ses spots';
+    btn.style.borderColor = 'rgba(0,212,255,0.25)';
+    btn.style.color       = 'var(--cyan)';
+    status.textContent = '💾 Stockage local';
+    status.style.color = 'var(--text-dim, #4a6a8a)';
+  }
+});
+
+// ── Login / Logout ──
+window.authToggle = async () => {
+  if (currentUser) {
+    if (!confirm(`Déconnecter ${currentUser.displayName} ?\nLes spots resteront en local.`)) return;
+    await signOut(auth);
+  } else {
+    try {
+      await signInWithPopup(auth, provider);
+    } catch(e) {
+      if (e.code !== 'auth/popup-closed-by-user') {
+        alert('Erreur de connexion : ' + e.message);
+      }
+    }
+  }
+};
+
+// ── Sauvegarder tous les spots custom vers Firestore ──
+window._saveCustomSpotsCloud = async () => {
+  if (!currentUser || typeof SPOTS === 'undefined') return;
+  const spots = SPOTS.filter(s => s.custom);
+  try {
+    for (const spot of spots) {
+      await setDoc(doc(db, 'users', currentUser.uid, 'spots', String(spot.id)), spot);
+    }
+    const status = document.getElementById('auth-status');
+    if (status) { status.textContent = '☁️ Sauvegardé'; setTimeout(() => { status.textContent = '☁️ Synchro active'; }, 2000); }
+  } catch(e) {
+    console.warn('Firestore save error:', e);
+  }
+};
+
+// ── Charger les spots depuis Firestore ──
+window._loadSpotsFromFirestore = async () => {
+  if (!currentUser || typeof SPOTS === 'undefined') return;
+  try {
+    const snap = await getDocs(collection(db, 'users', currentUser.uid, 'spots'));
+    let added = 0;
+    snap.forEach(d => {
+      const spot = d.data();
+      if (!SPOTS.find(s => s.id === spot.id)) {
+        SPOTS.push(spot);
+        added++;
+      }
+    });
+    if (added > 0 && typeof renderMatrix === 'function') {
+      renderMatrix(false);
+      renderCards(false);
+      if (typeof renderCustomSpotsList === 'function') renderCustomSpotsList();
+      if (typeof setStatus === 'function') setStatus(`☁️ ${snap.size} spot(s) chargés depuis Firestore`);
+    }
+  } catch(e) {
+    console.warn('Firestore load error:', e);
+  }
+};
+
+// ── Supprimer un spot de Firestore ──
+window._deleteSpotCloud = async (spotId) => {
+  if (!currentUser) return;
+  try {
+    await deleteDoc(doc(db, 'users', currentUser.uid, 'spots', String(spotId)));
+  } catch(e) {
+    console.warn('Firestore delete error:', e);
+  }
+};
+</script>
 <style>
 
 /* ═══════════════════════════════════════════════════════════
@@ -1045,6 +1162,19 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
       <div class="clock-display" id="clock">--:--</div>
     </div>
     <div class="date-display" id="date-now">—</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap;">
+      <button id="auth-btn" onclick="if(typeof authToggle==='function')authToggle();"
+        style="background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.25);
+               color:var(--cyan);padding:5px 13px;border-radius:7px;font-size:12px;
+               font-family:var(--mono,monospace);cursor:pointer;letter-spacing:.04em;
+               transition:all .2s;white-space:nowrap;">
+        🔑 Connexion Google
+      </button>
+      <span id="auth-status"
+        style="font-size:10px;color:var(--text-dim,#4a6a8a);font-family:var(--mono,monospace);letter-spacing:.04em;">
+        💾 Stockage local
+      </span>
+    </div>
   </div>
 </div>
 
@@ -2107,9 +2237,9 @@ function renderNewCurveBlock(spot, k_default) {
           <span class="dr-cta-lbl">↑ Lift réfraction</span>
           <span class="dr-cta-val" style="color:#38bdf8">${liftStr}</span>
         </div>
-        <div class="dr-cta-stat" style="${(d.hidden-d.h2)>0?'border-color:rgba(248,113,113,.2);background:rgba(248,113,113,.05)':'border-color:rgba(74,222,128,.2);background:rgba(74,222,128,.05)'}">
+        <div class="dr-cta-stat" id="dr-h2under-box-${spot.id}" style="${(d.hidden-d.h2)>0?'border-color:rgba(248,113,113,.2);background:rgba(248,113,113,.05)':'border-color:rgba(74,222,128,.2);background:rgba(74,222,128,.05)'}">
           <span class="dr-cta-lbl">⬇ Cible H2 cachée par</span>
-          <span class="dr-cta-val" style="color:${(d.hidden-d.h2)>0?'#f87171':'#4ade80'}">${(d.hidden-d.h2)>0?Math.round(d.hidden-d.h2).toLocaleString()+' m':'Visible +'+Math.round(d.h2-d.hidden).toLocaleString()+' m'}</span>
+          <span class="dr-cta-val" id="dr-h2under-${spot.id}" style="color:${(d.hidden-d.h2)>0?'#f87171':'#4ade80'}">${(d.hidden-d.h2)>0?Math.round(d.hidden-d.h2).toLocaleString()+' m':'Visible +'+Math.round(d.h2-d.hidden).toLocaleString()+' m'}</span>
         </div>
       </div>
       <div class="dr-cta-hint">🔍 Profil de courbure · slider k interactif</div>
@@ -2259,7 +2389,7 @@ function hiddenWithRefraction(d_m,k){ return (d_m*d_m)/(2*R_eff(k)); }
 // Lift = différence entre les deux
 function liftFromK(k,d_m){ return hiddenByEarth(d_m) - hiddenWithRefraction(d_m,k); }
 
-function renderCurvatureSVG(spot,k,bislinHidden,bislinH2){
+function renderCurvatureSVG(spot,k){
   const dist_m=spot.dist_km*1000;
   const obsAlt=spot.obs.alt||0, tgtAlt=spot.tgt.alt||0;
   const hiddenGeo=hiddenByEarth(dist_m);
@@ -2287,12 +2417,7 @@ function renderCurvatureSVG(spot,k,bislinHidden,bislinH2){
   let kCol='#9ca3af';
   if(k>0.4)kCol='#22d3ee';else if(k>0.2)kCol='#4ade80';else if(k>0.1)kCol='#fbbf24';else if(k<0)kCol='#f87171';
   const visCol=visible>0?'#4ade80':'#f87171';
-  const hid = (bislinHidden !== undefined) ? bislinHidden : 0;
-  const h2b = (bislinH2 !== undefined) ? bislinH2 : tgtAlt;
-  const h2under = hid - h2b;
-  const visLabel = h2under > 0
-    ? `Cible H2 cachée de ${Math.round(h2under).toLocaleString()} m`
-    : `Cible H2 visible de +${Math.round(-h2under).toLocaleString()} m`;
+  const visLabel=visible>0?`+${Math.round(visible)}m visible`:`${Math.round(Math.abs(visible))}m caché`;
   const losY1=toY(obsAlt), losY2=toY(tgtAlt);
   const gridLines=[0,0.25,0.5,0.75,1].map(f=>{const a=minAlt+f*altRange;const y=toY(a);return`<line x1="${PAD_L}" y1="${y.toFixed(1)}" x2="${W-PAD_R}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,0.04)" stroke-width="1"/><text x="${(PAD_L-5).toFixed(1)}" y="${(y+3).toFixed(1)}" text-anchor="end" fill="#374151" font-size="8">${Math.round(a)}m</text>`;}).join('');
   return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
@@ -2319,7 +2444,7 @@ function renderCurvatureSVG(spot,k,bislinHidden,bislinH2){
   <text x="${(toX(1)-9).toFixed(1)}" y="${(losY2-9).toFixed(1)}" text-anchor="end" fill="${spot.color}" font-size="9" font-weight="bold">${spot.target.replace('→ ','').split('·')[0].trim()}</text>
   <text x="${(toX(1)-9).toFixed(1)}" y="${(losY2+2).toFixed(1)}" text-anchor="end" fill="${spot.color}" font-size="8">${tgtAlt}m</text>
   <circle cx="${toX(1).toFixed(1)}" cy="${toY(tgtAlt-hiddenRef).toFixed(1)}" r="3.5" fill="${kCol}" opacity="0.9" stroke="#020609" stroke-width="1"/>
-  <text x="${(W/2).toFixed(1)}" y="${(H-6).toFixed(1)}" text-anchor="middle" fill="${h2under>0?'#f87171':'#4ade80'}" font-size="9" font-weight="bold">${visLabel} · ${spot.dist_km} km</text>
+  <text x="${(W/2).toFixed(1)}" y="${(H-6).toFixed(1)}" text-anchor="middle" fill="${visCol}" font-size="9" font-weight="bold">${visLabel} · ${spot.dist_km} km</text>
   <line x1="${PAD_L}" y1="${PAD_T-14}" x2="${PAD_L+18}" y2="${PAD_T-14}" stroke="rgba(56,189,248,0.3)" stroke-dasharray="4,3" stroke-width="1"/>
   <text x="${PAD_L+22}" y="${PAD_T-10}" fill="rgba(56,189,248,0.4)" font-size="8">Sans réfraction</text>
   <line x1="${PAD_L+108}" y1="${PAD_T-14}" x2="${PAD_L+126}" y2="${PAD_T-14}" stroke="${kCol}" stroke-width="2"/>
@@ -2338,8 +2463,7 @@ function updateCurveProfile(spotId,sliderVal){
   let kCol='#9ca3af';
   if(k>0.4)kCol='#22d3ee';else if(k>0.2)kCol='#4ade80';else if(k>0.1)kCol='#fbbf24';else if(k<0)kCol='#f87171';
   const svgWrap=document.getElementById('curve-svg-'+spotId);
-  const d2 = _calcBislin(spot, k);
-  if(svgWrap)svgWrap.innerHTML=renderCurvatureSVG(spot,k,d2.hidden,d2.h2);
+  if(svgWrap)svgWrap.innerHTML=renderCurvatureSVG(spot,k);
   const kD=document.getElementById('curve-k-'+spotId);
   if(kD){kD.textContent=`k = ${k.toFixed(2)}`;kD.style.color=kCol;}
   const lD=document.getElementById('curve-lift-'+spotId);
@@ -2373,8 +2497,7 @@ function openCurveOverlay(spotId, k) {
   const title = document.getElementById('curve-overlay-title');
   title.textContent = `🌍 ${_overlaySpot.name} ${_overlaySpot.target} · ${_overlaySpot.dist_km} km`;
   slider.value = k.toFixed(2);
-  const d3 = _calcBislin(_overlaySpot, k);
-  svgDiv.innerHTML = renderCurvatureSVG(_overlaySpot, k, d3.hidden, d3.h2);
+  svgDiv.innerHTML = renderCurvatureSVG(_overlaySpot, k);
   _updateOverlayStats(k);
   overlay.classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -2388,8 +2511,7 @@ function closeCurveOverlay(e) {
 function updateOverlayProfile(val) {
   if (!_overlaySpot) return;
   const k = parseFloat(val);
-  const d4 = _calcBislin(_overlaySpot, k);
-  document.getElementById('curve-overlay-svg').innerHTML = renderCurvatureSVG(_overlaySpot, k, d4.hidden, d4.h2);
+  document.getElementById('curve-overlay-svg').innerHTML = renderCurvatureSVG(_overlaySpot, k);
   _updateOverlayStats(k);
 }
 
@@ -2501,7 +2623,7 @@ function renderCurveBlock(spot, k_default){
   return `<div class="curve-section">
     <div class="curve-title">🌍 Profil de courbure · <span>${spot.name} ${spot.target}</span></div>
     <div class="curve-svg-wrap" onclick="openCurveOverlay('${spot.id}', ${k.toFixed(3)})" title="Cliquer pour agrandir">
-      ${renderCurvatureSVG(spot, k, d.hidden, d.h2)}
+      ${renderCurvatureSVG(spot, k)}
     </div>
     <div class="curve-hint">🔍 Cliquer pour agrandir · slider k interactif</div>
     <div class="bsl-grid" style="margin-top:.6rem">
@@ -3362,10 +3484,15 @@ function createSpot() {
 // ═══════════════════════════════════════════════════
 function saveCustomSpots() {
   const customSpots = SPOTS.filter(s => s.custom);
+  // Sauvegarde locale (toujours, fallback garanti)
   try {
     localStorage.setItem('vld_custom_spots', JSON.stringify(customSpots));
   } catch(e) {
-    console.warn('Impossible de sauvegarder les spots personnalisés');
+    console.warn('localStorage write error');
+  }
+  // Sync cloud si connecté à Firebase
+  if (typeof window._saveCustomSpotsCloud === 'function') {
+    window._saveCustomSpotsCloud();
   }
 }
 
@@ -3516,6 +3643,8 @@ function deleteCustomSpot(id) {
   const idx = SPOTS.findIndex(s => s.id === id);
   if (idx >= 0) SPOTS.splice(idx, 1);
   delete forecasts[id];
+  // Supprimer du cloud si connecté
+  if (typeof window._deleteSpotCloud === 'function') window._deleteSpotCloud(id);
   saveCustomSpots();
   renderMatrix(false);
   renderCards(false);
