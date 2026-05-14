@@ -793,10 +793,10 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
 .dr-cta-illust{width:100%;margin-bottom:.35rem;}
 .dr-cta-illust svg{width:100%;height:auto;display:block;}
 .dr-cta-badge{font-family:var(--mono);font-size:10px;font-weight:700;margin-bottom:.35rem;}
-.dr-cta-stats{display:flex;flex-direction:column;gap:2px;margin-bottom:.3rem;}
-.dr-cta-stat{display:flex;justify-content:space-between;align-items:center;}
-.dr-cta-lbl{font-size:9px;color:var(--text3);font-family:var(--mono);}
-.dr-cta-val{font-size:10px;font-weight:700;font-family:var(--mono);}
+.dr-cta-stats{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:.35rem;}
+.dr-cta-stat{display:flex;flex-direction:column;gap:3px;padding:.45rem .55rem;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);}
+.dr-cta-lbl{font-size:9px;color:var(--text3);font-family:var(--mono);letter-spacing:.04em;line-height:1.2;}
+.dr-cta-val{font-size:16px;font-weight:700;font-family:var(--display);letter-spacing:.03em;line-height:1.1;}
 .dr-cta-hint{font-size:8px;color:var(--text3);font-family:var(--mono);margin-top:.25rem;opacity:.7;}
 .dr-curve-info{display:grid;grid-template-columns:1fr 1fr;gap:.3rem;margin-top:.45rem;}
 .dr-ci{background:rgba(255,255,255,.03);border-radius:6px;padding:.3rem .45rem;display:flex;flex-direction:column;gap:1px;}
@@ -2095,9 +2095,22 @@ function renderNewCurveBlock(spot, k_default) {
       <div class="dr-cta-illust">${illustSVG}</div>
       <div class="dr-cta-badge" style="color:${visColor}">${visIcon} ${visLabel}</div>
       <div class="dr-cta-stats">
-        <div class="dr-cta-stat"><span class="dr-cta-lbl">✅ Visible</span><span class="dr-cta-val" style="color:#4ade80">${d.visible>0?Math.round(d.visible).toLocaleString()+' m':'0 m'}</span></div>
-        <div class="dr-cta-stat"><span class="dr-cta-lbl">❌ Caché</span><span class="dr-cta-val" style="color:#f87171">${Math.round(Math.max(d.hidden,0)).toLocaleString()} m</span></div>
-        <div class="dr-cta-stat"><span class="dr-cta-lbl">↑ Lift</span><span class="dr-cta-val" style="color:#38bdf8">${liftStr}</span></div>
+        <div class="dr-cta-stat" style="${d.visible>0?'border-color:rgba(74,222,128,.25);background:rgba(74,222,128,.06)':'border-color:rgba(248,113,113,.2);background:rgba(248,113,113,.05)'}">
+          <span class="dr-cta-lbl">${d.visible>0?'✅ Visible':'❌ Visible'}</span>
+          <span class="dr-cta-val" style="color:${d.visible>0?'#4ade80':'#f87171'}">${d.visible>0?Math.round(d.visible).toLocaleString()+' m':'0 m'}</span>
+        </div>
+        <div class="dr-cta-stat" style="${Math.max(d.hidden,0)>0?'border-color:rgba(248,113,113,.2);background:rgba(248,113,113,.05)':''}">
+          <span class="dr-cta-lbl">🌍 Caché courbure</span>
+          <span class="dr-cta-val" style="color:#f87171">${Math.round(Math.max(d.hidden,0)).toLocaleString()} m</span>
+        </div>
+        <div class="dr-cta-stat" style="border-color:rgba(56,189,248,.2);background:rgba(56,189,248,.05)">
+          <span class="dr-cta-lbl">↑ Lift réfraction</span>
+          <span class="dr-cta-val" style="color:#38bdf8">${liftStr}</span>
+        </div>
+        <div class="dr-cta-stat" id="dr-h2under-box-${spot.id}" style="${(d.hidden-d.h2)>0?'border-color:rgba(248,113,113,.2);background:rgba(248,113,113,.05)':'border-color:rgba(74,222,128,.2);background:rgba(74,222,128,.05)'}">
+          <span class="dr-cta-lbl">⬇ Cible H2 cachée par</span>
+          <span class="dr-cta-val" id="dr-h2under-${spot.id}" style="color:${(d.hidden-d.h2)>0?'#f87171':'#4ade80'}">${(d.hidden-d.h2)>0?Math.round(d.hidden-d.h2).toLocaleString()+' m':'Visible +'+Math.round(d.h2-d.hidden).toLocaleString()+' m'}</span>
+        </div>
       </div>
       <div class="dr-cta-hint">🔍 Profil de courbure · slider k interactif</div>
     </div>
@@ -2329,6 +2342,17 @@ function updateCurveProfile(spotId,sliderVal){
   if(hD)hD.textContent=`${Math.round(hiddenRef)} m`;
   const vD=document.getElementById('curve-vis-'+spotId);
   if(vD){vD.textContent=visible>0?`+${Math.round(visible)} m ✅`:`${Math.round(Math.abs(visible))} m ❌`;vD.style.color=visible>0?'#4ade80':'#f87171';}
+  const h2under = hiddenRef - (spot.tgt.alt||0);
+  const h2D = document.getElementById('dr-h2under-'+spotId);
+  const h2Box = document.getElementById('dr-h2under-box-'+spotId);
+  if(h2D){
+    h2D.textContent = h2under>0 ? Math.round(h2under).toLocaleString()+' m' : 'Visible +'+Math.round(-h2under).toLocaleString()+' m';
+    h2D.style.color = h2under>0 ? '#f87171' : '#4ade80';
+  }
+  if(h2Box){
+    h2Box.style.borderColor = h2under>0 ? 'rgba(248,113,113,.2)' : 'rgba(74,222,128,.2)';
+    h2Box.style.background = h2under>0 ? 'rgba(248,113,113,.05)' : 'rgba(74,222,128,.05)';
+  }
 }
 
 // ── OVERLAY ZOOM COURBE ──────────────────────────
