@@ -75,7 +75,6 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChang
 import { getFirestore, doc, setDoc, getDocs, deleteDoc, collection }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
-// ── 🔧 REMPLACE CES VALEURS par celles de ta console Firebase ──
 const firebaseConfig = {
   apiKey:            "AIzaSyAd9qZ-3Pqo93N7YtfdzcHxMhAZbP3XoVA",
   authDomain:        "vld-hub.firebaseapp.com",
@@ -93,7 +92,6 @@ const provider = new GoogleAuthProvider();
 
 let currentUser = null;
 
-// ── Écoute changement d'état auth ──
 onAuthStateChanged(auth, async user => {
   currentUser = user;
   const btn    = document.getElementById('auth-btn');
@@ -106,7 +104,6 @@ onAuthStateChanged(auth, async user => {
     btn.style.color       = '#4ade80';
     status.textContent = '☁️ Synchro active';
     status.style.color = '#4ade80';
-    // Charger les spots depuis Firestore au login
     await window._loadSpotsFromFirestore();
   } else {
     btn.textContent   = '🔑 Connexion Google';
@@ -118,7 +115,6 @@ onAuthStateChanged(auth, async user => {
   }
 });
 
-// ── Login / Logout ──
 window.authToggle = async () => {
   if (currentUser) {
     if (!confirm(`Déconnecter ${currentUser.displayName} ?\nLes spots resteront en local.`)) return;
@@ -127,14 +123,11 @@ window.authToggle = async () => {
     try {
       await signInWithPopup(auth, provider);
     } catch(e) {
-      if (e.code !== 'auth/popup-closed-by-user') {
-        alert('Erreur de connexion : ' + e.message);
-      }
+      if (e.code !== 'auth/popup-closed-by-user') alert('Erreur de connexion : ' + e.message);
     }
   }
 };
 
-// ── Sauvegarder tous les spots custom vers Firestore ──
 window._saveCustomSpotsCloud = async () => {
   if (!currentUser || typeof SPOTS === 'undefined') return;
   const spots = SPOTS.filter(s => s.custom);
@@ -144,12 +137,9 @@ window._saveCustomSpotsCloud = async () => {
     }
     const status = document.getElementById('auth-status');
     if (status) { status.textContent = '☁️ Sauvegardé'; setTimeout(() => { status.textContent = '☁️ Synchro active'; }, 2000); }
-  } catch(e) {
-    console.warn('Firestore save error:', e);
-  }
+  } catch(e) { console.warn('Firestore save error:', e); }
 };
 
-// ── Charger les spots depuis Firestore ──
 window._loadSpotsFromFirestore = async () => {
   if (!currentUser || typeof SPOTS === 'undefined') return;
   try {
@@ -157,30 +147,21 @@ window._loadSpotsFromFirestore = async () => {
     let added = 0;
     snap.forEach(d => {
       const spot = d.data();
-      if (!SPOTS.find(s => s.id === spot.id)) {
-        SPOTS.push(spot);
-        added++;
-      }
+      if (!SPOTS.find(s => s.id === spot.id)) { SPOTS.push(spot); added++; }
     });
     if (added > 0 && typeof renderMatrix === 'function') {
-      renderMatrix(false);
-      renderCards(false);
+      renderMatrix(false); renderCards(false);
       if (typeof renderCustomSpotsList === 'function') renderCustomSpotsList();
       if (typeof setStatus === 'function') setStatus(`☁️ ${snap.size} spot(s) chargés depuis Firestore`);
     }
-  } catch(e) {
-    console.warn('Firestore load error:', e);
-  }
+  } catch(e) { console.warn('Firestore load error:', e); }
 };
 
-// ── Supprimer un spot de Firestore ──
 window._deleteSpotCloud = async (spotId) => {
   if (!currentUser) return;
   try {
     await deleteDoc(doc(db, 'users', currentUser.uid, 'spots', String(spotId)));
-  } catch(e) {
-    console.warn('Firestore delete error:', e);
-  }
+  } catch(e) { console.warn('Firestore delete error:', e); }
 };
 </script>
 <style>
@@ -2395,7 +2376,9 @@ function renderCurvatureSVG(spot,k){
   const hiddenGeo=hiddenByEarth(dist_m);
   const hiddenRef=hiddenWithRefraction(dist_m,k);
   const lift=liftFromK(k,dist_m);
-  const visible=tgtAlt-hiddenRef+obsAlt;
+  // Bislin exacte pour cohérence avec le tableau de résultats
+  const bislin=_calcBislin(spot,k);
+  const visible=bislin.visible>0?bislin.visible:-(bislin.hidden-tgtAlt);
   const W=560,H=180,PAD_L=58,PAD_R=58,PAD_T=28,PAD_B=30;
   const plotW=W-PAD_L-PAD_R, plotH=H-PAD_T-PAD_B;
   const maxAlt=Math.max(obsAlt,tgtAlt,hiddenGeo)*1.35||3500;
@@ -2417,7 +2400,7 @@ function renderCurvatureSVG(spot,k){
   let kCol='#9ca3af';
   if(k>0.4)kCol='#22d3ee';else if(k>0.2)kCol='#4ade80';else if(k>0.1)kCol='#fbbf24';else if(k<0)kCol='#f87171';
   const visCol=visible>0?'#4ade80':'#f87171';
-  const visLabel=visible>0?`+${Math.round(visible)}m visible`:`${Math.round(Math.abs(visible))}m caché`;
+  const visLabel=visible>0?`+${Math.round(visible)}m visible`:`${Math.round(Math.abs(visible))}m sous la courbure`;
   const losY1=toY(obsAlt), losY2=toY(tgtAlt);
   const gridLines=[0,0.25,0.5,0.75,1].map(f=>{const a=minAlt+f*altRange;const y=toY(a);return`<line x1="${PAD_L}" y1="${y.toFixed(1)}" x2="${W-PAD_R}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,0.04)" stroke-width="1"/><text x="${(PAD_L-5).toFixed(1)}" y="${(y+3).toFixed(1)}" text-anchor="end" fill="#374151" font-size="8">${Math.round(a)}m</text>`;}).join('');
   return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
@@ -2459,7 +2442,10 @@ function updateCurveProfile(spotId,sliderVal){
   const dist_m=spot.dist_km*1000;
   const hiddenRef=hiddenWithRefraction(dist_m,k);
   const lift=liftFromK(k,dist_m);
-  const visible=(spot.tgt.alt||0)-hiddenRef+(spot.obs.alt||0);
+  // Bislin exacte pour cohérence avec le tableau
+  const bislin=_calcBislin(spot,k);
+  const visible=bislin.visible>0?bislin.visible:-(bislin.hidden-(spot.tgt.alt||0));
+  const h2under=bislin.hidden-(spot.tgt.alt||0);
   let kCol='#9ca3af';
   if(k>0.4)kCol='#22d3ee';else if(k>0.2)kCol='#4ade80';else if(k>0.1)kCol='#fbbf24';else if(k<0)kCol='#f87171';
   const svgWrap=document.getElementById('curve-svg-'+spotId);
@@ -2472,7 +2458,6 @@ function updateCurveProfile(spotId,sliderVal){
   if(hD)hD.textContent=`${Math.round(hiddenRef)} m`;
   const vD=document.getElementById('curve-vis-'+spotId);
   if(vD){vD.textContent=visible>0?`+${Math.round(visible)} m ✅`:`${Math.round(Math.abs(visible))} m ❌`;vD.style.color=visible>0?'#4ade80':'#f87171';}
-  const h2under = hiddenRef - (spot.tgt.alt||0);
   const h2D = document.getElementById('dr-h2under-'+spotId);
   const h2Box = document.getElementById('dr-h2under-box-'+spotId);
   if(h2D){
@@ -3484,16 +3469,12 @@ function createSpot() {
 // ═══════════════════════════════════════════════════
 function saveCustomSpots() {
   const customSpots = SPOTS.filter(s => s.custom);
-  // Sauvegarde locale (toujours, fallback garanti)
   try {
     localStorage.setItem('vld_custom_spots', JSON.stringify(customSpots));
   } catch(e) {
     console.warn('localStorage write error');
   }
-  // Sync cloud si connecté à Firebase
-  if (typeof window._saveCustomSpotsCloud === 'function') {
-    window._saveCustomSpotsCloud();
-  }
+  if (typeof window._saveCustomSpotsCloud === 'function') window._saveCustomSpotsCloud();
 }
 
 function loadCustomSpots() {
@@ -3643,7 +3624,6 @@ function deleteCustomSpot(id) {
   const idx = SPOTS.findIndex(s => s.id === id);
   if (idx >= 0) SPOTS.splice(idx, 1);
   delete forecasts[id];
-  // Supprimer du cloud si connecté
   if (typeof window._deleteSpotCloud === 'function') window._deleteSpotCloud(id);
   saveCustomSpots();
   renderMatrix(false);
