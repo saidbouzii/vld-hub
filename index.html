@@ -1673,7 +1673,8 @@ const SPOTS = [
       spread_elim:3, spread_ok:5, spread_exc:12,
       slp_elim:1013, slp_ok:1018, slp_exc:1025,
       wind_elim:25, wind_ok:20,
-      vis_ok:30, vis_exc:50, vis_mid_ok:30, vis_mid_exc:50,
+      vis_ok:30, vis_exc:50,
+      vis_mid_ok:40, vis_mid_exc:80,
     }
   },
   {
@@ -3486,22 +3487,27 @@ function saveCustomSpots() {
 function loadCustomSpots() {
   try {
     const saved = JSON.parse(localStorage.getItem('vld_custom_spots') || '[]');
+    let dirty = false;
     saved.forEach(spot => {
-      // Nettoyer vis_mid_elim des anciens spots sauvegardés
       if (spot.criteria) {
-        delete spot.criteria.vis_mid_elim;
+        // Supprimer tout vis_mid_elim quelle que soit la valeur
+        if ('vis_mid_elim' in spot.criteria) {
+          delete spot.criteria.vis_mid_elim;
+          dirty = true;
+        }
+        // Corriger les seuils trop bas pour les spots maritimes
         if (spot.type === 'mediterranee_corse' || spot.type === 'mediterranee_marin') {
-          if (!spot.criteria.vis_mid_ok || spot.criteria.vis_mid_ok > 50) spot.criteria.vis_mid_ok = 40;
-          if (!spot.criteria.vis_mid_exc || spot.criteria.vis_mid_exc > 100) spot.criteria.vis_mid_exc = 80;
+          if ((spot.criteria.vis_mid_ok || 0) < 40) { spot.criteria.vis_mid_ok = 40; dirty = true; }
+          if ((spot.criteria.vis_mid_exc || 0) < 80) { spot.criteria.vis_mid_exc = 80; dirty = true; }
         }
       }
-      if (!SPOTS.find(s => s.id === spot.id)) {
-        SPOTS.push(spot);
-      }
+      if (!SPOTS.find(s => s.id === spot.id)) SPOTS.push(spot);
     });
-    // Resauvegarder avec les critères nettoyés
-    const cleaned = SPOTS.filter(s => s.custom);
-    try { localStorage.setItem('vld_custom_spots', JSON.stringify(cleaned)); } catch(e) {}
+    // Resauvegarder si des critères ont été corrigés
+    if (dirty) {
+      const cleaned = saved;
+      try { localStorage.setItem('vld_custom_spots', JSON.stringify(cleaned)); } catch(e) {}
+    }
     return saved.length;
   } catch(e) {
     return 0;
