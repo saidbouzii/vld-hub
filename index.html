@@ -3487,10 +3487,21 @@ function loadCustomSpots() {
   try {
     const saved = JSON.parse(localStorage.getItem('vld_custom_spots') || '[]');
     saved.forEach(spot => {
+      // Nettoyer vis_mid_elim des anciens spots sauvegardés
+      if (spot.criteria) {
+        delete spot.criteria.vis_mid_elim;
+        if (spot.type === 'mediterranee_corse' || spot.type === 'mediterranee_marin') {
+          if (!spot.criteria.vis_mid_ok || spot.criteria.vis_mid_ok > 50) spot.criteria.vis_mid_ok = 40;
+          if (!spot.criteria.vis_mid_exc || spot.criteria.vis_mid_exc > 100) spot.criteria.vis_mid_exc = 80;
+        }
+      }
       if (!SPOTS.find(s => s.id === spot.id)) {
         SPOTS.push(spot);
       }
     });
+    // Resauvegarder avec les critères nettoyés
+    const cleaned = SPOTS.filter(s => s.custom);
+    try { localStorage.setItem('vld_custom_spots', JSON.stringify(cleaned)); } catch(e) {}
     return saved.length;
   } catch(e) {
     return 0;
