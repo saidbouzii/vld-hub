@@ -2670,7 +2670,7 @@ function getCriteriaByType(type, particularites) {
       slp_elim:1015, slp_ok:1020, slp_exc:1030,
       wind_elim:50, wind_ok:35, wind_min:15,
       vis_ok:30, vis_exc:50,
-      vis_mid_elim:30, vis_mid_ok:50, vis_mid_exc:100,
+      vis_mid_ok:40, vis_mid_exc:80,
     },
     mediterranee_marin: {
       cloud_low_elim:15, cloud_low_ok:5, fog_elim:1,
@@ -2680,7 +2680,7 @@ function getCriteriaByType(type, particularites) {
       slp_elim:1015, slp_ok:1020, slp_exc:1028,
       wind_elim:25, wind_ok:20,
       vis_ok:30, vis_exc:50,
-      vis_mid_elim:50, vis_mid_ok:100, vis_mid_exc:150,
+      vis_mid_ok:40, vis_mid_exc:80,
     },
   };
   const c = JSON.parse(JSON.stringify(base[type] || base.montagne_pyrenees));
@@ -2688,7 +2688,6 @@ function getCriteriaByType(type, particularites) {
   // Adapter selon particularités
   if (particularites.anticyclone) { c.slp_elim = 1018; c.slp_ok = 1023; }
   if (particularites.cape) { c.cape_elim = 200; c.cape_ok = 50; }
-  if (particularites.sst) { c.vis_mid_elim = (c.vis_mid_elim || 30) + 20; }
   if (particularites.dust) { c.vis_ok = 40; c.vis_exc = 60; }
   if (particularites.inversion) { c.rh_exc = c.rh_exc - 5; c.spread_exc = c.spread_exc + 2; }
   
