@@ -1656,7 +1656,8 @@ const SPOTS = [
       slp_elim:1015, slp_ok:1020, slp_exc:1030,
       wind_elim:50, wind_ok:35, wind_min:15,
       vis_ok:30, vis_exc:50,
-      vis_mid_elim:30, vis_mid_ok:50, vis_mid_exc:100,
+      vis_ok:30, vis_exc:50,
+      vis_mid_ok:40, vis_mid_exc:80,
     }
   },
   {
@@ -1689,7 +1690,7 @@ const SPOTS = [
       slp_elim:1015, slp_ok:1020, slp_exc:1028,
       wind_elim:25, wind_ok:20,
       vis_ok:30, vis_exc:50,
-      vis_mid_elim:50, vis_mid_ok:100, vis_mid_exc:150,
+      vis_mid_ok:40, vis_mid_exc:80,
     }
   }
 ];
@@ -1782,11 +1783,17 @@ function scoreDay(spot, h) {
   const visMid = h.vis_mid ?? 0;
   let visMidPts, visMidColor, visMidVerdict, visMidElim=false;
   if (spot.type==='mediterranee_corse'||spot.type==='mediterranee_marin') {
-    const elimSeuil = c.vis_mid_elim||30;
-    visMidElim = visMid < elimSeuil;
-    visMidPts = visMidElim?0:visMid>(c.vis_mid_exc||100)?15:visMid>(c.vis_mid_ok||50)?10:4;
-    visMidColor = visMidElim?'red':visMid>(c.vis_mid_ok||50)?'green':'amber';
-    visMidVerdict = visMidElim?`❌ ÉLIM (<${elimSeuil}km)`:visMid>100?'⭐ Mer dégagée':'✅ OK';
+    const elimSeuil = c.vis_mid_elim ?? null;
+    visMidElim = elimSeuil !== null && visMid < elimSeuil;
+    visMidPts = visMidElim ? 0
+      : visMid > (c.vis_mid_exc||80) ? 15
+      : visMid > (c.vis_mid_ok||40) ? 10
+      : visMid > 20 ? 4 : 1;
+    visMidColor = visMidElim ? 'red' : visMid > (c.vis_mid_ok||40) ? 'green' : visMid > 20 ? 'amber' : 'red';
+    visMidVerdict = visMidElim ? `❌ ÉLIM (<${elimSeuil}km)`
+      : visMid > (c.vis_mid_exc||80) ? '⭐ Mer dégagée'
+      : visMid > (c.vis_mid_ok||40) ? '✅ OK'
+      : visMid > 20 ? '⚠️ Réduite' : '⚠️ Brume';
   } else {
     visMidPts = visMid>(c.vis_mid_exc||50)?15:visMid>(c.vis_mid_ok||30)?9:visMid>15?3:0;
     visMidColor = visMid>(c.vis_mid_ok||30)?'green':visMid>15?'amber':'red';
