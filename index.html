@@ -1167,7 +1167,7 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
     <option value="avg">Moyenne matin (5h-11h)</option>
     <option value="0">🌅 Lever soleil exact</option>
     <option value="0.5">🌅 +30 min</option>
-    <option value="1" selected>🌅 +1h ⭐ (Pic mirage)</option>
+    <option value="1" selected>🌅 +1h ⭐ (Meilleure clarté)</option>
     <option value="1.5">🌅 +1h30</option>
     <option value="2">🌅 +2h</option>
     <option value="3">🌅 +3h</option>
@@ -1220,12 +1220,12 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
         <th style="padding:.35rem .6rem;color:var(--text3);font-weight:500;">Conditions typiques</th>
       </tr></thead>
       <tbody>
-        <tr><td style="padding:.35rem .6rem;font-family:var(--display);font-size:16px;color:#4ade80;">90–100</td><td style="padding:.35rem .6rem;">⭐ Exceptionnel</td><td style="padding:.35rem .6rem;color:var(--text3);">Ciel limpide, vent &lt;15 km/h, inversion marquée — mirage probable</td></tr>
-        <tr><td style="padding:.35rem .6rem;font-family:var(--display);font-size:16px;color:var(--cyan);">75–89</td><td style="padding:.35rem .6rem;">🟢 Bon</td><td style="padding:.35rem .6rem;color:var(--text3);">Nuages hauts seulement, vent modéré — VLD réaliste</td></tr>
-        <tr><td style="padding:.35rem .6rem;font-family:var(--display);font-size:16px;color:var(--amber);">55–74</td><td style="padding:.35rem .6rem;">🟡 Correct</td><td style="padding:.35rem .6rem;color:var(--text3);">Nuages moyens ou humidité — incertain</td></tr>
-        <tr><td style="padding:.35rem .6rem;font-family:var(--display);font-size:16px;color:#fb923c;">35–54</td><td style="padding:.35rem .6rem;">🟠 Médiocre</td><td style="padding:.35rem .6rem;color:var(--text3);">Nuages bas, vent ou humidité pénalisants</td></tr>
-        <tr><td style="padding:.35rem .6rem;font-family:var(--display);font-size:16px;color:var(--red);">15–34</td><td style="padding:.35rem .6rem;">🔴 Mauvais</td><td style="padding:.35rem .6rem;color:var(--text3);">Couverture dense, vent fort ou précipitations</td></tr>
-        <tr><td style="padding:.35rem .6rem;font-family:var(--display);font-size:16px;color:var(--text3);">0–35</td><td style="padding:.35rem .6rem;">⛔ Éliminé</td><td style="padding:.35rem .6rem;color:var(--text3);">Critère éliminatoire déclenché</td></tr>
+        <tr><td style="padding:.35rem .6rem;font-family:var(--display);font-size:16px;color:#4ade80;">90–100</td><td style="padding:.35rem .6rem;">⭐ Exceptionnel</td><td style="padding:.35rem .6rem;color:var(--text3);">Ciel cristallin, visibilité &gt;80km, aucun nuage sur l'axe — observation certaine</td></tr>
+        <tr><td style="padding:.35rem .6rem;font-family:var(--display);font-size:16px;color:var(--cyan);">75–89</td><td style="padding:.35rem .6rem;">🟢 Très bon</td><td style="padding:.35rem .6rem;color:var(--text3);">Ciel dégagé, quelques cirrus, visibilité &gt;50km — très favorable</td></tr>
+        <tr><td style="padding:.35rem .6rem;font-family:var(--display);font-size:16px;color:var(--amber);">55–74</td><td style="padding:.35rem .6rem;">🟡 Correct</td><td style="padding:.35rem .6rem;color:var(--text3);">Nuages hauts ou humidité modérée — observation possible selon distance</td></tr>
+        <tr><td style="padding:.35rem .6rem;font-family:var(--display);font-size:16px;color:#fb923c;">35–54</td><td style="padding:.35rem .6rem;">🟠 Médiocre</td><td style="padding:.35rem .6rem;color:var(--text3);">Nuages sur l'axe ou visibilité réduite — incertain</td></tr>
+        <tr><td style="padding:.35rem .6rem;font-family:var(--display);font-size:16px;color:var(--red);">15–34</td><td style="padding:.35rem .6rem;">🔴 Mauvais</td><td style="padding:.35rem .6rem;color:var(--text3);">Couverture nuageuse dense ou précipitations — observation compromise</td></tr>
+        <tr><td style="padding:.35rem .6rem;font-family:var(--display);font-size:16px;color:var(--text3);">0–14</td><td style="padding:.35rem .6rem;">⛔ Bloqué</td><td style="padding:.35rem .6rem;color:var(--text3);">Pluie certaine ou ciel entièrement bouché — annuler</td></tr>
       </tbody>
     </table>
   </div>
@@ -1699,122 +1699,177 @@ const SPOTS = [
 // ═══════════════════════════════════════════════════
 // SCORING
 // ═══════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+// SCORING V2 — CLARTÉ OPTIQUE (visibilité directe)
+// Objectif : ciel dégagé sur l'axe obs→cible
+// La pondération des nuages dépend de l'altitude de
+// passage du rayon visuel à mi-trajet (géométrie réelle)
+// ═══════════════════════════════════════════════════
+
+function _rayAltAtMid(spot) {
+  // Altitude (m) du rayon visuel à mi-trajet (courbure terrestre ignorée,
+  // interpolation linéaire obs_alt → tgt_alt sur dist_km)
+  const obsAlt = spot.obs?.alt ?? 0;
+  const tgtAlt = spot.tgt?.alt ?? 0;
+  return (obsAlt + tgtAlt) / 2; // m
+}
+
 function scoreDay(spot, h) {
-  const c = spot.criteria;
   const items = [];
   let score = 0, maxScore = 0;
-  let hasElim = false;
 
-  function add(name, val, unit, pts, max, color, verdict, elim=false) {
+  // ── Utilitaire ──────────────────────────────────
+  function add(name, val, unit, pts, max, color, verdict) {
     score += pts; maxScore += max;
-    if (elim) hasElim = true;
-    items.push({ name, val: Math.round(val*10)/10, unit, pts, max, color, verdict, elim });
+    items.push({ name, val: Math.round(val * 10) / 10, unit, pts, max, color, verdict, elim: false });
   }
 
-  const lc = h.cloud_low ?? 100;
-  const lcElim = lc >= c.cloud_low_elim;
-  add(t('crit.cloud_low'), lc, '%', lcElim?0:lc<c.cloud_low_ok?20:10, 20,
-    lcElim?'red':lc<c.cloud_low_ok?'green':'amber',
-    lcElim?t('cv.elim'):lc<c.cloud_low_ok?t('cv.ideal'):t('cv.limite'), lcElim);
+  // ── Géométrie du trajet ──────────────────────────
+  // Altitude du rayon visuel à mi-chemin
+  const rayMidAlt = _rayAltAtMid(spot); // m
+  // Bases des couches nuageuses (m, valeurs typiques open-meteo)
+  // low  : 0 – 2000 m  → gêne si rayMidAlt < 2000
+  // mid  : 2000 – 6000 m → gêne si rayMidAlt < 6000
+  // high : > 6000 m    → gêne seulement si très dense (cirrus épais)
+  const rayBlocksLow  = rayMidAlt < 2000;  // le rayon passe dans les nuages bas
+  const rayBlocksMid  = rayMidAlt < 5500;  // le rayon passe dans les nuages moyens
+  // Les nuages hauts (cirrus) diffusent la lumière — toujours un peu gênants
 
-  const fog = h.fog ?? 100;
-  const fogElim = fog > c.fog_elim;
-  add(t('crit.fog'), fog, '%', fogElim?0:fog===0?10:6, 10,
-    fogElim?'red':fog===0?'green':'amber',
-    fogElim?`${t('cv.elim')} (>${c.fog_elim}%)`:t('cv.ok'), fogElim);
+  // Poids des couches selon géométrie
+  // Cible haute (>2000m depuis montagne) : nuages moyens très importants
+  // Cible basse (maritime <500m) : nuages bas et brume sont tout
+  const wLow  = rayBlocksLow  ? 1.0 : 0.15; // facteur multiplicatif du poids
+  const wMid  = rayBlocksMid  ? 1.0 : 0.20;
+  const wHigh = 0.5; // cirrus toujours semi-pénalisants (diffusion)
 
-  const mc = h.cloud_mid ?? 100;
-  const mcElim = mc >= c.cloud_mid_elim;
-  add(t('crit.cloud_mid'), mc, '%', mcElim?0:mc<c.cloud_mid_ok?10:5, 10,
-    mcElim?'red':mc<c.cloud_mid_ok?'green':'amber',
-    mcElim?t('cv.elim'):t('cv.ok'), mcElim);
-
-  const hc = h.cloud_high ?? 100;
-  add(t('crit.cloud_high'), hc, '%', hc<c.cloud_high_ok?5:hc<30?3:1, 5,
-    hc<c.cloud_high_ok?'green':'amber',
-    hc<c.cloud_high_ok?t('cv.ok'):'⚠️ Cirrus');
-
-  const rh = h.rh ?? 100;
-  const rhElim = rh > c.rh_elim;
-  const rhPts = rhElim?0:rh<(c.rh_exc||50)?10:rh<c.rh_ok?7:3;
-  add(t('crit.rh'), rh, '%', rhPts, 10,
-    rhElim?'red':rh<c.rh_ok?'green':'amber',
-    rhElim?`${t('cv.elim')} (>${c.rh_elim}%)`:rh<c.rh_ok?t('cv.sec'):t('cv.humide'), rhElim);
-
-  const spread = h.spread ?? 0;
-  const spreadElim = spread < c.spread_elim;
-  const spreadPts = spreadElim?0:spread>(c.spread_exc||12)?10:spread>c.spread_ok?7:3;
-  add(t('crit.spread'), spread, '°C', spreadPts, 10,
-    spreadElim?'red':spread>c.spread_ok?'green':'amber',
-    spreadElim?`${t('cv.elim')} (<${c.spread_elim}°C)`:spread>c.spread_ok?t('cv.sec'):t('cv.limite'), spreadElim);
-
-  const slp = h.slp ?? 1000;
-  const slpElim = slp < c.slp_elim;
-  const slpPts = slpElim?0:slp>=c.slp_exc?10:slp>=c.slp_ok?7:3;
-  add(t('crit.slp'), slp, 'hPa', slpPts, 10,
-    slpElim?'red':slp>=c.slp_ok?'green':'amber',
-    slpElim?`${t('cv.elim')} (<${c.slp_elim})`:slp>=c.slp_exc?t('cv.anticyc'):t('cv.correct'), slpElim);
-
-  const wind = h.wind ?? 999;
-  let windPts, windColor, windVerdict, windElim;
-  if (spot.type === 'mediterranee_corse') {
-    windElim = wind > c.wind_elim;
-    windPts = windElim?0:(wind>=(c.wind_min||15)&&wind<=c.wind_ok)?15:wind<(c.wind_min||15)?10:5;
-    windColor = windElim?'red':(wind>=15&&wind<=35)?'green':'amber';
-    windVerdict = windElim?t('cv.mistral_fort'):(wind>=15&&wind<=35)?t('cv.mistral_ideal'):wind<15?t('cv.calme'):t('cv.fort');
-  } else if (spot.type === 'mediterranee_marin') {
-    windElim = wind > c.wind_elim;
-    windPts = windElim?0:wind<10?15:wind<c.wind_ok?10:4;
-    windColor = windElim?'red':wind<10?'green':'amber';
-    windVerdict = windElim?`${t('cv.elim')} (>${c.wind_elim} km/h)`:wind<10?t('cv.mer_huile'):t('cv.correct');
-  } else {
-    windElim = wind > c.wind_elim;
-    windPts = windElim?0:wind<10?15:wind<c.wind_ok?10:5;
-    windColor = windElim?'red':wind<c.wind_ok?'green':'amber';
-    windVerdict = windElim?`${t('cv.elim')} (>${c.wind_elim} km/h)`:wind<10?t('cv.calme'):t('cv.correct');
-  }
-  add(t('crit.wind'), wind, 'km/h', windPts, 15, windColor, windVerdict, windElim);
-
+  // ── 1. VISIBILITÉ AU POINT D'OBSERVATION (25 pts) ──
+  // Critère roi : si on voit pas loin depuis le spot, c'est mort
   const vis = h.vis ?? 0;
-  const visPts = vis>(c.vis_exc||50)?15:vis>c.vis_ok?10:vis>15?4:0;
-  add(t('crit.vis_obs'), vis, 'km', visPts, 15,
-    vis>c.vis_ok?'green':vis>15?'amber':'red',
-    vis>(c.vis_exc||50)?'⭐ Excellente':vis>c.vis_ok?t('cv.ok'):`${t('cv.elim')} Faible`);
+  const visPts = vis > 80 ? 25 : vis > 50 ? 22 : vis > 30 ? 17 : vis > 20 ? 11 : vis > 10 ? 5 : 0;
+  const visColor = vis > 50 ? 'green' : vis > 20 ? 'amber' : 'red';
+  const visVerdict = vis > 80 ? '⭐ Cristalline' : vis > 50 ? t('cv.ok') : vis > 20 ? t('cv.reduite') : `❌ Brume/brouillard`;
+  add(t('crit.vis_obs'), vis, 'km', visPts, 25, visColor, visVerdict);
 
+  // ── 2. VISIBILITÉ MI-TRAJET (20 pts) ──
+  // Transparence de l'atmosphère sur le chemin optique
   const visMid = h.vis_mid ?? 0;
-  let visMidPts, visMidColor, visMidVerdict, visMidElim=false;
-  if (spot.type==='mediterranee_corse'||spot.type==='mediterranee_marin') {
-    const elimSeuil = c.vis_mid_elim ?? null;
-    visMidElim = elimSeuil !== null && visMid < elimSeuil;
-    visMidPts = visMidElim ? 0
-      : visMid > (c.vis_mid_exc||80) ? 15
-      : visMid > (c.vis_mid_ok||40) ? 10
-      : visMid > 20 ? 4 : 1;
-    visMidColor = visMidElim ? 'red' : visMid > (c.vis_mid_ok||40) ? 'green' : visMid > 20 ? 'amber' : 'red';
-    visMidVerdict = visMidElim ? `${t('cv.elim')} (<${elimSeuil}km)`
-      : visMid > (c.vis_mid_exc||80) ? t('cv.mer_degagee')
-      : visMid > (c.vis_mid_ok||40) ? t('cv.ok')
-      : visMid > 20 ? t('cv.reduite') : t('cv.brume');
-  } else {
-    visMidPts = visMid>(c.vis_mid_exc||50)?15:visMid>(c.vis_mid_ok||30)?9:visMid>15?3:0;
-    visMidColor = visMid>(c.vis_mid_ok||30)?'green':visMid>15?'amber':'red';
-    visMidVerdict = visMid>(c.vis_mid_ok||30)?t('cv.ok'):t('cv.reduite');
-  }
-  const midLabel = spot.type==='mediterranee_corse'?t('crit.vis_mid.corse'):
-                   spot.type==='mediterranee_marin'?t('crit.vis_mid.marin'):t('crit.vis_mid.default');
-  add(midLabel, visMid, 'km', visMidPts, 15, visMidColor, visMidVerdict, visMidElim);
+  const visMidPts = visMid > 80 ? 20 : visMid > 50 ? 17 : visMid > 30 ? 12 : visMid > 15 ? 6 : 0;
+  const visMidColor = visMid > 50 ? 'green' : visMid > 15 ? 'amber' : 'red';
+  const visMidVerdict = visMid > 80 ? '⭐ Excellente' : visMid > 50 ? t('cv.ok') : visMid > 15 ? t('cv.reduite') : '❌ Opaque';
+  const midLabel = spot.type === 'mediterranee_corse' ? t('crit.vis_mid.corse')
+                 : spot.type === 'mediterranee_marin'  ? t('crit.vis_mid.marin')
+                 : t('crit.vis_mid.default');
+  add(midLabel, visMid, 'km', visMidPts, 20, visMidColor, visMidVerdict);
 
+  // ── 3. NUAGES BAS (pondérés par géométrie) ──
+  // Max 20 pts × wLow (si rayon ne passe pas dans cette couche, impact faible)
+  const lc = h.cloud_low ?? 100;
+  const lcBase = lc < 5 ? 20 : lc < 15 ? 15 : lc < 30 ? 8 : lc < 50 ? 3 : 0;
+  const lcPts  = Math.round(lcBase * wLow);
+  const lcMax  = Math.round(20 * wLow);
+  const lcColor = lc < 15 ? 'green' : lc < 40 ? 'amber' : 'red';
+  const lcVerdict = lc < 5  ? '⭐ Dégagé'
+                  : lc < 15 ? t('cv.ok')
+                  : lc < 40 ? t('cv.limite')
+                  : `❌ Couvert`;
+  add(t('crit.cloud_low'), lc, '%', lcPts, lcMax || 1, lcColor, lcVerdict);
+
+  // ── 4. NUAGES MOYENS (pondérés par géométrie) ──
+  // Max 20 pts × wMid (critique pour cibles en altitude, moindre pour maritimes bas)
+  const mc = h.cloud_mid ?? 100;
+  const mcBase = mc < 5 ? 20 : mc < 20 ? 15 : mc < 40 ? 7 : mc < 60 ? 2 : 0;
+  const mcPts  = Math.round(mcBase * wMid);
+  const mcMax  = Math.round(20 * wMid);
+  const mcColor = mc < 20 ? 'green' : mc < 50 ? 'amber' : 'red';
+  const mcVerdict = mc < 5  ? '⭐ Dégagé'
+                  : mc < 20 ? t('cv.ok')
+                  : mc < 50 ? t('cv.limite')
+                  : `❌ Couvert`;
+  add(t('crit.cloud_mid'), mc, '%', mcPts, mcMax || 1, mcColor, mcVerdict);
+
+  // ── 5. NUAGES HAUTS / CIRRUS (10 pts × wHigh) ──
+  // Cirrus épais = voile blanchâtre qui réduit contraste et distance visible
+  const hc = h.cloud_high ?? 100;
+  const hcBase = hc < 10 ? 10 : hc < 30 ? 7 : hc < 60 ? 4 : 1;
+  const hcPts  = Math.round(hcBase * wHigh);
+  const hcMax  = Math.round(10 * wHigh);
+  const hcColor = hc < 30 ? 'green' : hc < 60 ? 'amber' : 'red';
+  const hcVerdict = hc < 10 ? '⭐ Ciel pur' : hc < 30 ? t('cv.ok') : hc < 60 ? '⚠️ Cirrus' : '❌ Voile épais';
+  add(t('crit.cloud_high'), hc, '%', hcPts, hcMax || 1, hcColor, hcVerdict);
+
+  // ── 6. PRÉCIPITATIONS (15 pts) ──
+  // Pluie/neige = visibilité nulle, fort impact
   const precip = h.precip ?? 100;
-  add(t('crit.precip'), precip, '%', precip<10?5:precip<30?2:0, 5,
-    precip<10?'green':precip<30?'amber':'red',
-    precip<10?t('cv.sec'):'⚠️ Possible');
-  const cape=h.cape??null;
-  if(cape!==null){const capeElim=cape>300;const capePts=capeElim?0:cape<10?10:cape<100?7:3;add(t('crit.cape'),cape,'J/kg',capePts,10,capeElim?'red':cape<100?'green':'amber',capeElim?`${t('cv.elim')} >300`:cape<10?t('cv.cape_stable'):cape<100?t('cv.cape_ok'):t('cv.cape_conv'),capeElim);}
-  const dust=h.dust??null;
-  if(dust!==null){const dustElim=dust>200;const dustPts=dustElim?0:dust<20?10:dust<100?6:2;const dustLabel=dustElim?`${t('cv.elim')} >200`:dust<20?t('cv.dust_clair'):t('cv.dust_voile');add(t('crit.dust'),Math.round(dust),'\u00b5g/m\u00b3',dustPts,10,dustElim?'red':dust<20?'green':'amber',dustLabel,dustElim);}
-  const pct = maxScore>0 ? Math.round((score/maxScore)*100) : 0;
-  const finalScore = hasElim ? Math.min(pct, 35) : pct;
-  return { score: finalScore, items, hasElim };
+  const precipPts = precip < 5 ? 15 : precip < 20 ? 10 : precip < 40 ? 4 : 0;
+  const precipColor = precip < 10 ? 'green' : precip < 30 ? 'amber' : 'red';
+  const precipVerdict = precip < 5 ? t('cv.sec') : precip < 20 ? '⚠️ Risque faible' : `❌ Précipitations`;
+  add(t('crit.precip'), precip, '%', precipPts, 15, precipColor, precipVerdict);
+
+  // ── 7. PRESSION (5 pts) ──
+  // Haute pression = air stable, sec, transparent — bonus qualité atmosphérique
+  const slp = h.slp ?? 1000;
+  const slpPts = slp >= 1025 ? 5 : slp >= 1018 ? 4 : slp >= 1013 ? 2 : 0;
+  const slpColor = slp >= 1018 ? 'green' : slp >= 1010 ? 'amber' : 'red';
+  const slpVerdict = slp >= 1025 ? t('cv.anticyc') : slp >= 1013 ? t('cv.correct') : '⚠️ Dépression';
+  add(t('crit.slp'), slp, 'hPa', slpPts, 5, slpColor, slpVerdict);
+
+  // ── 8. HUMIDITÉ (5 pts) ──
+  // Humidité forte = brume sèche, diffusion — pénalité légère
+  const rh = h.rh ?? 100;
+  const rhPts = rh < 40 ? 5 : rh < 60 ? 4 : rh < 75 ? 2 : 0;
+  const rhColor = rh < 60 ? 'green' : rh < 80 ? 'amber' : 'red';
+  const rhVerdict = rh < 40 ? t('cv.sec') : rh < 60 ? t('cv.ok') : rh < 80 ? t('cv.humide') : '⚠️ Très humide';
+  add(t('crit.rh'), rh, '%', rhPts, 5, rhColor, rhVerdict);
+
+  // ── 9. VENT (10 pts) ──
+  // Vent fort = turbulences, poussières soulevées, embruns — réduit la visibilité directe
+  // Seuils issus des critères par spot (wind_elim, wind_ok)
+  // Vent nul = mauvais pour mistral (spot type corse) — géré par wind_min
+  const wind = h.wind !== null && h.wind !== undefined ? h.wind : null;
+  if (wind !== null) {
+    const windElim = spot?.criteria?.wind_elim ?? 30;
+    const windOk   = spot?.criteria?.wind_ok   ?? 20;
+    const windMin  = spot?.criteria?.wind_min   ?? 0;  // vent minimum idéal (mistral)
+    let windPts, windColor, windVerdict;
+    if (wind >= windElim) {
+      windPts = 0; windColor = 'red'; windVerdict = t('cv.fort');
+    } else if (wind >= windOk) {
+      windPts = 3; windColor = 'amber'; windVerdict = `⚠️ ${Math.round(wind)} km/h`;
+    } else if (windMin > 0 && wind < windMin) {
+      // Cas mistral : vent trop faible = mauvais
+      windPts = 5; windColor = 'amber'; windVerdict = t('cv.calme');
+    } else {
+      windPts = 10; windColor = 'green';
+      windVerdict = wind < 10 ? t('cv.calme') : `✅ ${Math.round(wind)} km/h`;
+    }
+    // Pour mistral idéal (wind_min défini) : bonus si dans la fenêtre idéale
+    if (windMin > 0 && wind >= windMin && wind < windElim) {
+      windPts = wind < windOk ? 10 : 6;
+      windVerdict = wind < windOk ? t('cv.mistral_ideal') : t('cv.mistral_fort');
+      windColor = wind < windOk ? 'green' : 'amber';
+    }
+    add(t('crit.wind'), wind, 'km/h', windPts, 10, windColor, windVerdict);
+  }
+
+  // ── 10. POUSSIÈRES SAHARIENNES (optionnel, 5 pts) ──
+  const dust = h.dust ?? null;
+  if (dust !== null) {
+    const dustPts = dust < 20 ? 5 : dust < 80 ? 3 : dust < 200 ? 1 : 0;
+    const dustColor = dust < 20 ? 'green' : dust < 100 ? 'amber' : 'red';
+    const dustVerdict = dust < 20 ? t('cv.dust_clair') : dust < 80 ? t('cv.dust_voile') : `❌ Brume saharienne`;
+    add(t('crit.dust'), Math.round(dust), 'µg/m³', dustPts, 5, dustColor, dustVerdict);
+  }
+
+  // ── SCORE FINAL ──────────────────────────────────
+  // Pas de plafond arbitraire. Score proportionnel réel 0-100.
+  // Pénalité douce si précipitations fortes (pas d'élimination binaire)
+  const rawPct = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
+
+  // Seul cas d'élimination vraie : précipitations >70% (pluie certaine = visibilité 0)
+  const hardElim = precip > 70;
+  const finalScore = hardElim ? Math.min(rawPct, 20) : rawPct;
+
+  return { score: finalScore, rawScore: rawPct, items, hasElim: hardElim };
 }
 
 // ═══════════════════════════════════════════════════
@@ -1845,7 +1900,8 @@ async function fetchSpot(spot) {
     const s=day*24+5, e=day*24+11;
     const avg = arr => {
       if(!arr || !Array.isArray(arr)) return null;
-     const v = arr.slice(s,e).filter(x=>x!==null&&x!==undefined&&!isNaN(x));
+      // Filtre les valeurs nulles ET la valeur sentinelle 999 d'open-meteo (vent non dispo)
+      const v = arr.slice(s,e).filter(x=>x!==null&&x!==undefined&&!isNaN(x)&&x!==999);
       return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null;
     };
     const temp=avg(d1.hourly?.temperature_2m);
@@ -1911,7 +1967,9 @@ async function fetchSpot(spot) {
       fog: avg(d1.hourly?.fog)??0,
       rh: avg(d1.hourly?.relative_humidity_2m),
       spread: (temp!==null&&dew!==null)?temp-dew:null,
-      slp: P_mbar,
+      // Réduction altimétrique : pression station → pression au niveau de la mer
+      // Formule barométrique : SLP = P_station × exp(alt / (29.3 × T_K))
+      slp: (()=>{const T_K=(temp??15)+273.15; const alt=spot.obs.alt||0; return P_mbar*Math.exp(alt/(29.3*T_K));})(),
       cape: avg(d2.hourly?.cape),
 wind_shear: (()=>{const w80=avg(d2.hourly?.wind_speed_80m);const w120=avg(d2.hourly?.wind_speed_120m);return(w80!==null&&w120!==null)?Math.abs(w120-w80)/40:null;})(),
 dust: avg(d3.hourly?.dust),     
@@ -1937,8 +1995,8 @@ wind: avg(d1.hourly?.wind_speed_10m),
         cloud_high: d1.hourly?.cloud_cover_high?.[hourIdx] ?? h.cloud_high,
         fog: d1.hourly?.fog?.[hourIdx] ?? h.fog,
         rh: d1.hourly?.relative_humidity_2m?.[hourIdx] ?? h.rh,
-        slp: d1.hourly?.surface_pressure?.[hourIdx] ?? h.slp,
-        wind: d1.hourly?.wind_speed_10m?.[hourIdx] ?? h.wind,
+        slp: (()=>{const P_h=d1.hourly?.surface_pressure?.[hourIdx]??h.slp; const T_K=(tH??temp??15)+273.15; const alt=spot.obs.alt||0; return P_h*Math.exp(alt/(29.3*T_K));})(),
+        wind: (()=>{const w=d1.hourly?.wind_speed_10m?.[hourIdx]??h.wind; return (w===999||w===null||w===undefined)?h.wind:w;})(),
         vis: (d1.hourly?.visibility?.[hourIdx] ?? 0)/1000 || h.vis,
         precip: d1.hourly?.precipitation_probability?.[hourIdx] ?? h.precip,
         vis_mid: (d2.hourly?.visibility?.[hourIdx] ?? 0)/1000 || h.vis_mid,
@@ -3876,7 +3934,7 @@ const I18N = {
     'tw.avg': 'Moyenne matin (5h-11h)',
     'tw.0': '🌅 Lever soleil exact',
     'tw.0.5': '🌅 +30 min',
-    'tw.1': '🌅 +1h ⭐ (Pic mirage)',
+    'tw.1': '🌅 +1h ⭐ (Meilleure clarté)',
     'tw.1.5': '🌅 +1h30',
     'tw.2': '🌅 +2h',
     'tw.3': '🌅 +3h',
