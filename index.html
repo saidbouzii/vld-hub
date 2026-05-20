@@ -99,25 +99,25 @@ onAuthStateChanged(auth, async user => {
   if (user) {
     const firstName = user.displayName ? user.displayName.split(' ')[0] : 'Compte';
     btn.textContent   = `👤 ${firstName}`;
-    btn.title         = 'Cliquer pour se déconnecter';
+    btn.title         = t('auth.btn.title.logout');
     btn.style.borderColor = 'rgba(74,222,128,0.4)';
     btn.style.color       = '#4ade80';
-    status.textContent = '☁️ Synchro active';
+    status.textContent = t('auth.status.sync');
     status.style.color = '#4ade80';
     await window._loadSpotsFromFirestore();
   } else {
-    btn.textContent   = '🔑 Connexion Google';
-    btn.title         = 'Se connecter pour synchroniser ses spots';
+    btn.textContent   = t('auth.login');
+    btn.title         = t('auth.btn.title.login');
     btn.style.borderColor = 'rgba(0,212,255,0.25)';
     btn.style.color       = 'var(--cyan)';
-    status.textContent = '💾 Stockage local';
+    status.textContent = t('auth.status.local');
     status.style.color = 'var(--text-dim, #4a6a8a)';
   }
 });
 
 window.authToggle = async () => {
   if (currentUser) {
-    if (!confirm(`Déconnecter ${currentUser.displayName} ?\nLes spots resteront en local.`)) return;
+    if (!confirm(t('auth.logout.confirm', {name: currentUser.displayName}))) return;
     await signOut(auth);
   } else {
     try {
@@ -136,7 +136,7 @@ window._saveCustomSpotsCloud = async () => {
       await setDoc(doc(db, 'users', currentUser.uid, 'spots', String(spot.id)), spot);
     }
     const status = document.getElementById('auth-status');
-    if (status) { status.textContent = '☁️ Sauvegardé'; setTimeout(() => { status.textContent = '☁️ Synchro active'; }, 2000); }
+    if (status) { status.textContent = t('auth.status.saved'); setTimeout(() => { status.textContent = t('auth.status.sync'); }, 2000); }
   } catch(e) { console.warn('Firestore save error:', e); }
 };
 
@@ -1713,47 +1713,47 @@ function scoreDay(spot, h) {
 
   const lc = h.cloud_low ?? 100;
   const lcElim = lc >= c.cloud_low_elim;
-  add('Nuages bas', lc, '%', lcElim?0:lc<c.cloud_low_ok?20:10, 20,
+  add(t('crit.cloud_low'), lc, '%', lcElim?0:lc<c.cloud_low_ok?20:10, 20,
     lcElim?'red':lc<c.cloud_low_ok?'green':'amber',
-    lcElim?'❌ ÉLIM':lc<c.cloud_low_ok?'⭐ Idéal':'⚠️ Limite', lcElim);
+    lcElim?t('cv.elim'):lc<c.cloud_low_ok?t('cv.ideal'):t('cv.limite'), lcElim);
 
   const fog = h.fog ?? 100;
   const fogElim = fog > c.fog_elim;
-  add('Brouillard', fog, '%', fogElim?0:fog===0?10:6, 10,
+  add(t('crit.fog'), fog, '%', fogElim?0:fog===0?10:6, 10,
     fogElim?'red':fog===0?'green':'amber',
-    fogElim?`❌ ÉLIM (>${c.fog_elim}%)`:'✅ OK', fogElim);
+    fogElim?`${t('cv.elim')} (>${c.fog_elim}%)`:t('cv.ok'), fogElim);
 
   const mc = h.cloud_mid ?? 100;
   const mcElim = mc >= c.cloud_mid_elim;
-  add('Nuages moy.', mc, '%', mcElim?0:mc<c.cloud_mid_ok?10:5, 10,
+  add(t('crit.cloud_mid'), mc, '%', mcElim?0:mc<c.cloud_mid_ok?10:5, 10,
     mcElim?'red':mc<c.cloud_mid_ok?'green':'amber',
-    mcElim?'❌ ÉLIM':'✅ OK', mcElim);
+    mcElim?t('cv.elim'):t('cv.ok'), mcElim);
 
   const hc = h.cloud_high ?? 100;
-  add('Nuages hauts', hc, '%', hc<c.cloud_high_ok?5:hc<30?3:1, 5,
+  add(t('crit.cloud_high'), hc, '%', hc<c.cloud_high_ok?5:hc<30?3:1, 5,
     hc<c.cloud_high_ok?'green':'amber',
-    hc<c.cloud_high_ok?'✅ OK':'⚠️ Cirrus');
+    hc<c.cloud_high_ok?t('cv.ok'):'⚠️ Cirrus');
 
   const rh = h.rh ?? 100;
   const rhElim = rh > c.rh_elim;
   const rhPts = rhElim?0:rh<(c.rh_exc||50)?10:rh<c.rh_ok?7:3;
-  add('Humidité', rh, '%', rhPts, 10,
+  add(t('crit.rh'), rh, '%', rhPts, 10,
     rhElim?'red':rh<c.rh_ok?'green':'amber',
-    rhElim?`❌ ÉLIM (>${c.rh_elim}%)`:rh<c.rh_ok?'✅ Sec':'⚠️ Humide', rhElim);
+    rhElim?`${t('cv.elim')} (>${c.rh_elim}%)`:rh<c.rh_ok?t('cv.sec'):t('cv.humide'), rhElim);
 
   const spread = h.spread ?? 0;
   const spreadElim = spread < c.spread_elim;
   const spreadPts = spreadElim?0:spread>(c.spread_exc||12)?10:spread>c.spread_ok?7:3;
-  add('ΔT rosée', spread, '°C', spreadPts, 10,
+  add(t('crit.spread'), spread, '°C', spreadPts, 10,
     spreadElim?'red':spread>c.spread_ok?'green':'amber',
-    spreadElim?`❌ ÉLIM (<${c.spread_elim}°C)`:spread>c.spread_ok?'✅ Sec':'⚠️ Limite', spreadElim);
+    spreadElim?`${t('cv.elim')} (<${c.spread_elim}°C)`:spread>c.spread_ok?t('cv.sec'):t('cv.limite'), spreadElim);
 
   const slp = h.slp ?? 1000;
   const slpElim = slp < c.slp_elim;
   const slpPts = slpElim?0:slp>=c.slp_exc?10:slp>=c.slp_ok?7:3;
-  add('Pression SLP', slp, 'hPa', slpPts, 10,
+  add(t('crit.slp'), slp, 'hPa', slpPts, 10,
     slpElim?'red':slp>=c.slp_ok?'green':'amber',
-    slpElim?`❌ ÉLIM (<${c.slp_elim})`:slp>=c.slp_exc?'⭐ Anticyc.':'✅ Correct', slpElim);
+    slpElim?`${t('cv.elim')} (<${c.slp_elim})`:slp>=c.slp_exc?t('cv.anticyc'):t('cv.correct'), slpElim);
 
   const wind = h.wind ?? 999;
   let windPts, windColor, windVerdict, windElim;
@@ -1761,25 +1761,25 @@ function scoreDay(spot, h) {
     windElim = wind > c.wind_elim;
     windPts = windElim?0:(wind>=(c.wind_min||15)&&wind<=c.wind_ok)?15:wind<(c.wind_min||15)?10:5;
     windColor = windElim?'red':(wind>=15&&wind<=35)?'green':'amber';
-    windVerdict = windElim?`❌ ÉLIM Mistral fort`:(wind>=15&&wind<=35)?'⭐ Mistral idéal':wind<15?'⚠️ Calme':'⚠️ Fort';
+    windVerdict = windElim?t('cv.mistral_fort'):(wind>=15&&wind<=35)?t('cv.mistral_ideal'):wind<15?t('cv.calme'):t('cv.fort');
   } else if (spot.type === 'mediterranee_marin') {
     windElim = wind > c.wind_elim;
     windPts = windElim?0:wind<10?15:wind<c.wind_ok?10:4;
     windColor = windElim?'red':wind<10?'green':'amber';
-    windVerdict = windElim?`❌ ÉLIM (>${c.wind_elim} km/h)`:wind<10?'⭐ Mer d\'huile':'✅ Correct';
+    windVerdict = windElim?`${t('cv.elim')} (>${c.wind_elim} km/h)`:wind<10?t('cv.mer_huile'):t('cv.correct');
   } else {
     windElim = wind > c.wind_elim;
     windPts = windElim?0:wind<10?15:wind<c.wind_ok?10:5;
     windColor = windElim?'red':wind<c.wind_ok?'green':'amber';
-    windVerdict = windElim?`❌ ÉLIM (>${c.wind_elim} km/h)`:wind<10?'⭐ Calme':'✅ Correct';
+    windVerdict = windElim?`${t('cv.elim')} (>${c.wind_elim} km/h)`:wind<10?t('cv.calme'):t('cv.correct');
   }
-  add('Vent', wind, 'km/h', windPts, 15, windColor, windVerdict, windElim);
+  add(t('crit.wind'), wind, 'km/h', windPts, 15, windColor, windVerdict, windElim);
 
   const vis = h.vis ?? 0;
   const visPts = vis>(c.vis_exc||50)?15:vis>c.vis_ok?10:vis>15?4:0;
-  add('Vis. obs.', vis, 'km', visPts, 15,
+  add(t('crit.vis_obs'), vis, 'km', visPts, 15,
     vis>c.vis_ok?'green':vis>15?'amber':'red',
-    vis>(c.vis_exc||50)?'⭐ Excellente':vis>c.vis_ok?'✅ OK':'❌ Faible');
+    vis>(c.vis_exc||50)?'⭐ Excellente':vis>c.vis_ok?t('cv.ok'):`${t('cv.elim')} Faible`);
 
   const visMid = h.vis_mid ?? 0;
   let visMidPts, visMidColor, visMidVerdict, visMidElim=false;
@@ -1791,27 +1791,27 @@ function scoreDay(spot, h) {
       : visMid > (c.vis_mid_ok||40) ? 10
       : visMid > 20 ? 4 : 1;
     visMidColor = visMidElim ? 'red' : visMid > (c.vis_mid_ok||40) ? 'green' : visMid > 20 ? 'amber' : 'red';
-    visMidVerdict = visMidElim ? `❌ ÉLIM (<${elimSeuil}km)`
-      : visMid > (c.vis_mid_exc||80) ? '⭐ Mer dégagée'
-      : visMid > (c.vis_mid_ok||40) ? '✅ OK'
-      : visMid > 20 ? '⚠️ Réduite' : '⚠️ Brume';
+    visMidVerdict = visMidElim ? `${t('cv.elim')} (<${elimSeuil}km)`
+      : visMid > (c.vis_mid_exc||80) ? t('cv.mer_degagee')
+      : visMid > (c.vis_mid_ok||40) ? t('cv.ok')
+      : visMid > 20 ? t('cv.reduite') : t('cv.brume');
   } else {
     visMidPts = visMid>(c.vis_mid_exc||50)?15:visMid>(c.vis_mid_ok||30)?9:visMid>15?3:0;
     visMidColor = visMid>(c.vis_mid_ok||30)?'green':visMid>15?'amber':'red';
-    visMidVerdict = visMid>(c.vis_mid_ok||30)?'✅ OK':'⚠️ Réduite';
+    visMidVerdict = visMid>(c.vis_mid_ok||30)?t('cv.ok'):t('cv.reduite');
   }
-  const midLabel = spot.type==='mediterranee_corse'?'Vis. mer centrale':
-                   spot.type==='mediterranee_marin'?'Vis. maritime':'Vis. mi-trajet';
+  const midLabel = spot.type==='mediterranee_corse'?t('crit.vis_mid.corse'):
+                   spot.type==='mediterranee_marin'?t('crit.vis_mid.marin'):t('crit.vis_mid.default');
   add(midLabel, visMid, 'km', visMidPts, 15, visMidColor, visMidVerdict, visMidElim);
 
   const precip = h.precip ?? 100;
-  add('Précipitations', precip, '%', precip<10?5:precip<30?2:0, 5,
+  add(t('crit.precip'), precip, '%', precip<10?5:precip<30?2:0, 5,
     precip<10?'green':precip<30?'amber':'red',
-    precip<10?'✅ Sec':'⚠️ Possible');
-    const cape=h.cape??null;
-if(cape!==null){const capeElim=cape>300;const capePts=capeElim?0:cape<10?10:cape<100?7:3;add('CAPE',cape,'J/kg',capePts,10,capeElim?'red':cape<100?'green':'amber',capeElim?'ELIM >300':cape<10?'Ultra stable':cape<100?'Stable':'Convection',capeElim);}
-const dust=h.dust??null;
-  if(dust!==null){const dustElim=dust>200;const dustPts=dustElim?0:dust<20?10:dust<100?6:2;const dustLabel=dustElim?'ELIM >200':dust<20?'Clair':'Voile partiel';add('Dust',Math.round(dust),'\u00b5g/m\u00b3',dustPts,10,dustElim?'red':dust<20?'green':'amber',dustLabel,dustElim);}
+    precip<10?t('cv.sec'):'⚠️ Possible');
+  const cape=h.cape??null;
+  if(cape!==null){const capeElim=cape>300;const capePts=capeElim?0:cape<10?10:cape<100?7:3;add(t('crit.cape'),cape,'J/kg',capePts,10,capeElim?'red':cape<100?'green':'amber',capeElim?`${t('cv.elim')} >300`:cape<10?t('cv.cape_stable'):cape<100?t('cv.cape_ok'):t('cv.cape_conv'),capeElim);}
+  const dust=h.dust??null;
+  if(dust!==null){const dustElim=dust>200;const dustPts=dustElim?0:dust<20?10:dust<100?6:2;const dustLabel=dustElim?`${t('cv.elim')} >200`:dust<20?t('cv.dust_clair'):t('cv.dust_voile');add(t('crit.dust'),Math.round(dust),'\u00b5g/m\u00b3',dustPts,10,dustElim?'red':dust<20?'green':'amber',dustLabel,dustElim);}
   const pct = maxScore>0 ? Math.round((score/maxScore)*100) : 0;
   const finalScore = hasElim ? Math.min(pct, 35) : pct;
   return { score: finalScore, items, hasElim };
@@ -1960,7 +1960,7 @@ let lastAlert = null;
 
 async function fetchAll() {
   const btn = document.getElementById('fetch-btn');
-  btn.disabled=true; btn.textContent='⟳ CHARGEMENT…';
+  btn.disabled=true; btn.textContent=t('btn.fetch.loading');
   document.getElementById('prog').style.display='block';
   setStatus('Interrogation Open-Meteo…');
   renderMatrix(true); renderCards(true);
@@ -1990,7 +1990,7 @@ async function fetchAll() {
     if (fc) window._lastScores[s.id] = Math.max(...fc.map(d => d.score || 0));
   });
   renderMatrix(false); renderCards(false); renderBanner(); checkAutoAlert();
-  btn.disabled=false; btn.textContent='⟳ PRÉVISIONS 7 JOURS';
+  btn.disabled=false; btn.textContent=t('btn.fetch');
   setStatus(`Actualisé ${new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}`);
   document.getElementById('prog').style.display='none';
   updateMapIfVisible();
@@ -2001,11 +2001,11 @@ function dayLabel(d){ return d.toLocaleDateString('fr-FR',{weekday:'short',day:'
 function fullLabel(d){ return d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'}); }
 function cellClass(sc){ return sc>=65?'great':sc>=40?'good':'poor'; }
 function verdict(sc){
-  if(sc>=80) return '🟢 Excellent';
-  if(sc>=65) return '✅ Favorable';
-  if(sc>=45) return '🟡 Moyen';
-  if(sc>=25) return '🟠 Médiocre';
-  return '🔴 Mauvais';
+  if(sc>=80) return '🟢 '+t('verdict.favorable');
+  if(sc>=65) return t('verdict.favorable');
+  if(sc>=45) return '🟡 '+t('legend.verdict');
+  if(sc>=25) return t('verdict.mediocre');
+  return t('verdict.mauvais');
 }
 function scoreColor(sc){ return sc>=65?'var(--green)':sc>=40?'var(--amber)':'var(--red)'; }
 
@@ -3850,5 +3850,642 @@ document.getElementById('score-legend-chevron').style.transform = open ? 'rotate
   </div>
 </div>
 
+<!-- ═══════════════════════════════════════════════════
+     i18n — Internationalisation FR / EN / ES / AR
+═══════════════════════════════════════════════════ -->
+<script>
+const I18N = {
+  fr: {
+    // Header
+    'auth.login': '🔑 Connexion Google',
+    'auth.logout.confirm': 'Déconnecter {name} ?\nLes spots resteront en local.',
+    'auth.status.local': '💾 Stockage local',
+    'auth.status.sync': '☁️ Synchro active',
+    'auth.status.saved': '☁️ Sauvegardé',
+    'auth.btn.title.login': 'Se connecter pour synchroniser ses spots',
+    'auth.btn.title.logout': 'Cliquer pour se déconnecter',
+    // Onglets
+    'tab.accueil': '🏔️ ACCUEIL',
+    'tab.carte': '🗺️ CARTE',
+    'tab.creator': '🛠️ CRÉATEUR DE SPOT',
+    'tab.alertes': '📨 ALERTES',
+    // Time slicer
+    'ts.label': '🌅 FENÊTRE HORAIRE',
+    'ts.sunrise.pending': '⏳ Charger prévisions',
+    'tw.now': '⚡ Maintenant',
+    'tw.avg': 'Moyenne matin (5h-11h)',
+    'tw.0': '🌅 Lever soleil exact',
+    'tw.0.5': '🌅 +30 min',
+    'tw.1': '🌅 +1h ⭐ (Pic mirage)',
+    'tw.1.5': '🌅 +1h30',
+    'tw.2': '🌅 +2h',
+    'tw.3': '🌅 +3h',
+    // Boutons
+    'btn.fetch': '⟳ PRÉVISIONS 7 JOURS',
+    'btn.fetch.loading': '⟳ Chargement...',
+    'btn.charger': '🔄 Charger prévisions',
+    // Banner
+    'banner.title': '🎯 FENÊTRES FAVORABLES CETTE SEMAINE',
+    // Matrix
+    'matrix.title': '⊞ VUE SEMAINE — SCORE /100 PAR MATIN',
+    'spots.title': '🔴 SPOTS · DÉTAIL PAR JOUR',
+    // Score legend
+    'legend.score': 'Score',
+    'legend.verdict': 'Verdict',
+    'legend.conditions': 'Conditions typiques',
+    // Verdicts score
+    'verdict.favorable': '✅ Favorable',
+    'verdict.mediocre': '🟠 Médiocre',
+    'verdict.mauvais': '🔴 Mauvais',
+    'verdict.elim': 'élim',
+    // Critères météo
+    'crit.cloud_low': 'Nuages bas',
+    'crit.fog': 'Brouillard',
+    'crit.cloud_mid': 'Nuages moy.',
+    'crit.cloud_high': 'Nuages hauts',
+    'crit.rh': 'Humidité',
+    'crit.spread': 'ΔT rosée',
+    'crit.slp': 'Pression SLP',
+    'crit.wind': 'Vent',
+    'crit.vis_obs': 'Vis. obs.',
+    'crit.vis_mid.corse': 'Vis. mer centrale',
+    'crit.vis_mid.marin': 'Vis. maritime',
+    'crit.vis_mid.default': 'Vis. mi-trajet',
+    'crit.precip': 'Précipitations',
+    'crit.cape': 'CAPE',
+    'crit.dust': 'Dust',
+    // Verdicts critères
+    'cv.elim': '❌ ÉLIM',
+    'cv.ideal': '⭐ Idéal',
+    'cv.limite': '⚠️ Limite',
+    'cv.ok': '✅ OK',
+    'cv.humide': '⚠️ Humide',
+    'cv.sec': '✅ Sec',
+    'cv.anticyc': '⭐ Anticyc.',
+    'cv.correct': '✅ Correct',
+    'cv.mistral_fort': '❌ ÉLIM Mistral fort',
+    'cv.mistral_ideal': '⭐ Mistral idéal',
+    'cv.calme': '⚠️ Calme',
+    'cv.fort': '⚠️ Fort',
+    'cv.mer_huile': '⭐ Mer d\'huile',
+    'cv.mer_degagee': '⭐ Mer dégagée',
+    'cv.reduite': '⚠️ Réduite',
+    'cv.brume': '⚠️ Brume',
+    'cv.cape_stable': 'Ultra stable',
+    'cv.cape_ok': 'Stable',
+    'cv.cape_conv': 'Convection',
+    'cv.dust_clair': 'Clair',
+    'cv.dust_voile': 'Voile partiel',
+    // Réfraction
+    'refrac.title': 'Réfraction',
+    'refrac.source.era5': 'ERA5 réel',
+    'refrac.source.icao': 'Modèle ICAO',
+    'refrac.standard': 'Standard',
+    'refrac.visible': 'Visible',
+    'refrac.hidden': 'Caché courbure',
+    'refrac.lift': '↑ Lift réfraction',
+    'refrac.h2under': '↓ Cible H2 cachée par',
+    'refrac.profile': 'Profil de courbure · slider k interactif',
+    'refrac.terrain': 'RELIEF INTERMÉDIAIRE',
+    'refrac.btn.terrain': '🗺️ Profil terrain',
+    // Profil terrain
+    'terrain.title': '🏔️ Profil terrain',
+    'curve.title': '🌍 Profil de courbure',
+    'curve.visible': 'Visible',
+    'curve.hidden': 'Cible entièrement cachée sous l\'horizon',
+    'curve.sous_courbure': 'sous la courbure',
+    // Bislin tableau
+    'bislin.title': '🎯 RÉSULTATS CIBLE (MÉTHODE BISLIN EXACTE)',
+    'bislin.visible': '✅ Visible',
+    'bislin.hidden': '❌ Caché (Hidden)',
+    'bislin.lift': '↑ Lift réfraction',
+    'bislin.drop_geo': 'Drop géométrique (k=0)',
+    'bislin.drop_ref': 'Drop avec réfraction',
+    'bislin.sagitta': 'Sagitta (bulge au milieu)',
+    'bislin.angle_ref': 'Angle de réfraction',
+    'bislin.angle_cible': 'Angle cible (top)',
+    'bislin.param': '📐 PARAMÈTRES',
+    'bislin.h1': 'Hauteur observateur h1',
+    'bislin.h2': 'Hauteur cible h2',
+    'bislin.dist': 'Distance',
+    'bislin.k': 'Coeff. réfraction k',
+    'bislin.r': 'Rayon apparent R\'',
+    'bislin.horizon': 'Distance à l\'horizon',
+    // Scintillation
+    'scint.label': '✦ Scintillation optique',
+    'scint.faible': 'Faible · image stable',
+    'scint.mod': 'Modérée · shimmer',
+    'scint.forte': 'Forte · distorsion',
+    // Créateur
+    'creator.title': '✦ CRÉATEUR DE SPOT',
+    'creator.save': '💾 Sauvegarder le spot',
+    'creator.reset': '🔄 Réinitialiser',
+    // Alertes
+    'alertes.title': '📨 ALERTES EMAIL',
+    // Misc
+    'ready': 'Prêt',
+    'spots.loaded': '{n} spots chargés',
+    'fermer': '✕ Fermer',
+    'h1.obs': 'h1 obs.',
+    'h2.cible': 'h2 cible',
+    'cible.masquee': 'Cible masquée',
+    'cible.partielle': 'Partiellement visible',
+    'ajuster.k': 'Ajuster k :',
+    'k.refraction': 'κ réfraction :',
+    'mistral.label': 'Mistral local 15-35 km/h',
+  },
+
+  en: {
+    'auth.login': '🔑 Sign in with Google',
+    'auth.logout.confirm': 'Sign out {name}?\nSpots will remain local.',
+    'auth.status.local': '💾 Local storage',
+    'auth.status.sync': '☁️ Sync active',
+    'auth.status.saved': '☁️ Saved',
+    'auth.btn.title.login': 'Sign in to sync your spots',
+    'auth.btn.title.logout': 'Click to sign out',
+    'tab.accueil': '🏔️ HOME',
+    'tab.carte': '🗺️ MAP',
+    'tab.creator': '🛠️ SPOT CREATOR',
+    'tab.alertes': '📨 ALERTS',
+    'ts.label': '🌅 TIME WINDOW',
+    'ts.sunrise.pending': '⏳ Load forecast',
+    'tw.now': '⚡ Now',
+    'tw.avg': 'Morning average (5h-11h)',
+    'tw.0': '🌅 Exact sunrise',
+    'tw.0.5': '🌅 +30 min',
+    'tw.1': '🌅 +1h ⭐ (Mirage peak)',
+    'tw.1.5': '🌅 +1h30',
+    'tw.2': '🌅 +2h',
+    'tw.3': '🌅 +3h',
+    'btn.fetch': '⟳ 7-DAY FORECAST',
+    'btn.fetch.loading': '⟳ Loading...',
+    'btn.charger': '🔄 Load forecast',
+    'banner.title': '🎯 FAVORABLE WINDOWS THIS WEEK',
+    'matrix.title': '⊞ WEEKLY VIEW — SCORE /100 PER MORNING',
+    'spots.title': '🔴 SPOTS · DAILY DETAIL',
+    'legend.score': 'Score',
+    'legend.verdict': 'Verdict',
+    'legend.conditions': 'Typical conditions',
+    'verdict.favorable': '✅ Favorable',
+    'verdict.mediocre': '🟠 Moderate',
+    'verdict.mauvais': '🔴 Poor',
+    'verdict.elim': 'elim',
+    'crit.cloud_low': 'Low clouds',
+    'crit.fog': 'Fog',
+    'crit.cloud_mid': 'Mid clouds',
+    'crit.cloud_high': 'High clouds',
+    'crit.rh': 'Humidity',
+    'crit.spread': 'Dew spread',
+    'crit.slp': 'SLP pressure',
+    'crit.wind': 'Wind',
+    'crit.vis_obs': 'Obs. vis.',
+    'crit.vis_mid.corse': 'Central sea vis.',
+    'crit.vis_mid.marin': 'Maritime vis.',
+    'crit.vis_mid.default': 'Mid-path vis.',
+    'crit.precip': 'Precipitation',
+    'crit.cape': 'CAPE',
+    'crit.dust': 'Dust',
+    'cv.elim': '❌ ELIM',
+    'cv.ideal': '⭐ Ideal',
+    'cv.limite': '⚠️ Marginal',
+    'cv.ok': '✅ OK',
+    'cv.humide': '⚠️ Humid',
+    'cv.sec': '✅ Dry',
+    'cv.anticyc': '⭐ Anticyc.',
+    'cv.correct': '✅ Correct',
+    'cv.mistral_fort': '❌ ELIM Strong Mistral',
+    'cv.mistral_ideal': '⭐ Ideal Mistral',
+    'cv.calme': '⚠️ Calm',
+    'cv.fort': '⚠️ Strong',
+    'cv.mer_huile': '⭐ Glassy sea',
+    'cv.mer_degagee': '⭐ Clear sea',
+    'cv.reduite': '⚠️ Reduced',
+    'cv.brume': '⚠️ Haze',
+    'cv.cape_stable': 'Ultra stable',
+    'cv.cape_ok': 'Stable',
+    'cv.cape_conv': 'Convection',
+    'cv.dust_clair': 'Clear',
+    'cv.dust_voile': 'Partial veil',
+    'refrac.title': 'Refraction',
+    'refrac.source.era5': 'ERA5 real',
+    'refrac.source.icao': 'ICAO model',
+    'refrac.standard': 'Standard',
+    'refrac.visible': 'Visible',
+    'refrac.hidden': 'Hidden by curvature',
+    'refrac.lift': '↑ Refraction lift',
+    'refrac.h2under': '↓ Target H2 hidden by',
+    'refrac.profile': 'Curvature profile · interactive k slider',
+    'refrac.terrain': 'INTERMEDIATE TERRAIN',
+    'refrac.btn.terrain': '🗺️ Terrain profile',
+    'terrain.title': '🏔️ Terrain profile',
+    'curve.title': '🌍 Curvature profile',
+    'curve.visible': 'Visible',
+    'curve.hidden': 'Target entirely hidden below horizon',
+    'curve.sous_courbure': 'below curvature',
+    'bislin.title': '🎯 TARGET RESULTS (EXACT BISLIN METHOD)',
+    'bislin.visible': '✅ Visible',
+    'bislin.hidden': '❌ Hidden',
+    'bislin.lift': '↑ Refraction lift',
+    'bislin.drop_geo': 'Geometric drop (k=0)',
+    'bislin.drop_ref': 'Drop with refraction',
+    'bislin.sagitta': 'Sagitta (bulge at mid)',
+    'bislin.angle_ref': 'Refraction angle',
+    'bislin.angle_cible': 'Target angle (top)',
+    'bislin.param': '📐 PARAMETERS',
+    'bislin.h1': 'Observer height h1',
+    'bislin.h2': 'Target height h2',
+    'bislin.dist': 'Distance',
+    'bislin.k': 'Refraction coeff. k',
+    'bislin.r': 'Apparent radius R\'',
+    'bislin.horizon': 'Distance to horizon',
+    'scint.label': '✦ Optical scintillation',
+    'scint.faible': 'Low · stable image',
+    'scint.mod': 'Moderate · shimmer',
+    'scint.forte': 'Strong · distortion',
+    'creator.title': '✦ SPOT CREATOR',
+    'creator.save': '💾 Save spot',
+    'creator.reset': '🔄 Reset',
+    'alertes.title': '📨 EMAIL ALERTS',
+    'ready': 'Ready',
+    'spots.loaded': '{n} spots loaded',
+    'fermer': '✕ Close',
+    'h1.obs': 'h1 obs.',
+    'h2.cible': 'h2 target',
+    'cible.masquee': 'Target hidden',
+    'cible.partielle': 'Partially visible',
+    'ajuster.k': 'Adjust k:',
+    'k.refraction': 'κ refraction:',
+    'mistral.label': 'Local Mistral 15-35 km/h',
+  },
+
+  es: {
+    'auth.login': '🔑 Iniciar sesión con Google',
+    'auth.logout.confirm': '¿Desconectar {name}?\nLos spots quedarán en local.',
+    'auth.status.local': '💾 Almacenamiento local',
+    'auth.status.sync': '☁️ Sincronización activa',
+    'auth.status.saved': '☁️ Guardado',
+    'auth.btn.title.login': 'Iniciar sesión para sincronizar',
+    'auth.btn.title.logout': 'Clic para desconectarse',
+    'tab.accueil': '🏔️ INICIO',
+    'tab.carte': '🗺️ MAPA',
+    'tab.creator': '🛠️ CREADOR DE SPOT',
+    'tab.alertes': '📨 ALERTAS',
+    'ts.label': '🌅 VENTANA HORARIA',
+    'ts.sunrise.pending': '⏳ Cargar previsión',
+    'tw.now': '⚡ Ahora',
+    'tw.avg': 'Media mañana (5h-11h)',
+    'tw.0': '🌅 Amanecer exacto',
+    'tw.0.5': '🌅 +30 min',
+    'tw.1': '🌅 +1h ⭐ (Pico espejismo)',
+    'tw.1.5': '🌅 +1h30',
+    'tw.2': '🌅 +2h',
+    'tw.3': '🌅 +3h',
+    'btn.fetch': '⟳ PREVISIÓN 7 DÍAS',
+    'btn.fetch.loading': '⟳ Cargando...',
+    'btn.charger': '🔄 Cargar previsión',
+    'banner.title': '🎯 VENTANAS FAVORABLES ESTA SEMANA',
+    'matrix.title': '⊞ VISTA SEMANAL — PUNTUACIÓN /100 POR MAÑANA',
+    'spots.title': '🔴 SPOTS · DETALLE DIARIO',
+    'legend.score': 'Puntuación',
+    'legend.verdict': 'Veredicto',
+    'legend.conditions': 'Condiciones típicas',
+    'verdict.favorable': '✅ Favorable',
+    'verdict.mediocre': '🟠 Mediocre',
+    'verdict.mauvais': '🔴 Malo',
+    'verdict.elim': 'elim',
+    'crit.cloud_low': 'Nubes bajas',
+    'crit.fog': 'Niebla',
+    'crit.cloud_mid': 'Nubes medias',
+    'crit.cloud_high': 'Nubes altas',
+    'crit.rh': 'Humedad',
+    'crit.spread': 'ΔT rocío',
+    'crit.slp': 'Presión SLP',
+    'crit.wind': 'Viento',
+    'crit.vis_obs': 'Vis. obs.',
+    'crit.vis_mid.corse': 'Vis. mar central',
+    'crit.vis_mid.marin': 'Vis. marítima',
+    'crit.vis_mid.default': 'Vis. mitad trayecto',
+    'crit.precip': 'Precipitaciones',
+    'crit.cape': 'CAPE',
+    'crit.dust': 'Polvo',
+    'cv.elim': '❌ ELIM',
+    'cv.ideal': '⭐ Ideal',
+    'cv.limite': '⚠️ Límite',
+    'cv.ok': '✅ OK',
+    'cv.humide': '⚠️ Húmedo',
+    'cv.sec': '✅ Seco',
+    'cv.anticyc': '⭐ Anticiclón',
+    'cv.correct': '✅ Correcto',
+    'cv.mistral_fort': '❌ ELIM Mistral fuerte',
+    'cv.mistral_ideal': '⭐ Mistral ideal',
+    'cv.calme': '⚠️ Calma',
+    'cv.fort': '⚠️ Fuerte',
+    'cv.mer_huile': '⭐ Mar en calma',
+    'cv.mer_degagee': '⭐ Mar despejado',
+    'cv.reduite': '⚠️ Reducida',
+    'cv.brume': '⚠️ Bruma',
+    'cv.cape_stable': 'Ultra estable',
+    'cv.cape_ok': 'Estable',
+    'cv.cape_conv': 'Convección',
+    'cv.dust_clair': 'Despejado',
+    'cv.dust_voile': 'Velo parcial',
+    'refrac.title': 'Refracción',
+    'refrac.source.era5': 'ERA5 real',
+    'refrac.source.icao': 'Modelo ICAO',
+    'refrac.standard': 'Estándar',
+    'refrac.visible': 'Visible',
+    'refrac.hidden': 'Oculto por curvatura',
+    'refrac.lift': '↑ Elevación refracción',
+    'refrac.h2under': '↓ Objetivo H2 oculto por',
+    'refrac.profile': 'Perfil curvatura · slider k interactivo',
+    'refrac.terrain': 'TERRENO INTERMEDIO',
+    'refrac.btn.terrain': '🗺️ Perfil terreno',
+    'terrain.title': '🏔️ Perfil terreno',
+    'curve.title': '🌍 Perfil de curvatura',
+    'curve.visible': 'Visible',
+    'curve.hidden': 'Objetivo completamente oculto bajo el horizonte',
+    'curve.sous_courbure': 'bajo la curvatura',
+    'bislin.title': '🎯 RESULTADOS OBJETIVO (MÉTODO BISLIN EXACTO)',
+    'bislin.visible': '✅ Visible',
+    'bislin.hidden': '❌ Oculto (Hidden)',
+    'bislin.lift': '↑ Elevación refracción',
+    'bislin.drop_geo': 'Caída geométrica (k=0)',
+    'bislin.drop_ref': 'Caída con refracción',
+    'bislin.sagitta': 'Sagitta (bulge en medio)',
+    'bislin.angle_ref': 'Ángulo de refracción',
+    'bislin.angle_cible': 'Ángulo objetivo (cima)',
+    'bislin.param': '📐 PARÁMETROS',
+    'bislin.h1': 'Altura observador h1',
+    'bislin.h2': 'Altura objetivo h2',
+    'bislin.dist': 'Distancia',
+    'bislin.k': 'Coef. refracción k',
+    'bislin.r': 'Radio aparente R\'',
+    'bislin.horizon': 'Distancia al horizonte',
+    'scint.label': '✦ Centelleo óptico',
+    'scint.faible': 'Bajo · imagen estable',
+    'scint.mod': 'Moderado · shimmer',
+    'scint.forte': 'Alto · distorsión',
+    'creator.title': '✦ CREADOR DE SPOT',
+    'creator.save': '💾 Guardar spot',
+    'creator.reset': '🔄 Reiniciar',
+    'alertes.title': '📨 ALERTAS EMAIL',
+    'ready': 'Listo',
+    'spots.loaded': '{n} spots cargados',
+    'fermer': '✕ Cerrar',
+    'h1.obs': 'h1 obs.',
+    'h2.cible': 'h2 objetivo',
+    'cible.masquee': 'Objetivo oculto',
+    'cible.partielle': 'Parcialmente visible',
+    'ajuster.k': 'Ajustar k:',
+    'k.refraction': 'κ refracción:',
+    'mistral.label': 'Mistral local 15-35 km/h',
+  },
+
+  ar: {
+    'auth.login': '🔑 تسجيل الدخول بـ Google',
+    'auth.logout.confirm': 'تسجيل خروج {name}؟\nستبقى النقاط محلياً.',
+    'auth.status.local': '💾 تخزين محلي',
+    'auth.status.sync': '☁️ المزامنة نشطة',
+    'auth.status.saved': '☁️ تم الحفظ',
+    'auth.btn.title.login': 'تسجيل الدخول لمزامنة النقاط',
+    'auth.btn.title.logout': 'انقر لتسجيل الخروج',
+    'tab.accueil': '🏔️ الرئيسية',
+    'tab.carte': '🗺️ الخريطة',
+    'tab.creator': '🛠️ إنشاء نقطة',
+    'tab.alertes': '📨 التنبيهات',
+    'ts.label': '🌅 النافذة الزمنية',
+    'ts.sunrise.pending': '⏳ تحميل التوقعات',
+    'tw.now': '⚡ الآن',
+    'tw.avg': 'متوسط الصباح (5ص-11ص)',
+    'tw.0': '🌅 وقت الشروق الدقيق',
+    'tw.0.5': '🌅 +30 دقيقة',
+    'tw.1': '🌅 +1 ساعة ⭐ (ذروة السراب)',
+    'tw.1.5': '🌅 +1.5 ساعة',
+    'tw.2': '🌅 +2 ساعة',
+    'tw.3': '🌅 +3 ساعات',
+    'btn.fetch': '⟳ توقعات 7 أيام',
+    'btn.fetch.loading': '⟳ جارٍ التحميل...',
+    'btn.charger': '🔄 تحميل التوقعات',
+    'banner.title': '🎯 النوافذ المناسبة هذا الأسبوع',
+    'matrix.title': '⊞ العرض الأسبوعي — النتيجة /100 لكل صباح',
+    'spots.title': '🔴 النقاط · تفاصيل يومية',
+    'legend.score': 'النتيجة',
+    'legend.verdict': 'الحكم',
+    'legend.conditions': 'الظروف النموذجية',
+    'verdict.favorable': '✅ ملائم',
+    'verdict.mediocre': '🟠 متوسط',
+    'verdict.mauvais': '🔴 سيئ',
+    'verdict.elim': 'مستبعد',
+    'crit.cloud_low': 'سحب منخفضة',
+    'crit.fog': 'ضباب',
+    'crit.cloud_mid': 'سحب متوسطة',
+    'crit.cloud_high': 'سحب عالية',
+    'crit.rh': 'رطوبة',
+    'crit.spread': 'فارق الندى',
+    'crit.slp': 'ضغط SLP',
+    'crit.wind': 'رياح',
+    'crit.vis_obs': 'الرؤية',
+    'crit.vis_mid.corse': 'رؤية وسط البحر',
+    'crit.vis_mid.marin': 'الرؤية البحرية',
+    'crit.vis_mid.default': 'رؤية منتصف المسار',
+    'crit.precip': 'هطول',
+    'crit.cape': 'CAPE',
+    'crit.dust': 'غبار',
+    'cv.elim': '❌ مستبعد',
+    'cv.ideal': '⭐ مثالي',
+    'cv.limite': '⚠️ حدي',
+    'cv.ok': '✅ مقبول',
+    'cv.humide': '⚠️ رطب',
+    'cv.sec': '✅ جاف',
+    'cv.anticyc': '⭐ مرتفع جوي',
+    'cv.correct': '✅ صحيح',
+    'cv.mistral_fort': '❌ مستبعد - ميسترال قوي',
+    'cv.mistral_ideal': '⭐ ميسترال مثالي',
+    'cv.calme': '⚠️ هادئ',
+    'cv.fort': '⚠️ قوي',
+    'cv.mer_huile': '⭐ بحر زجاجي',
+    'cv.mer_degagee': '⭐ بحر صافٍ',
+    'cv.reduite': '⚠️ محدودة',
+    'cv.brume': '⚠️ ضباب خفيف',
+    'cv.cape_stable': 'مستقر جداً',
+    'cv.cape_ok': 'مستقر',
+    'cv.cape_conv': 'حمل حراري',
+    'cv.dust_clair': 'صافٍ',
+    'cv.dust_voile': 'حجاب جزئي',
+    'refrac.title': 'الانكسار',
+    'refrac.source.era5': 'ERA5 حقيقي',
+    'refrac.source.icao': 'نموذج ICAO',
+    'refrac.standard': 'قياسي',
+    'refrac.visible': 'مرئي',
+    'refrac.hidden': 'مخفي بالانحناء',
+    'refrac.lift': '↑ رفع الانكسار',
+    'refrac.h2under': '↓ الهدف H2 مخفي بـ',
+    'refrac.profile': 'ملف الانحناء · شريط k تفاعلي',
+    'refrac.terrain': 'التضاريس الوسيطة',
+    'refrac.btn.terrain': '🗺️ ملف التضاريس',
+    'terrain.title': '🏔️ ملف التضاريس',
+    'curve.title': '🌍 ملف الانحناء',
+    'curve.visible': 'مرئي',
+    'curve.hidden': 'الهدف مخفي تماماً تحت الأفق',
+    'curve.sous_courbure': 'تحت الانحناء',
+    'bislin.title': '🎯 نتائج الهدف (طريقة BisLin الدقيقة)',
+    'bislin.visible': '✅ مرئي',
+    'bislin.hidden': '❌ مخفي',
+    'bislin.lift': '↑ رفع الانكسار',
+    'bislin.drop_geo': 'الانخفاض الهندسي (k=0)',
+    'bislin.drop_ref': 'الانخفاض مع الانكسار',
+    'bislin.sagitta': 'Sagitta (انتفاخ المنتصف)',
+    'bislin.angle_ref': 'زاوية الانكسار',
+    'bislin.angle_cible': 'زاوية الهدف (قمة)',
+    'bislin.param': '📐 المعاملات',
+    'bislin.h1': 'ارتفاع المراقب h1',
+    'bislin.h2': 'ارتفاع الهدف h2',
+    'bislin.dist': 'المسافة',
+    'bislin.k': 'معامل الانكسار k',
+    'bislin.r': 'نصف القطر الظاهر R\'',
+    'bislin.horizon': 'المسافة إلى الأفق',
+    'scint.label': '✦ الترقيم الضوئي',
+    'scint.faible': 'منخفض · صورة مستقرة',
+    'scint.mod': 'متوسط · اهتزاز',
+    'scint.forte': 'قوي · تشويه',
+    'creator.title': '✦ منشئ النقاط',
+    'creator.save': '💾 حفظ النقطة',
+    'creator.reset': '🔄 إعادة تعيين',
+    'alertes.title': '📨 تنبيهات البريد الإلكتروني',
+    'ready': 'جاهز',
+    'spots.loaded': '{n} نقاط محملة',
+    'fermer': '✕ إغلاق',
+    'h1.obs': 'h1 مراقب',
+    'h2.cible': 'h2 هدف',
+    'cible.masquee': 'الهدف مخفي',
+    'cible.partielle': 'مرئي جزئياً',
+    'ajuster.k': 'ضبط k:',
+    'k.refraction': 'κ الانكسار:',
+    'mistral.label': 'ميسترال محلي 15-35 كم/س',
+  }
+};
+
+// ── Langue courante ──
+let _lang = localStorage.getItem('vld_lang') || 'fr';
+
+function t(key, vars) {
+  const dict = I18N[_lang] || I18N['fr'];
+  let str = dict[key] || I18N['fr'][key] || key;
+  if (vars) Object.keys(vars).forEach(k => { str = str.replace('{'+k+'}', vars[k]); });
+  return str;
+}
+
+function setLang(lang) {
+  _lang = lang;
+  localStorage.setItem('vld_lang', lang);
+  // RTL pour l'arabe
+  document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+  document.documentElement.lang = lang;
+  applyTranslations();
+}
+
+function applyTranslations() {
+  // Onglets
+  const tabMap = {
+    'tab-btn-accueil': 'tab.accueil',
+    'tab-btn-carte': 'tab.carte',
+    'tab-btn-creator': 'tab.creator',
+    'tab-btn-alertes': 'tab.alertes',
+  };
+  Object.entries(tabMap).forEach(([id, key]) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = t(key);
+  });
+  // Time slicer label
+  const tsl = document.querySelector('.time-slicer-label');
+  if (tsl) tsl.textContent = t('ts.label');
+  // Time window options
+  const tw = document.getElementById('time-window');
+  if (tw) {
+    const twMap = {'now':'tw.now','avg':'tw.avg','0':'tw.0','0.5':'tw.0.5','1':'tw.1','1.5':'tw.1.5','2':'tw.2','3':'tw.3'};
+    Array.from(tw.options).forEach(opt => {
+      if (twMap[opt.value]) opt.textContent = t(twMap[opt.value]);
+    });
+  }
+  // Bouton fetch
+  const fb = document.getElementById('fetch-btn');
+  if (fb && !fb.disabled) fb.textContent = t('btn.fetch');
+  // Banner title
+  const bt = document.querySelector('.bb-title');
+  if (bt) bt.textContent = t('banner.title');
+  // Matrix title
+  const mt = document.querySelector('#score-legend-trigger');
+  if (mt) {
+    const chevron = document.getElementById('score-legend-chevron');
+    const info = mt.querySelector('span[style*="color:var(--cyan)"]');
+    mt.childNodes[0].textContent = t('matrix.title') + ' ';
+  }
+  // Auth bouton
+  const authBtn = document.getElementById('auth-btn');
+  const authStatus = document.getElementById('auth-status');
+  if (authBtn) {
+    const isLoggedIn = authBtn.textContent.includes('👤');
+    if (!isLoggedIn) {
+      authBtn.textContent = t('auth.login');
+      authBtn.title = t('auth.btn.title.login');
+    }
+  }
+  if (authStatus && authStatus.textContent.includes('local') || authStatus && authStatus.textContent.includes('Local') || authStatus && authStatus.textContent.includes('محلي')) {
+    authStatus.textContent = t('auth.status.local');
+  }
+  // Sunrise badge
+  const sb = document.getElementById('ts-sunrise');
+  if (sb && (sb.textContent.includes('Charger') || sb.textContent.includes('Load') || sb.textContent.includes('تحميل') || sb.textContent.includes('Cargar'))) {
+    sb.textContent = t('ts.sunrise.pending');
+  }
+  // Re-render si données chargées
+  if (Object.keys(forecasts || {}).length > 0) {
+    renderMatrix(false);
+    renderCards(false);
+    renderBanner();
+  }
+}
+
+// ── Sélecteur de langue dans le header ──
+function injectLangSelector() {
+  const hdrRight = document.querySelector('.hdr-right');
+  if (!hdrRight || document.getElementById('lang-selector')) return;
+  const sel = document.createElement('select');
+  sel.id = 'lang-selector';
+  sel.style.cssText = `
+    background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.25);
+    color:var(--cyan);padding:4px 8px;border-radius:7px;font-size:12px;
+    font-family:var(--mono,monospace);cursor:pointer;margin-top:6px;
+    appearance:none;-webkit-appearance:none;text-align:center;
+  `;
+  const langs = [
+    {code:'fr', label:'🇫🇷 FR'},
+    {code:'en', label:'🇬🇧 EN'},
+    {code:'es', label:'🇪🇸 ES'},
+    {code:'ar', label:'🇸🇦 AR'},
+  ];
+  langs.forEach(l => {
+    const opt = document.createElement('option');
+    opt.value = l.code;
+    opt.textContent = l.label;
+    if (l.code === _lang) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  sel.addEventListener('change', e => setLang(e.target.value));
+  hdrRight.appendChild(sel);
+}
+
+// ── Patch scoreDay pour utiliser les traductions ──
+// Appelé après le chargement du DOM
+document.addEventListener('DOMContentLoaded', () => {
+  injectLangSelector();
+  // Appliquer la langue sauvegardée
+  if (_lang !== 'fr') {
+    document.documentElement.dir = _lang === 'ar' ? 'rtl' : 'ltr';
+    document.documentElement.lang = _lang;
+    setTimeout(applyTranslations, 100);
+  }
+});
+</script>
 </body>
 </html>
