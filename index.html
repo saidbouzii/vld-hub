@@ -1319,11 +1319,7 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
       <div class="creator-section-title">⚡ PARTICULARITÉS</div>
       <div class="creator-checkbox-grid">
         <label class="creator-checkbox part-mistral-wrap" id="part-mistral-wrap"><input type="checkbox" id="part-mistral"> Mistral requis</label>
-        <label class="creator-checkbox"><input type="checkbox" id="part-anticyclone"> Anticyclone obligatoire</label>
-        <label class="creator-checkbox"><input type="checkbox" id="part-inversion"> Inversion marine</label>
-        <label class="creator-checkbox"><input type="checkbox" id="part-sst"> SST importante</label>
-        <label class="creator-checkbox"><input type="checkbox" id="part-dust"> Poussières sahariennes</label>
-        <label class="creator-checkbox"><input type="checkbox" id="part-cape"> CAPE à surveiller</label>
+        <label class="creator-checkbox"><input type="checkbox" id="part-dust"> Poussières sahariennes fréquentes</label>
       </div>
     </div>
 
@@ -1597,16 +1593,7 @@ const SPOTS = [
     mid: { lat: 44.02, lon: 2.60 },
     tgt: { lat: 42.655, lon: 0.730, alt: 3143 },
     dist_km: 395, azimut: '221°–236°', type: 'montagne_pyrenees',
-    criteria: {
-      cloud_low_elim:20, cloud_low_ok:10, fog_elim:5,
-      cloud_mid_elim:30, cloud_mid_ok:20, cloud_high_ok:15,
-      rh_elim:70, rh_ok:55, rh_exc:35,
-      spread_elim:3, spread_ok:5, spread_exc:12,
-      slp_elim:1015, slp_ok:1020, slp_exc:1030,
-      wind_elim:30, wind_ok:20,
-      vis_ok:30, vis_exc:50, vis_mid_ok:30, vis_mid_exc:50,
-      cape_elim:300, cape_ok:100,
-    }
+    criteria: { wind_elim:30, wind_ok:20 }
   },
   {
     id: 'mezenc', name: 'Mont Mézenc', target: '→ Pyrénées', color: '#34d399',
@@ -1614,16 +1601,7 @@ const SPOTS = [
     mid: { lat: 44.1, lon: 2.8 },
     tgt: { lat: 42.655, lon: 0.730, alt: 3143 },
     dist_km: 390, azimut: '49°–57°', type: 'montagne_pyrenees',
-    criteria: {
-      cloud_low_elim:20, cloud_low_ok:10, fog_elim:5,
-      cloud_mid_elim:30, cloud_mid_ok:20, cloud_high_ok:15,
-      rh_elim:70, rh_ok:55, rh_exc:35,
-      spread_elim:3, spread_ok:5, spread_exc:12,
-      slp_elim:1015, slp_ok:1020, slp_exc:1030,
-      wind_elim:30, wind_ok:20,
-      vis_ok:30, vis_exc:50, vis_mid_ok:30, vis_mid_exc:50,
-      cape_elim:300, cape_ok:100,
-    }
+    criteria: { wind_elim:30, wind_ok:20 }
   },
   {
     id: 'puydome', name: 'Puy de Dôme', target: '→ Pyrénées', color: '#c084fc',
@@ -1631,16 +1609,7 @@ const SPOTS = [
     mid: { lat: 43.5, lon: 1.8 },
     tgt: { lat: 42.655, lon: 0.730, alt: 3143 },
     dist_km: 380, azimut: '~200°', type: 'montagne_pyrenees',
-    criteria: {
-      cloud_low_elim:20, cloud_low_ok:10, fog_elim:5,
-      cloud_mid_elim:30, cloud_mid_ok:20, cloud_high_ok:15,
-      rh_elim:70, rh_ok:55, rh_exc:35,
-      spread_elim:3, spread_ok:5, spread_exc:12,
-      slp_elim:1015, slp_ok:1020, slp_exc:1030,
-      wind_elim:30, wind_ok:20,
-      vis_ok:30, vis_exc:50, vis_mid_ok:30, vis_mid_exc:50,
-      cape_elim:300, cape_ok:100,
-    }
+    criteria: { wind_elim:30, wind_ok:20 }
   },
   {
     id: 'lozere', name: 'Mont Lozère', target: '→ Corse · 479 km', color: '#fbbf24',
@@ -1648,17 +1617,7 @@ const SPOTS = [
     mid: { lat: 42.5, lon: 6.5 },
     tgt: { lat: 42.376, lon: 8.936, alt: 2706 },
     dist_km: 479, azimut: '116.61°', type: 'mediterranee_corse',
-    criteria: {
-      cloud_low_elim:20, cloud_low_ok:10, fog_elim:5,
-      cloud_mid_elim:30, cloud_mid_ok:20, cloud_high_ok:15,
-      rh_elim:80, rh_ok:65, rh_exc:50,
-      spread_elim:3, spread_ok:5, spread_exc:12,
-      slp_elim:1015, slp_ok:1020, slp_exc:1030,
-      wind_elim:50, wind_ok:35, wind_min:15,
-      vis_ok:30, vis_exc:50,
-      vis_ok:30, vis_exc:50,
-      vis_mid_ok:40, vis_mid_exc:80,
-    }
+    criteria: { wind_elim:50, wind_ok:35, wind_min:15 }
   },
   {
     id: 'kelibia', name: 'Fort de Kelibia', target: '→ Monastir · 120 km', color: '#22d3ee',
@@ -1666,16 +1625,7 @@ const SPOTS = [
     mid: { lat: 36.9, lon: 11.5 },
     tgt: { lat: 35.77, lon: 10.83, alt: 30 },
     dist_km: 120, azimut: '~195°', type: 'mediterranee_marin',
-    criteria: {
-      cloud_low_elim:20, cloud_low_ok:10, fog_elim:2,
-      cloud_mid_elim:30, cloud_mid_ok:20, cloud_high_ok:15,
-      rh_elim:80, rh_ok:70, rh_exc:55,
-      spread_elim:3, spread_ok:5, spread_exc:12,
-      slp_elim:1013, slp_ok:1018, slp_exc:1025,
-      wind_elim:25, wind_ok:20,
-      vis_ok:30, vis_exc:50,
-      vis_mid_ok:40, vis_mid_exc:80,
-    }
+    criteria: { wind_elim:25, wind_ok:20 }
   },
   {
     id: 'zaghouan', name: 'Djebel Zaghouan', target: '→ Etna · 459 km', color: '#fb7185',
@@ -1683,16 +1633,7 @@ const SPOTS = [
     mid: { lat: 37.07, lon: 12.55 },
     tgt: { lat: 37.748, lon: 14.999, alt: 3357 },
     dist_km: 459, azimut: '69°', type: 'mediterranee_marin',
-    criteria: {
-      cloud_low_elim:15, cloud_low_ok:5, fog_elim:1,
-      cloud_mid_elim:25, cloud_mid_ok:15, cloud_high_ok:10,
-      rh_elim:75, rh_ok:65, rh_exc:50,
-      spread_elim:4, spread_ok:7, spread_exc:14,
-      slp_elim:1015, slp_ok:1020, slp_exc:1028,
-      wind_elim:25, wind_ok:20,
-      vis_ok:30, vis_exc:50,
-      vis_mid_ok:40, vis_mid_exc:80,
-    }
+    criteria: { wind_elim:25, wind_ok:20 }
   }
 ];
 
@@ -1851,14 +1792,76 @@ function scoreDay(spot, h) {
     add(t('crit.wind'), wind, 'km/h', windPts, 10, windColor, windVerdict);
   }
 
-  // ── 10. POUSSIÈRES SAHARIENNES (optionnel, 5 pts) ──
+  // ── 10. POUSSIÈRES SAHARIENNES (optionnel, 15 pts) ──
   const dust = h.dust ?? null;
   if (dust !== null) {
-    const dustPts = dust < 20 ? 5 : dust < 80 ? 3 : dust < 200 ? 1 : 0;
+    const dustPts = dust < 20 ? 15 : dust < 80 ? 9 : dust < 200 ? 3 : 0;
     const dustColor = dust < 20 ? 'green' : dust < 100 ? 'amber' : 'red';
     const dustVerdict = dust < 20 ? t('cv.dust_clair') : dust < 80 ? t('cv.dust_voile') : `❌ Brume saharienne`;
-    add(t('crit.dust'), Math.round(dust), 'µg/m³', dustPts, 5, dustColor, dustVerdict);
+    add(t('crit.dust'), Math.round(dust), 'µg/m³', dustPts, 15, dustColor, dustVerdict);
   }
+
+  // ── 11. GÉOMÉTRIE SOLAIRE ─────────────────────────
+  // Formule Jean Meeus simplifiée — JS pur, sans API
+  (function solarGeometry() {
+    try {
+      const lat = spot.obs.lat * Math.PI / 180;
+      const lon = spot.obs.lon;
+      // Jour julien pour J+_day à 8h UTC (fenêtre matin)
+      const obsDay = new Date(); obsDay.setDate(obsDay.getDate() + (h._day||0));
+      obsDay.setUTCHours(8, 0, 0, 0);
+      const JD = obsDay.getTime() / 86400000 + 2440587.5;
+      const n  = JD - 2451545.0;
+      const L  = (280.460 + 0.9856474 * n) % 360;
+      const g  = (357.528 + 0.9856003 * n) * Math.PI / 180;
+      const lam = (L + 1.915 * Math.sin(g) + 0.020 * Math.sin(2*g)) * Math.PI / 180;
+      const eps = 23.439 * Math.PI / 180;
+      const sinDec = Math.sin(eps) * Math.sin(lam);
+      const dec    = Math.asin(sinDec);
+      // Equation du temps (minutes) → correction longitude
+      const RA = Math.atan2(Math.cos(eps)*Math.sin(lam), Math.cos(lam));
+      const B  = (360/365)*(obsDay.getUTCDay()-81)*Math.PI/180;
+      const EoT = 9.87*Math.sin(2*B)-7.53*Math.cos(B)-1.5*Math.sin(B);
+      const solarNoon = 12 - lon/15 - EoT/60; // heure locale UTC
+      const HA = (8 - solarNoon) * 15 * Math.PI / 180; // angle horaire 8h UTC
+      // Altitude solaire
+      const sinAlt = Math.sin(lat)*sinDec + Math.cos(lat)*Math.cos(dec)*Math.cos(HA);
+      const sunAlt  = Math.asin(sinAlt) * 180 / Math.PI;
+      if (sunAlt < -6) return; // nuit / avant aube nautique — pas de malus
+      // Azimut solaire (°N)
+      const cosAz = (sinDec - Math.sin(lat)*sinAlt) / (Math.cos(lat)*Math.cos(Math.asin(sinAlt)));
+      let sunAz = Math.acos(Math.max(-1, Math.min(1, cosAz))) * 180 / Math.PI;
+      if (Math.sin(HA) > 0) sunAz = 360 - sunAz;
+      // Azimut obs→cible depuis spot.azimut (ex: '221°–236°' → prendre valeur médiane)
+      const azStr = String(spot.azimut || '0');
+      const azNums = azStr.match(/[\d.]+/g);
+      let targetAz = 0;
+      if (azNums && azNums.length >= 2) targetAz = (parseFloat(azNums[0]) + parseFloat(azNums[azNums.length-1])) / 2;
+      else if (azNums && azNums.length === 1) targetAz = parseFloat(azNums[0]);
+      // Angle entre soleil et axe de visée
+      let diff = Math.abs(sunAz - targetAz) % 360;
+      if (diff > 180) diff = 360 - diff;
+      // Application malus/bonus
+      let solarFactor = 1.0;
+      let solarVerdict, solarColor;
+      if (diff > 90) {
+        solarFactor = 1.05; solarColor = 'green';
+        solarVerdict = `☀️ Soleil dos (${Math.round(diff)}°) +5%`;
+      } else if (diff >= 45) {
+        solarFactor = 1.0; solarColor = 'green';
+        solarVerdict = `☀️ Soleil latéral (${Math.round(diff)}°)`;
+      } else if (diff >= 20) {
+        solarFactor = 0.85; solarColor = 'amber';
+        solarVerdict = `⚠️ Soleil <45° de l'axe (${Math.round(diff)}°) -15%`;
+      } else {
+        solarFactor = 0.70; solarColor = 'red';
+        solarVerdict = `❌ Soleil <20° de l'axe (${Math.round(diff)}°) -30%`;
+      }
+      // Appliquer le facteur au score courant
+      score = Math.round(score * solarFactor);
+      items.push({ name: '☀️ Géométrie solaire', val: Math.round(diff), unit: '°', pts: 0, max: 0, color: solarColor, verdict: solarVerdict, elim: false });
+    } catch(e) { /* silencieux si calcul impossible */ }
+  })();
 
   // ── SCORE FINAL ──────────────────────────────────
   // Pas de plafond arbitraire. Score proportionnel réel 0-100.
@@ -1884,13 +1887,30 @@ async function fetchSpot(spot) {
    const base = `https://api.open-meteo.com/v1/forecast?forecast_days=7&daily=sunrise,sunset&timezone=auto`;
   const urlObs = `${base}&latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=${params}`;
   const urlMid = `${base}&latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=visibility,cloud_cover_low,relative_humidity_2m,cape,wind_speed_80m,wind_speed_120m`;
- const urlDust = 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude='+spot.mid.lat+'&longitude='+spot.mid.lon+'&hourly=dust&timezone=auto';
+ // AOD — 3 points : obs, mid, tgt (worst-case)
+  const _aqBase = 'https://air-quality-api.open-meteo.com/v1/air-quality';
+  const urlDustObs = `${_aqBase}?latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=dust&timezone=auto`;
+  const urlDust    = `${_aqBase}?latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=dust&timezone=auto`;
+  const urlDustTgt = `${_aqBase}?latitude=${spot.tgt.lat}&longitude=${spot.tgt.lon}&hourly=dust&timezone=auto`;
   // U2 — ERA5 pressure levels pour calcul κ ITU-R P.453
   const urlPres = `https://api.open-meteo.com/v1/forecast?latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=temperature_1000hPa,temperature_925hPa,temperature_850hPa,temperature_700hPa,temperature_600hPa,temperature_500hPa,temperature_400hPa,temperature_300hPa,relative_humidity_1000hPa,relative_humidity_925hPa,relative_humidity_850hPa,relative_humidity_700hPa,relative_humidity_600hPa,relative_humidity_500hPa,relative_humidity_400hPa,relative_humidity_300hPa,geopotential_height_1000hPa,geopotential_height_925hPa,geopotential_height_850hPa,geopotential_height_700hPa,geopotential_height_600hPa,geopotential_height_500hPa,geopotential_height_400hPa,geopotential_height_300hPa&forecast_days=7&timezone=auto`;
-  const [r1,r2,r3,r4] = await Promise.all([fetch(urlObs),fetch(urlMid).catch(e=>{console.warn('urlMid fetch failed:',e);return null;}),fetch(urlDust),fetch(urlPres).catch(e=>{console.warn('urlPres fetch failed:',e);return null;})]);
+  const [r1,r2,r3,r3b,r3c,r4] = await Promise.all([
+    fetch(urlObs),
+    fetch(urlMid).catch(e=>{console.warn('urlMid fetch failed:',e);return null;}),
+    fetch(urlDust),
+    fetch(urlDustObs).catch(e=>{console.warn('urlDustObs failed:',e);return null;}),
+    fetch(urlDustTgt).catch(e=>{console.warn('urlDustTgt failed:',e);return null;}),
+    fetch(urlPres).catch(e=>{console.warn('urlPres fetch failed:',e);return null;})
+  ]);
   if(!r1.ok) throw new Error(`urlObs HTTP ${r1.status}`);
   if(r2&&!r2.ok) console.warn(`urlMid HTTP ${r2.status}`);
-  const [d1,d2,d3] = await Promise.all([r1.json().catch(()=>null),(r2&&r2.ok)?r2.json().catch(()=>null):Promise.resolve(null),r3?.json().catch(()=>null)]);
+  const [d1,d2,d3,d3b,d3c] = await Promise.all([
+    r1.json().catch(()=>null),
+    (r2&&r2.ok)?r2.json().catch(()=>null):Promise.resolve(null),
+    r3?.json().catch(()=>null),
+    (r3b&&r3b.ok)?r3b.json().catch(()=>null):Promise.resolve(null),
+    (r3c&&r3c.ok)?r3c.json().catch(()=>null):Promise.resolve(null)
+  ]);
   if(!d1||d1.error) throw new Error(`urlObs: ${d1?.reason||'réponse invalide'}`);
   if(d2?.error) console.warn(`urlMid: ${d2.reason}`);
   const d4 = r4 ? await r4.json().catch(()=>null) : null;
@@ -1972,12 +1992,13 @@ async function fetchSpot(spot) {
       slp: (()=>{const T_K=(temp??15)+273.15; const alt=spot.obs.alt||0; return P_mbar*Math.exp(alt/(29.3*T_K));})(),
       cape: avg(d2.hourly?.cape),
 wind_shear: (()=>{const w80=avg(d2.hourly?.wind_speed_80m);const w120=avg(d2.hourly?.wind_speed_120m);return(w80!==null&&w120!==null)?Math.abs(w120-w80)/40:null;})(),
-dust: avg(d3.hourly?.dust),     
+dust: (()=>{ const v=[avg(d3.hourly?.dust),avg(d3b?.hourly?.dust),avg(d3c?.hourly?.dust)].filter(x=>x!==null&&x!==undefined); return v.length?Math.max(...v):null; })(),
 wind: avg(d1.hourly?.wind_speed_10m),
       vis: (avg(d1.hourly?.visibility)??0)/1000,
       precip: avg(d1.hourly?.precipitation_probability),
       vis_mid: (avg(d2.hourly?.visibility)??0)/1000,
       temp, dTdh, k_bislin, lift_m, k_source,
+      _day: day,
     };
     const dt=new Date(); dt.setDate(dt.getDate()+day);
         // TIME SLICER - Sunrise & scoring par heure
@@ -2147,12 +2168,10 @@ function renderCards(loading) {
       :`<div class="scard-body" id="sdb-${s.id}">
           <div class="crit-legend">
             <strong>Seuils ${s.name} :</strong>
-            Nuages bas élim ≥${s.criteria.cloud_low_elim}% · Fog élim >${s.criteria.fog_elim}% ·
-            Vent élim >${s.criteria.wind_elim} km/h · RH élim >${s.criteria.rh_elim}% ·
-            SLP élim &lt;${s.criteria.slp_elim} hPa · Vis mi-trajet ok >${s.criteria.vis_mid_ok} km
-            ${s.type==='mediterranee_corse'?' · Mistral idéal 15–35 km/h':
-              s.type==='mediterranee_marin'?' · Maritime très strict':
-              ' · CAPE élim >300 J/kg'}
+            Vent élim >${s.criteria.wind_elim} km/h · ok <${s.criteria.wind_ok} km/h
+            ${s.criteria.wind_min ? ` · Mistral min ${s.criteria.wind_min} km/h` : ''}
+            ${s.type==='mediterranee_corse' ? ' · Mistral idéal 15–35 km/h' :
+              s.type==='mediterranee_marin'  ? ' · Maritime strict' : ''}
           </div>
           ${fc.map((dayData,di)=>renderDayRow(dayData,days[di],s)).join('')}
         </div>`;
@@ -2711,45 +2730,13 @@ function switchTab(tabId) {
 // ═══════════════════════════════════════════════════
 function getCriteriaByType(type, particularites) {
   const base = {
-    montagne_pyrenees: {
-      cloud_low_elim:20, cloud_low_ok:10, fog_elim:5,
-      cloud_mid_elim:30, cloud_mid_ok:20, cloud_high_ok:15,
-      rh_elim:70, rh_ok:55, rh_exc:35,
-      spread_elim:3, spread_ok:5, spread_exc:12,
-      slp_elim:1015, slp_ok:1020, slp_exc:1030,
-      wind_elim:30, wind_ok:20,
-      vis_ok:30, vis_exc:50, vis_mid_ok:30, vis_mid_exc:50,
-      cape_elim:300, cape_ok:100,
-    },
-    mediterranee_corse: {
-      cloud_low_elim:20, cloud_low_ok:10, fog_elim:5,
-      cloud_mid_elim:30, cloud_mid_ok:20, cloud_high_ok:15,
-      rh_elim:80, rh_ok:65, rh_exc:50,
-      spread_elim:3, spread_ok:5, spread_exc:12,
-      slp_elim:1015, slp_ok:1020, slp_exc:1030,
-      wind_elim:50, wind_ok:35, wind_min:15,
-      vis_ok:30, vis_exc:50,
-      vis_mid_ok:40, vis_mid_exc:80,
-    },
-    mediterranee_marin: {
-      cloud_low_elim:15, cloud_low_ok:5, fog_elim:1,
-      cloud_mid_elim:25, cloud_mid_ok:15, cloud_high_ok:10,
-      rh_elim:75, rh_ok:65, rh_exc:50,
-      spread_elim:4, spread_ok:7, spread_exc:14,
-      slp_elim:1015, slp_ok:1020, slp_exc:1028,
-      wind_elim:25, wind_ok:20,
-      vis_ok:30, vis_exc:50,
-      vis_mid_ok:40, vis_mid_exc:80,
-    },
+    montagne_pyrenees:  { wind_elim:30, wind_ok:20 },
+    mediterranee_corse: { wind_elim:50, wind_ok:35, wind_min:15 },
+    mediterranee_marin: { wind_elim:25, wind_ok:20 },
   };
   const c = JSON.parse(JSON.stringify(base[type] || base.montagne_pyrenees));
-  
-  // Adapter selon particularités
-  if (particularites.anticyclone) { c.slp_elim = 1018; c.slp_ok = 1023; }
-  if (particularites.cape) { c.cape_elim = 200; c.cape_ok = 50; }
-  if (particularites.dust) { c.vis_ok = 40; c.vis_exc = 60; }
-  if (particularites.inversion) { c.rh_exc = c.rh_exc - 5; c.spread_exc = c.spread_exc + 2; }
-  
+  // Mistral requis : déjà intégré dans mediterranee_corse (wind_min)
+  // Poussières sahariennes : info visuelle seulement, pas de seuil supplémentaire
   return c;
 }
 
@@ -3426,12 +3413,8 @@ function runUX2Detection() {
 
 function applyUX2Suggestions() {
   const map = {
-    mistral:     'part-mistral',
-    anticyclone: 'part-anticyclone',
-    inversion:   'part-inversion',
-    sst:         'part-sst',
-    dust:        'part-dust',
-    cape:        'part-cape',
+    mistral: 'part-mistral',
+    dust:    'part-dust',
   };
   Object.keys(_ux2Suggestions).forEach(k => {
     const el = document.getElementById(map[k]);
@@ -3473,11 +3456,7 @@ function createSpot() {
   
   const particularites = {
     mistral: document.getElementById('part-mistral').checked,
-    anticyclone: document.getElementById('part-anticyclone').checked,
-    inversion: document.getElementById('part-inversion').checked,
-    sst: document.getElementById('part-sst').checked,
-    dust: document.getElementById('part-dust').checked,
-    cape: document.getElementById('part-cape').checked,
+    dust:    document.getElementById('part-dust').checked,
   };
   
   // Validation
@@ -3548,16 +3527,15 @@ function loadCustomSpots() {
     let dirty = false;
     saved.forEach(spot => {
       if (spot.criteria) {
-        // Supprimer tout vis_mid_elim quelle que soit la valeur
-        if ('vis_mid_elim' in spot.criteria) {
-          delete spot.criteria.vis_mid_elim;
-          dirty = true;
-        }
-        // Corriger les seuils trop bas pour les spots maritimes
-        if (spot.type === 'mediterranee_corse' || spot.type === 'mediterranee_marin') {
-          if ((spot.criteria.vis_mid_ok || 0) < 40) { spot.criteria.vis_mid_ok = 40; dirty = true; }
-          if ((spot.criteria.vis_mid_exc || 0) < 80) { spot.criteria.vis_mid_exc = 80; dirty = true; }
-        }
+        // Migration : supprimer tous les champs criteria obsolètes
+        const deadFields = ['cloud_low_elim','cloud_low_ok','fog_elim','cloud_mid_elim',
+          'cloud_mid_ok','cloud_high_ok','rh_elim','rh_ok','rh_exc','spread_elim',
+          'spread_ok','spread_exc','slp_elim','slp_ok','slp_exc','vis_ok','vis_exc',
+          'vis_mid_ok','vis_mid_exc','vis_mid_elim','cape_elim','cape_ok'];
+        deadFields.forEach(f => { if (f in spot.criteria) { delete spot.criteria[f]; dirty = true; } });
+        // S'assurer que wind_elim/ok existent
+        if (!spot.criteria.wind_elim) { spot.criteria.wind_elim = 30; dirty = true; }
+        if (!spot.criteria.wind_ok)   { spot.criteria.wind_ok   = 20; dirty = true; }
       }
       if (!SPOTS.find(s => s.id === spot.id)) SPOTS.push(spot);
     });
