@@ -2432,9 +2432,8 @@ function scoreDay(spot, h) {
     try {
       const lat = spot.obs.lat * Math.PI / 180;
       const lon = spot.obs.lon;
-      // Jour julien pour J+_day à 8h UTC (fenêtre matin)
-      const obsDay = new Date(); obsDay.setDate(obsDay.getDate() + (h._day||0));
-      obsDay.setUTCHours(8, 0, 0, 0);
+      // Jour julien — utilise l'heure réelle du créneau si fournie (_obsDate), sinon 8h UTC
+      const obsDay = h._obsDate ? new Date(h._obsDate) : (() => { const d = new Date(); d.setDate(d.getDate() + (h._day||0)); d.setUTCHours(8,0,0,0); return d; })();
       const JD = obsDay.getTime() / 86400000 + 2440587.5;
       const n  = JD - 2451545.0;
       const L  = (280.460 + 0.9856474 * n) % 360;
@@ -2491,7 +2490,7 @@ function scoreDay(spot, h) {
   // ── SCORE FINAL ──────────────────────────────────
   // Pas de plafond arbitraire. Score proportionnel réel 0-100.
   // Pénalité douce si précipitations fortes (pas d'élimination binaire)
-  const rawPct = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
+  const rawPct = maxScore > 0 ? Math.min(100, Math.round((score / maxScore) * 100)) : 0;
 
   // Seul cas d'élimination vraie : précipitations >70% (pluie certaine = visibilité 0)
   const hardElim = precip > 70;
@@ -2637,6 +2636,9 @@ wind: avg(d1.hourly?.wind_speed_10m),
       const hourIdx = day*24 + Math.floor(sunriseHour + offset);
       const tH = d1.hourly?.temperature_2m?.[hourIdx];
       const dH = d1.hourly?.dew_point_2m?.[hourIdx];
+      // Heure exacte du créneau — doit être déclaré AVANT hData
+      const obsDate = new Date(sunriseStr);
+      obsDate.setMinutes(obsDate.getMinutes() + Math.round(offset * 60));
       const hData = {
         cloud_low: d1.hourly?.cloud_cover_low?.[hourIdx] ?? h.cloud_low,
         cloud_mid: d1.hourly?.cloud_cover_mid?.[hourIdx] ?? h.cloud_mid,
@@ -2649,11 +2651,10 @@ wind: avg(d1.hourly?.wind_speed_10m),
         precip: d1.hourly?.precipitation_probability?.[hourIdx] ?? h.precip,
         vis_mid: (d2.hourly?.visibility?.[hourIdx] ?? 0)/1000 || h.vis_mid,
         spread: (tH!=null && dH!=null) ? tH-dH : h.spread,
+        dust: h.dust, pm10: h.pm10, rh_mid: h.rh_mid, cape: h.cape,
+        _day: h._day, _obsDate: obsDate.toISOString(),
       };
       const rawScore = scoreDay(spot, hData).score;
-      // Calcul de l'élévation solaire réelle à l'heure exacte de ce spot
-      const obsDate = new Date(sunriseStr);
-      obsDate.setMinutes(obsDate.getMinutes() + Math.round(offset * 60));
       const elev = solarElevation(spot.obs.lat, spot.obs.lon, obsDate);
       hourlyScores[offset] = rawScore;
       hourlyScores[offset + '_elev'] = Math.round(elev * 10) / 10;
