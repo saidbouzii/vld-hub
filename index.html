@@ -1093,6 +1093,295 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
   .logo-features{display:none;}
 }
 
+
+/* ═══════════════════════════════════════
+   ONGLET OUTILS TERRAIN
+═══════════════════════════════════════ */
+.outils-wrap {
+  max-width: 900px;
+  margin: 1.5rem auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+.outils-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border2);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.outils-card-header {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: 1rem 1.25rem;
+  background: rgba(0,212,255,.04);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+}
+.outils-card-header:hover { background: rgba(0,212,255,.07); }
+.outils-card-title {
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: var(--cyan);
+  flex: 1;
+}
+.outils-card-chevron {
+  font-size: 12px;
+  color: var(--text3);
+  transition: transform .25s;
+}
+.outils-card.open .outils-card-chevron { transform: rotate(180deg); }
+.outils-card-body {
+  display: none;
+  padding: 1.25rem;
+}
+.outils-card.open .outils-card-body { display: block; }
+/* Forcer l'affichage initial des cartes ouvertes */
+#card-boussole .outils-card-body,
+#card-checklist .outils-card-body,
+#card-tutos .outils-card-body { display: block; }
+
+/* ── Boussole ── */
+.compass-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+}
+.compass-ring {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  flex-shrink: 0;
+}
+.compass-ring svg { width: 100%; height: 100%; }
+.compass-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: .75rem;
+  width: 100%;
+}
+@media(min-width:600px) {
+  .compass-wrap { flex-direction: row; align-items: center; }
+  .compass-stats { grid-template-columns: repeat(2, 1fr); }
+}
+.cstat {
+  background: var(--bg-widget);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: .75rem 1rem;
+}
+.cstat-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: .12em;
+  color: var(--text3);
+  text-transform: uppercase;
+  margin-bottom: .25rem;
+}
+.cstat-val {
+  font-family: var(--display, var(--mono));
+  font-size: 22px;
+  color: var(--cyan);
+  letter-spacing: .04em;
+  line-height: 1;
+}
+.cstat-unit {
+  font-size: 11px;
+  color: var(--text3);
+  margin-left: 2px;
+}
+.compass-btn {
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  padding: .5rem 1.2rem;
+  border-radius: 8px;
+  border: 1px solid var(--border2);
+  background: var(--bg-widget);
+  color: var(--cyan);
+  cursor: pointer;
+  transition: all .2s;
+  margin-top: .5rem;
+}
+.compass-btn:hover { background: rgba(0,212,255,.1); border-color: var(--cyan); }
+.compass-target-row {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  flex-wrap: wrap;
+  margin-top: .75rem;
+  padding-top: .75rem;
+  border-top: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text2);
+}
+.compass-delta {
+  font-size: 13px;
+  font-weight: 700;
+}
+.compass-delta.ok { color: var(--green); }
+.compass-delta.warn { color: var(--amber); }
+.compass-delta.bad { color: var(--red); }
+.compass-status {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  margin-top: .5rem;
+  text-align: center;
+}
+
+/* ── Checklist ── */
+.checklist-section { margin-bottom: 1.25rem; }
+.checklist-section-title {
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  color: var(--orange);
+  text-transform: uppercase;
+  margin-bottom: .6rem;
+  padding-bottom: .4rem;
+  border-bottom: 1px solid var(--border);
+}
+.cl-check-item {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .45rem .5rem;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background .15s;
+}
+.cl-check-item:hover { background: rgba(255,255,255,.03); }
+.cl-check-item input[type=checkbox] { display: none; }
+.cl-check-box {
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--border2);
+  border-radius: 5px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .2s;
+  font-size: 11px;
+}
+.cl-check-item.checked .cl-check-box {
+  background: var(--green);
+  border-color: var(--green);
+  color: #050b12;
+}
+.cl-check-item.checked .cl-check-text {
+  text-decoration: line-through;
+  color: var(--text3);
+}
+.cl-check-text {
+  font-family: var(--font);
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.4;
+}
+.checklist-footer {
+  display: flex;
+  gap: .75rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+.cl-progress {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  margin-top: .75rem;
+}
+.cl-progress-bar {
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  margin-top: .35rem;
+  overflow: hidden;
+}
+.cl-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--cyan), var(--green));
+  border-radius: 2px;
+  transition: width .4s var(--ease);
+}
+
+/* ── Tutos ── */
+.tuto-section { margin-bottom: .75rem; }
+.tuto-section-title {
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  color: var(--text3);
+  text-transform: uppercase;
+  padding: .5rem 0;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+}
+.tuto-section-title span { flex:1; }
+.tuto-section-title .tchev { font-size: 11px; transition: transform .2s; }
+.tuto-section.open .tchev { transform: rotate(180deg); }
+.tuto-body {
+  display: none;
+  padding: .85rem 0;
+  font-family: var(--font);
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.75;
+}
+.tuto-section.open .tuto-body { display: block; }
+#tuto-telescope .tuto-body { display: block; }
+.tuto-body h4 {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: var(--cyan);
+  text-transform: uppercase;
+  margin: 1rem 0 .4rem;
+}
+.tuto-body h4:first-child { margin-top: 0; }
+.tuto-body ul {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+}
+.tuto-body ul li::before {
+  content: '→ ';
+  color: var(--orange);
+  font-family: var(--mono);
+}
+.tuto-tip {
+  background: rgba(0,212,255,.05);
+  border-left: 2px solid var(--cyan);
+  padding: .5rem .85rem;
+  border-radius: 0 6px 6px 0;
+  margin: .75rem 0;
+  font-size: 11px;
+  color: var(--text);
+}
+.tuto-warn {
+  background: rgba(255,138,0,.06);
+  border-left: 2px solid var(--orange);
+  padding: .5rem .85rem;
+  border-radius: 0 6px 6px 0;
+  margin: .75rem 0;
+  font-size: 11px;
+  color: var(--text2);
+}
 </style>
 </head>
 <body>
@@ -1183,6 +1472,7 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
   <button class="tab-btn" onclick="switchTab('carte')" id="tab-btn-carte">🗺️ CARTE</button>
   <button class="tab-btn" onclick="switchTab('creator')" id="tab-btn-creator">🛠️ CRÉATEUR DE SPOT</button>
   <button class="tab-btn" onclick="switchTab('alertes')" id="tab-btn-alertes">📨 ALERTES</button>
+  <button class="tab-btn" onclick="switchTab('outils')" id="tab-btn-outils">🧭 OUTILS TERRAIN</button>
 </div>
 
 <!-- ══════════════════════════════════════
@@ -1401,8 +1691,6 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
   </div>
 </div><!-- /tab-alertes -->
 
-</div><!-- /wrap -->
-
 
 
 <!-- PWA Banner -->
@@ -1412,6 +1700,214 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
   <button id="install-btn">Installer</button>
   <button id="install-close" onclick="document.getElementById('install-banner').classList.add('hidden')">✕</button>
 </div>
+
+<script>
+
+// ═══════════════════════════════════════════
+// ONGLET OUTILS TERRAIN
+// ═══════════════════════════════════════════
+
+// ── Accordéons cartes outils ──
+function toggleOutilsCard(id) {
+  const card = document.getElementById('card-' + id);
+  if (!card) return;
+  const isOpen = card.classList.toggle('open');
+  const chev = card.querySelector('.outils-card-chevron');
+  if (chev) chev.textContent = isOpen ? '▲' : '▼';
+}
+
+// ── Accordéons tutos ──
+function toggleTuto(id) {
+  const sec = document.getElementById('tuto-' + id);
+  if (!sec) return;
+  const isOpen = sec.classList.toggle('open');
+  const chev = sec.querySelector('.tchev');
+  if (chev) chev.textContent = isOpen ? '▲' : '▼';
+  const body = sec.querySelector('.tuto-body');
+  if (body) body.style.display = isOpen ? 'block' : 'none';
+}
+
+// ── Checklist ──
+function toggleCheck(label) {
+  const cb = label.querySelector('input[type=checkbox]');
+  if (!cb) return;
+  cb.checked = !cb.checked;
+  label.classList.toggle('checked', cb.checked);
+  const box = label.querySelector('.cl-check-box');
+  if (box) box.textContent = cb.checked ? '✓' : '';
+  updateChecklistProgress();
+}
+
+function updateChecklistProgress() {
+  const all = document.querySelectorAll('#card-checklist .cl-check-item input[type=checkbox]');
+  const checked = [...all].filter(c => c.checked).length;
+  const total = all.length;
+  const pct = total ? Math.round(checked / total * 100) : 0;
+  const txt = document.getElementById('cl-progress-text');
+  const fill = document.getElementById('cl-progress-fill');
+  if (txt) txt.textContent = checked + ' / ' + total + ' éléments cochés (' + pct + '%)';
+  if (fill) fill.style.width = pct + '%';
+}
+
+function resetChecklist() {
+  document.querySelectorAll('#card-checklist .cl-check-item').forEach(label => {
+    const cb = label.querySelector('input[type=checkbox]');
+    if (cb) cb.checked = false;
+    label.classList.remove('checked');
+    const box = label.querySelector('.cl-check-box');
+    if (box) box.textContent = '';
+  });
+  updateChecklistProgress();
+}
+
+// ── Peuplement du select spots ──
+function populateCompassSpotSelect() {
+  const sel = document.getElementById('compass-spot-select');
+  if (!sel || typeof SPOTS === 'undefined') return;
+  sel.innerHTML = '<option value="">— Aucun —</option>';
+  SPOTS.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = s.name + ' (' + (s.dist_km || '?') + ' km)';
+    sel.appendChild(opt);
+  });
+  sel.addEventListener('change', updateCompassTarget);
+}
+
+function updateCompassTarget() {
+  const sel = document.getElementById('compass-spot-select');
+  const spotId = sel?.value;
+  const azRow = document.getElementById('compass-azimut-target');
+  const deltaRow = document.getElementById('compass-delta-row');
+  if (!spotId) {
+    if (azRow) azRow.style.display = 'none';
+    if (deltaRow) deltaRow.style.display = 'none';
+    const needle = document.getElementById('compass-target-needle');
+    if (needle) needle.setAttribute('opacity', '0');
+    return;
+  }
+  const spot = SPOTS.find(s => s.id === spotId);
+  if (!spot) return;
+  // Extraire azimut numérique depuis spot.azimut (ex "221°–236°" → 221)
+  const azMatch = spot.azimut?.match(/(\d+)/);
+  if (!azMatch) return;
+  const targetAz = parseInt(azMatch[1]);
+  if (azRow) {
+    azRow.style.display = 'inline';
+    document.getElementById('compass-az-val').textContent = targetAz;
+  }
+  if (deltaRow) deltaRow.style.display = 'block';
+  // Aiguille cible
+  const needle = document.getElementById('compass-target-needle');
+  if (needle) {
+    needle.setAttribute('opacity', '0.75');
+    needle.setAttribute('transform', 'rotate(' + targetAz + ',100,100)');
+  }
+  // Mise à jour delta si cap connu
+  _compassTargetAz = targetAz;
+  updateCompassDelta();
+}
+
+let _compassTargetAz = null;
+let _compassCurrentAz = null;
+let _compassWatchId = null;
+
+function updateCompassDelta() {
+  if (_compassTargetAz === null || _compassCurrentAz === null) return;
+  let delta = _compassTargetAz - _compassCurrentAz;
+  // Ramener dans [-180, 180]
+  while (delta > 180) delta -= 360;
+  while (delta < -180) delta += 360;
+  const absDelta = Math.abs(delta);
+  const el = document.getElementById('compass-delta');
+  const hint = document.getElementById('compass-delta-hint');
+  if (!el) return;
+  el.textContent = (delta >= 0 ? '+' : '') + Math.round(delta);
+  el.className = 'compass-delta ' + (absDelta <= 5 ? 'ok' : absDelta <= 15 ? 'warn' : 'bad');
+  if (hint) hint.textContent = absDelta <= 5 ? '✓ Dans l'axe' : (delta > 0 ? 'Tourne vers la droite' : 'Tourne vers la gauche');
+}
+
+function startCompass() {
+  const status = document.getElementById('compass-status');
+  // DeviceOrientationEvent (mobile)
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    // iOS 13+
+    DeviceOrientationEvent.requestPermission().then(perm => {
+      if (perm === 'granted') listenCompass(status);
+      else if (status) status.textContent = '❌ Permission refusée — autorise l'accès aux capteurs dans les réglages.';
+    }).catch(() => {
+      if (status) status.textContent = '❌ Erreur de permission capteur.';
+    });
+  } else if (window.DeviceOrientationEvent) {
+    listenCompass(status);
+  } else {
+    // Fallback GPS uniquement
+    startGPSOnly(status);
+  }
+  // GPS pour lat/lon/alt dans tous les cas
+  startGPSOnly(status);
+}
+
+function listenCompass(status) {
+  window.addEventListener('deviceorientationabsolute', onOrientation, true);
+  window.addEventListener('deviceorientation', onOrientation, true);
+  if (status) status.textContent = '📡 Boussole active — oriente ton appareil';
+}
+
+function onOrientation(e) {
+  let heading = null;
+  if (e.webkitCompassHeading != null) {
+    heading = e.webkitCompassHeading; // iOS
+  } else if (e.absolute && e.alpha != null) {
+    heading = (360 - e.alpha) % 360; // Android absolu
+  } else if (e.alpha != null) {
+    heading = (360 - e.alpha) % 360;
+  }
+  if (heading === null) return;
+  _compassCurrentAz = Math.round(heading);
+  // Rotation aiguille
+  const needle = document.getElementById('compass-needle');
+  if (needle) needle.setAttribute('transform', 'rotate(' + heading + ',100,100)');
+  // Stat azimut
+  const azEl = document.getElementById('cstat-azimut');
+  if (azEl) azEl.innerHTML = Math.round(heading) + '<span class="cstat-unit">°</span>';
+  updateCompassDelta();
+}
+
+function startGPSOnly(status) {
+  if (!navigator.geolocation) {
+    if (status) status.textContent += ' | GPS non disponible.';
+    return;
+  }
+  _compassWatchId = navigator.geolocation.watchPosition(pos => {
+    const lat = pos.coords.latitude;
+    const lon = pos.coords.longitude;
+    const alt = pos.coords.altitude;
+    const latEl = document.getElementById('cstat-lat');
+    const lonEl = document.getElementById('cstat-lon');
+    const altEl = document.getElementById('cstat-alt');
+    if (latEl) latEl.innerHTML = lat.toFixed(5);
+    if (lonEl) lonEl.innerHTML = lon.toFixed(5);
+    if (altEl) altEl.innerHTML = alt != null ? Math.round(alt) + '<span class="cstat-unit">m</span>' : '—<span class="cstat-unit">m</span>';
+    if (status) status.textContent = '✓ GPS actif — précision ' + Math.round(pos.coords.accuracy) + ' m';
+  }, err => {
+    if (status) status.textContent = '⚠ GPS : ' + err.message;
+  }, { enableHighAccuracy: true, maximumAge: 2000 });
+}
+
+// Init quand on ouvre l'onglet outils
+function initOutilsTab() {
+  populateCompassSpotSelect();
+  updateChecklistProgress();
+  // Ouvrir le premier tuto par défaut
+  const firstTuto = document.getElementById('tuto-telescope');
+  if (firstTuto && firstTuto.classList.contains('open')) {
+    const body = firstTuto.querySelector('.tuto-body');
+    if (body) body.style.display = 'block';
+  }
+}
+
+</script>
 
 <script>
 // ── UX1 — CONVERTISSEUR DMS ────────────────────────────────────────────────
@@ -2723,6 +3219,7 @@ function switchTab(tabId) {
   document.getElementById('tab-btn-' + tabId).classList.add('active');
   if (tabId === 'creator') { renderCustomSpotsList(); renderGererSpots(); }
   if (tabId === 'carte') initVLDMap();
+  if (tabId === 'outils') initOutilsTab();
 }
 
 // ═══════════════════════════════════════════════════
@@ -3869,6 +4366,340 @@ document.getElementById('score-legend-chevron').style.transform = open ? 'rotate
 </script>
 
 
+
+
+
+<!-- ═══════════════════════════════════════════
+     ONGLET OUTILS TERRAIN
+═══════════════════════════════════════════ -->
+<div class="tab-content" id="tab-outils">
+<div class="outils-wrap">
+
+  <!-- ── BOUSSOLE TERRAIN ── -->
+  <div class="outils-card open" id="card-boussole">
+    <div class="outils-card-header" onclick="toggleOutilsCard('boussole')">
+      <span style="font-size:18px">🧭</span>
+      <span class="outils-card-title">BOUSSOLE TERRAIN</span>
+      <span class="outils-card-chevron">▲</span>
+    </div>
+    <div class="outils-card-body">
+      <div class="compass-wrap">
+        <!-- SVG boussole -->
+        <div class="compass-ring">
+          <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+            <!-- Fond -->
+            <circle cx="100" cy="100" r="96" fill="#08111f" stroke="rgba(0,212,255,.25)" stroke-width="1.5"/>
+            <circle cx="100" cy="100" r="84" fill="none" stroke="rgba(0,212,255,.08)" stroke-width="1"/>
+            <!-- Graduations -->
+            <g id="compass-ticks" stroke="rgba(0,212,255,.3)" stroke-width="1"></g>
+            <!-- Points cardinaux -->
+            <text x="100" y="22" text-anchor="middle" fill="#00D4FF" font-family="monospace" font-size="13" font-weight="bold">N</text>
+            <text x="100" y="188" text-anchor="middle" fill="#3D6480" font-family="monospace" font-size="11">S</text>
+            <text x="183" y="104" text-anchor="middle" fill="#3D6480" font-family="monospace" font-size="11">E</text>
+            <text x="17" y="104" text-anchor="middle" fill="#3D6480" font-family="monospace" font-size="11">O</text>
+            <!-- Aiguille (groupe rotatif) -->
+            <g id="compass-needle" transform="rotate(0,100,100)">
+              <polygon points="100,28 95,100 100,115 105,100" fill="#00D4FF" opacity=".9"/>
+              <polygon points="100,115 95,100 100,172 105,100" fill="#EF4444" opacity=".7"/>
+              <circle cx="100" cy="100" r="5" fill="#0a1929" stroke="rgba(0,212,255,.6)" stroke-width="1.5"/>
+            </g>
+            <!-- Cible (aiguille orange, masquée par défaut) -->
+            <g id="compass-target-needle" transform="rotate(0,100,100)" opacity="0">
+              <line x1="100" y1="35" x2="100" y2="165" stroke="#FF8A00" stroke-width="1.5" stroke-dasharray="4,3"/>
+            </g>
+          </svg>
+        </div>
+
+        <!-- Stats -->
+        <div style="flex:1;width:100%">
+          <div class="compass-stats">
+            <div class="cstat">
+              <div class="cstat-label">Azimut / Cap</div>
+              <div class="cstat-val" id="cstat-azimut">—<span class="cstat-unit">°</span></div>
+            </div>
+            <div class="cstat">
+              <div class="cstat-label">Altitude GPS</div>
+              <div class="cstat-val" id="cstat-alt">—<span class="cstat-unit">m</span></div>
+            </div>
+            <div class="cstat">
+              <div class="cstat-label">Latitude</div>
+              <div class="cstat-val" style="font-size:14px" id="cstat-lat">—</div>
+            </div>
+            <div class="cstat">
+              <div class="cstat-label">Longitude</div>
+              <div class="cstat-val" style="font-size:14px" id="cstat-lon">—</div>
+            </div>
+          </div>
+
+          <!-- Sélection spot cible -->
+          <div class="compass-target-row">
+            <span style="color:var(--text3)">Spot cible :</span>
+            <select id="compass-spot-select" style="background:var(--bg-input);border:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:11px;padding:.3rem .6rem;border-radius:6px;outline:none;flex:1;">
+              <option value="">— Aucun —</option>
+            </select>
+            <span id="compass-azimut-target" style="color:var(--orange);display:none">Az. cible : <b id="compass-az-val">—</b>°</span>
+          </div>
+          <div id="compass-delta-row" style="display:none;margin-top:.6rem;font-family:var(--mono);font-size:11px;color:var(--text2);">
+            Écart : <span id="compass-delta" class="compass-delta">—</span>°
+            <span id="compass-delta-hint" style="margin-left:.5rem;color:var(--text3);font-size:10px;"></span>
+          </div>
+
+          <button class="compass-btn" onclick="startCompass()">📡 Activer la boussole</button>
+          <div class="compass-status" id="compass-status">Appuie sur Activer — nécessite un appareil avec capteur de direction (mobile/tablette)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CHECKLIST PRÉ-SESSION ── -->
+  <div class="outils-card open" id="card-checklist">
+    <div class="outils-card-header" onclick="toggleOutilsCard('checklist')">
+      <span style="font-size:18px">✅</span>
+      <span class="outils-card-title">CHECKLIST PRÉ-SESSION</span>
+      <span class="outils-card-chevron">▲</span>
+    </div>
+    <div class="outils-card-body">
+
+      <div class="checklist-section">
+        <div class="checklist-section-title">📦 Matériel optique</div>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Longue vue / télescope sorti et acclimaté (≥ 30 min avant)</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Trépied stable, vissé et nivelé</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Objectif / oculaire nettoyé (chiffon microfibre)</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Adaptateur T2 ou digiscoping fixé et serré</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Téléphone / appareil photo fixé sur l'adaptateur</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Cam Link + câble USB-C (si livestream)</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Batterie externe chargée</span>
+        </label>
+      </div>
+
+      <div class="checklist-section">
+        <div class="checklist-section-title">🌤️ Conditions météo vérifiées</div>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">VLD Hub — score ≥ 75 sur la fenêtre ciblée</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Windy SLP — anticyclone (H) centré ou proche du trajet</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Clearoutside — nuages bas < 10%, brouillard absent</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Vent surface < 25 km/h (pas de turbulences optiques)</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Humidité relative < 60% (vérif Meteociel ou open-meteo)</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Fenêtre horaire : 1h après lever soleil ou ±1h avant coucher</span>
+        </label>
+      </div>
+
+      <div class="checklist-section">
+        <div class="checklist-section-title">📡 Technique & cadrage</div>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Azimut de la cible noté et boussole vérifiée</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Point de mise au point fait sur un relief intermédiaire</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Exposition/ISO réglés (ne pas brûler le ciel)</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Mode rafale ou vidéo activé pour empilage (stacking)</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Stockage suffisant (photos RAW ou vidéo 4K)</span>
+        </label>
+      </div>
+
+      <div class="checklist-section">
+        <div class="checklist-section-title">📝 Post-session</div>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Photos/vidéos sauvegardées sur support externe</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Résultat noté : Vu / Partiel / Raté + heure + conditions</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Traitement empilage lancé (Autostakkert / Registax / PIPP)</span>
+        </label>
+      </div>
+
+      <div class="cl-progress">
+        <span id="cl-progress-text">0 / 20 éléments cochés</span>
+        <div class="cl-progress-bar"><div class="cl-progress-fill" id="cl-progress-fill" style="width:0%"></div></div>
+      </div>
+
+      <div class="checklist-footer">
+        <button class="compass-btn" onclick="resetChecklist()">↺ Réinitialiser</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TUTORIELS ── -->
+  <div class="outils-card open" id="card-tutos">
+    <div class="outils-card-header" onclick="toggleOutilsCard('tutos')">
+      <span style="font-size:18px">📖</span>
+      <span class="outils-card-title">TUTORIELS OPTIQUE VLD</span>
+      <span class="outils-card-chevron">▲</span>
+    </div>
+    <div class="outils-card-body">
+
+      <!-- TUTO 1 — Télescope terrestre -->
+      <div class="tuto-section open" id="tuto-telescope">
+        <div class="tuto-section-title" onclick="toggleTuto('telescope')">
+          <span>🔭 Télescope terrestre pour VLD</span>
+          <span class="tchev">▲</span>
+        </div>
+        <div class="tuto-body">
+          <h4>Choix de l'instrument</h4>
+          <ul>
+            <li>Privilégie un télescope à fort tirage focal : f/10 à f/15 (ex. Maksutov 90mm, SCT 5"). Plus le rapport F/D est élevé, plus la cible est grossie à focale équivalente.</li>
+            <li>Évite les instruments à large champ (f/5 ou moins) — utiles en astro mais insuffisants pour isoler un sommet à 300 km.</li>
+            <li>Ouverture minimale recommandée : 70mm. L'ouverture détermine la résolution et la luminosité — critique par faible contraste atmosphérique.</li>
+            <li>Un Kowa TSN-88 ou Swarovski ATX95 couvrent l'essentiel des cas VLD en 80x–150x.</li>
+          </ul>
+          <div class="tuto-tip">💡 Pour les longues distances (> 200 km), un Maksutov 90mm à 1250mm de focale + oculaire 5mm donne 250x. La turbulence atmosphérique sera souvent le facteur limitant, pas l'instrument.</div>
+
+          <h4>Montage & stabilité</h4>
+          <ul>
+            <li>Trépied carbone ou aluminium lourd — les vibrations détruisent la mise au point à fort grossissement.</li>
+            <li>Acclimatation thermique obligatoire : sors l'instrument 30 à 45 min avant. Un tube chaud dans un air froid crée des turbulences internes visibles.</li>
+            <li>N'appuie jamais directement sur le trépied pendant une capture — utilise un déclencheur ou le retardateur.</li>
+          </ul>
+
+          <h4>Mise au point pour VLD</h4>
+          <ul>
+            <li>Ne fais pas la mise au point sur l'infini à l'aveugle — vise d'abord un relief intermédiaire bien contrasté (arête rocheuse, tour).</li>
+            <li>Utilise le foyer solaire ou une étoile la veille pour calibrer ta position de mise au point exacte et la marquer sur la crémaillère.</li>
+            <li>Par turbulence modérée, un filtre polarisant réduit l'éblouissement du ciel et améliore le contraste de la cible.</li>
+          </ul>
+          <div class="tuto-warn">⚠️ Ne regarde jamais directement vers le soleil, même avec un filtre — les filtres VLD ne sont pas des filtres solaires.</div>
+        </div>
+      </div>
+
+      <!-- TUTO 2 — Digiscoping -->
+      <div class="tuto-section" id="tuto-digiscoping">
+        <div class="tuto-section-title" onclick="toggleTuto('digiscoping')">
+          <span>📱 Digiscoping : téléphone + longue vue</span>
+          <span class="tchev">▼</span>
+        </div>
+        <div class="tuto-body">
+          <h4>Principe du digiscoping</h4>
+          <ul>
+            <li>Le digiscoping consiste à photographier ou filmer à travers l'oculaire d'une longue vue avec un téléphone ou un compact — technique accessible et redoutablement efficace.</li>
+            <li>La focale équivalente atteint facilement 2000–4000 mm, ce qui permet d'isoler un sommet à 400 km dans un ciel favorable.</li>
+          </ul>
+
+          <h4>Adaptateur et alignement</h4>
+          <ul>
+            <li>Utilise un adaptateur universel spécifique à ta longue vue (Kowa, Vortex, Swarovski en proposent). Évite les pinces génériques qui vibrent.</li>
+            <li>Centre l'objectif du téléphone exactement dans l'axe de l'oculaire — le moindre décalage crée un vignettage (bords noirs sur l'image).</li>
+            <li>Désactive la stabilisation optique du téléphone si l'image tremble anormalement — elle peut entrer en conflit avec la mise au point de la longue vue.</li>
+          </ul>
+
+          <h4>Réglages téléphone recommandés</h4>
+          <ul>
+            <li>Mode Pro ou Manuel obligatoire : règle l'ISO à la main (100–400 max), évite l'automatisme qui surexpose le ciel.</li>
+            <li>Vitesse d'obturation : 1/500s minimum pour geler la turbulence atmosphérique lors d'une capture vidéo.</li>
+            <li>Zoom numérique : évite-le — utilise le grossissement de la longue vue pour remplir le champ, pas le zoom digital qui dégrade la qualité.</li>
+            <li>Format vidéo : 4K 30fps ou 1080p 60fps pour l'empilage — plus d'images = plus de chances de trouver des frames nettes.</li>
+          </ul>
+          <div class="tuto-tip">💡 Technique du "lucky imaging" : filme 3–5 min en continu, puis extrais les 10% de frames les plus nettes avec PIPP, empile avec Autostakkert et affine avec Registax. Le résultat est souvent spectaculaire même dans des conditions médiocres.</div>
+
+          <h4>Erreurs classiques</h4>
+          <ul>
+            <li>Téléphone non centré → vignettage sévère</li>
+            <li>ISO trop haut → bruit numérique qui masque les détails fins</li>
+            <li>Mise au point faite sur l'interface téléphone au lieu de la bague de la longue vue → flou non corrigeable en post</li>
+            <li>Capture au soleil zénithal (midi) → turbulence thermique maximale, résultats décevants</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- TUTO 3 — Réglages appareil photo -->
+      <div class="tuto-section" id="tuto-photo">
+        <div class="tuto-section-title" onclick="toggleTuto('photo')">
+          <span>📷 Réglages appareil photo pour VLD</span>
+          <span class="tchev">▼</span>
+        </div>
+        <div class="tuto-body">
+          <h4>Matériel conseillé</h4>
+          <ul>
+            <li>Hybride ou reflex avec monture T2 (Sony E, Canon EF, Nikon F, Micro 4/3). Le capteur APS-C amplifie la focale (×1.5 ou ×1.6) — avantage pour le VLD.</li>
+            <li>Connexion directement au foyer du télescope via bague T2 : focale = celle du scope, grossissement = capteur seul sans oculaire intermédiaire.</li>
+            <li>Pour le livestream : Sony A6400 + Elgato Cam Link + câble USB-C → OBS. La Sony sort un signal HDMI propre sans timecode.</li>
+          </ul>
+
+          <h4>Réglages exposition</h4>
+          <ul>
+            <li>Mode Manuel (M) uniquement — l'automatisme expose le ciel clair et sous-expose la cible.</li>
+            <li>ISO : 100–400 en journée, jamais au-dessus de 800 (bruit numérique trop présent sur les détails fins).</li>
+            <li>Vitesse : 1/500s à 1/2000s selon la luminosité. Le but est de geler la turbulence pour l'empilage.</li>
+            <li>Ouverture : si tu utilises un objectif photo (non au foyer du scope), f/5.6 à f/8 offre le meilleur piqué.</li>
+          </ul>
+          <div class="tuto-tip">💡 Histogramme : vise un pic principal au tiers gauche. Si la montagne est surexposée (pic à droite), baisse la vitesse d'obturation. L'exposition au ciel est sacrifiée pour garder le détail sur la cible.</div>
+
+          <h4>Mise au point critique</h4>
+          <ul>
+            <li>Active le focus peaking ou le zoom live view ×10 pour vérifier la mise au point pixel par pixel.</li>
+            <li>Mise au point manuelle uniquement — l'autofocus ne trouve pas de contraste sur un lointain brumeux.</li>
+            <li>Marque la position de ta bague focus avec un trait de marqueur sur le scope après la mise au point — tu pourras retrouver le réglage rapidement.</li>
+          </ul>
+
+          <h4>Empilage et post-traitement</h4>
+          <ul>
+            <li>PIPP → trie et convertit les frames vidéo, exporte les meilleures</li>
+            <li>Autostakkert → empile les frames sélectionnées (lucky imaging)</li>
+            <li>Registax → wavelets pour affiner les détails et améliorer la netteté</li>
+            <li>En post (Lightroom / DarkTable) : clarté +20 à +40, désbrumer légèrement, ne pas pousser la saturation (artefacts colorés)</li>
+          </ul>
+          <div class="tuto-warn">⚠️ L'empilage ne crée pas de détails inexistants — si les frames de base sont floues, aucun traitement ne les sauvera. La qualité des conditions atmosphériques prime toujours sur le post-traitement.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- /outils-wrap -->
+</div><!-- /tab-outils -->
+
+</div><!-- /wrap -->
 
 <!-- OVERLAY PROFIL CARTE (profil de relief + courbure SVG) -->
 <div id="map-profile-overlay" onclick="closeMapProfile(event)">
