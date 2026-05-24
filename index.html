@@ -2853,7 +2853,7 @@ function renderCards(loading) {
 }
 
 function openScoreModal(dataB64) {
-  const data = JSON.parse(atob(dataB64));
+  const data = JSON.parse(decodeURIComponent(escape(atob(dataB64))));
   const { items, score, spotName, dateLabel } = data;
   const scored = items.filter(it => it.max > 0);
   const solar  = items.find(it => it.name && it.name.includes('solaire'));
@@ -2899,7 +2899,7 @@ function closeScoreModal() {
 }
 
 function buildScoreExplain(items, score, spotId, day, spotName, dateLabel) {
-  const payload = btoa(JSON.stringify({ items, score, spotName, dateLabel }));
+  const payload = btoa(unescape(encodeURIComponent(JSON.stringify({ items, score, spotName, dateLabel }))));
   return `<div class="mb explain-btn" onclick="openScoreModal('${payload}')">
     <div class="mb-explain-icon">🔭</div>
     <div class="mb-explain-lbl">Comprendre<br>ce score</div>
