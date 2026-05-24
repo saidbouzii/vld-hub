@@ -1586,6 +1586,22 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
       </div>
       <div style="color:var(--text3);font-size:10px;margin-top:.35rem;">Calculé à partir de la position astronomique réelle du soleil aux coordonnées de chaque spot.</div>
     </div>
+    <div style="margin-bottom:1rem;padding:.6rem .8rem;background:rgba(56,189,248,.05);border-radius:10px;border:1px solid rgba(56,189,248,.1);">
+      <div style="color:var(--cyan);font-size:11px;letter-spacing:.06em;margin-bottom:.5rem;">🌫 TRANSPARENCE AXE MI-TRAJET — INDICE CALCULÉ /20</div>
+      <div style="color:var(--text3);font-size:10px;line-height:1.6;">
+        Remplace la visibilité API mi-trajet (plafonnée ~24–40 km selon le modèle météo).
+        Calculé à partir de variables physiques directes :<br>
+        <span style="color:var(--text2);">RH mid</span> · humidité sur l'axe optique &nbsp;|&nbsp;
+        <span style="color:var(--text2);">Dust</span> · aérosols worst-case obs/mid/cible &nbsp;|&nbsp;
+        <span style="color:var(--text2);">PM10</span> · haze urbain/industriel &nbsp;|&nbsp;
+        <span style="color:var(--text2);">CAPE</span> · turbidité convective
+      </div>
+      <div style="display:flex;gap:.8rem;flex-wrap:wrap;margin-top:.5rem;">
+        <span>🟢 <span style="color:var(--text2);">16–20</span> <span style="color:var(--text3);font-size:10px">Axe limpide</span></span>
+        <span>🟡 <span style="color:var(--text2);">10–15</span> <span style="color:var(--text3);font-size:10px">Dégradé</span></span>
+        <span>🔴 <span style="color:var(--text2);">0–9</span> <span style="color:var(--text3);font-size:10px">Axe bouché</span></span>
+      </div>
+    </div>
     <table style="width:100%;border-collapse:collapse;">
       <thead><tr style="text-align:left;border-bottom:1px solid rgba(0,212,255,.1);">
         <th style="padding:.35rem .6rem;color:var(--text3);font-weight:500;">Score</th>
@@ -1593,12 +1609,12 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
         <th style="padding:.35rem .6rem;color:var(--text3);font-weight:500;">Conditions typiques</th>
       </tr></thead>
       <tbody>
-        <tr><td style="padding:.35rem .6rem;font-family:var(--display);font-size:16px;color:#4ade80;">90–100</td><td style="padding:.35rem .6rem;">⭐ Exceptionnel</td><td style="padding:.35rem .6rem;color:var(--text3);">Ciel cristallin, visibilité &gt;80km, aucun nuage sur l'axe — observation certaine</td></tr>
-        <tr><td style="padding:.35rem .6rem;font-family:var(--display);font-size:16px;color:var(--cyan);">75–89</td><td style="padding:.35rem .6rem;">🟢 Très bon</td><td style="padding:.35rem .6rem;color:var(--text3);">Ciel dégagé, quelques cirrus, visibilité &gt;50km — très favorable</td></tr>
+        <tr><td style="padding:.35rem .6rem;font-family:var(--display);font-size:16px;color:#4ade80;">90–100</td><td style="padding:.35rem .6rem;">⭐ Exceptionnel</td><td style="padding:.35rem .6rem;color:var(--text3);">Ciel cristallin, axe limpide (RH&lt;55%, dust&lt;20), aucun nuage — observation certaine</td></tr>
+        <tr><td style="padding:.35rem .6rem;font-family:var(--display);font-size:16px;color:var(--cyan);">75–89</td><td style="padding:.35rem .6rem;">🟢 Très bon</td><td style="padding:.35rem .6rem;color:var(--text3);">Ciel dégagé, axe correct (RH&lt;65%, dust faible) — très favorable</td></tr>
         <tr><td style="padding:.35rem .6rem;font-family:var(--display);font-size:16px;color:var(--amber);">55–74</td><td style="padding:.35rem .6rem;">🟡 Correct</td><td style="padding:.35rem .6rem;color:var(--text3);">Nuages hauts ou humidité modérée — observation possible selon distance</td></tr>
-        <tr><td style="padding:.35rem .6rem;font-family:var(--display);font-size:16px;color:#fb923c;">35–54</td><td style="padding:.35rem .6rem;">🟠 Médiocre</td><td style="padding:.35rem .6rem;color:var(--text3);">Nuages sur l'axe ou visibilité réduite — incertain</td></tr>
+        <tr><td style="padding:.35rem .6rem;font-family:var(--display);font-size:16px;color:#fb923c;">35–54</td><td style="padding:.35rem .6rem;">🟠 Médiocre</td><td style="padding:.35rem .6rem;color:var(--text3);">Axe dégradé (brume hygro ou dust) — incertain</td></tr>
         <tr><td style="padding:.35rem .6rem;font-family:var(--display);font-size:16px;color:var(--red);">15–34</td><td style="padding:.35rem .6rem;">🔴 Mauvais</td><td style="padding:.35rem .6rem;color:var(--text3);">Couverture nuageuse dense ou précipitations — observation compromise</td></tr>
-        <tr><td style="padding:.35rem .6rem;font-family:var(--display);font-size:16px;color:var(--text3);">0–14</td><td style="padding:.35rem .6rem;">⛔ Bloqué</td><td style="padding:.35rem .6rem;color:var(--text3);">Pluie certaine ou ciel entièrement bouché — annuler</td></tr>
+        <tr><td style="padding:.35rem .6rem;font-family:var(--display);font-size:16px;color:var(--text3);">0–14</td><td style="padding:.35rem .6rem;">⛔ Bloqué</td><td style="padding:.35rem .6rem;color:var(--text3);">Pluie certaine ou axe opaque (dust&gt;200 µg/m³) — annuler</td></tr>
       </tbody>
     </table>
   </div>
@@ -2270,16 +2286,40 @@ function scoreDay(spot, h) {
   const visVerdict = vis > 80 ? '⭐ Cristalline' : vis > 50 ? t('cv.ok') : vis > 20 ? t('cv.reduite') : `❌ Brume/brouillard`;
   add(t('crit.vis_obs'), vis, 'km', visPts, 25, visColor, visVerdict);
 
-  // ── 2. VISIBILITÉ MI-TRAJET (20 pts) ──
-  // Transparence de l'atmosphère sur le chemin optique
-  const visMid = h.vis_mid ?? 0;
-  const visMidPts = visMid > 80 ? 20 : visMid > 50 ? 17 : visMid > 30 ? 12 : visMid > 15 ? 6 : 0;
-  const visMidColor = visMid > 50 ? 'green' : visMid > 15 ? 'amber' : 'red';
-  const visMidVerdict = visMid > 80 ? '⭐ Excellente' : visMid > 50 ? t('cv.ok') : visMid > 15 ? t('cv.reduite') : '❌ Opaque';
-  const midLabel = spot.type === 'mediterranee_corse' ? t('crit.vis_mid.corse')
-                 : spot.type === 'mediterranee_marin'  ? t('crit.vis_mid.marin')
-                 : t('crit.vis_mid.default');
-  add(midLabel, visMid, 'km', visMidPts, 20, visMidColor, visMidVerdict);
+  // ── 2. TRANSPARENCE AXE MI-TRAJET (20 pts) ──
+  // Indice calculé — indépendant du plafonnage API visibilité
+  // Variables : RH mid, dust worst-case, pm10 worst-case, CAPE mid
+  (function transparenceAxe() {
+    const rhM   = h.rh_mid ?? h.rh ?? 80;
+    const dust  = h.dust   ?? 0;
+    const pm10  = h.pm10   ?? 0;
+    const cape  = h.cape   ?? 0;
+
+    // Pénalités indépendantes (budget 20 pts)
+    const penRH   = rhM < 55 ? 0 : rhM < 65 ? 2 : rhM < 75 ? 5 : rhM < 85 ? 9 : 13;
+    const penDust = dust < 20 ? 0 : dust < 80 ? 3 : dust < 200 ? 7 : 12;
+    const penPM10 = pm10 < 30 ? 0 : pm10 < 60 ? 2 : pm10 < 100 ? 4 : 7;
+    const penCAPE = cape < 200 ? 0 : cape < 500 ? 1 : cape < 1000 ? 3 : 5;
+
+    const totalPen = penRH + penDust + penPM10 + penCAPE;
+    const transpPts = Math.max(0, 20 - totalPen);
+    const transpColor = transpPts >= 16 ? 'green' : transpPts >= 10 ? 'amber' : 'red';
+
+    let transpVerdict;
+    if      (transpPts >= 18) transpVerdict = '⭐ Axe limpide';
+    else if (transpPts >= 14) transpVerdict = t('cv.ok');
+    else if (penDust >= 7)    transpVerdict = `❌ Dust ${Math.round(dust)} µg/m³`;
+    else if (penRH >= 9)      transpVerdict = `⚠️ Brume RH ${Math.round(rhM)}%`;
+    else if (penPM10 >= 4)    transpVerdict = `⚠️ Haze PM10 ${Math.round(pm10)} µg/m³`;
+    else if (penCAPE >= 3)    transpVerdict = `⚠️ Convection CAPE ${Math.round(cape)}`;
+    else                      transpVerdict = t('cv.reduite');
+
+    const midLabel = spot.type === 'mediterranee_corse' ? t('crit.vis_mid.corse')
+                   : spot.type === 'mediterranee_marin'  ? t('crit.vis_mid.marin')
+                   : t('crit.vis_mid.default');
+    add(midLabel, transpPts, '/20', transpPts, 20, transpColor, transpVerdict);
+    h._transp = transpPts;
+  })();
 
   // ── 3. NUAGES BAS (pondérés par géométrie) ──
   // Max 20 pts × wLow (si rayon ne passe pas dans cette couche, impact faible)
@@ -2341,10 +2381,10 @@ function scoreDay(spot, h) {
   const rhColor = rh < 65 ? 'green' : rh < 80 ? 'amber' : 'red';
   const rhVerdict = rh < 50 ? t('cv.sec') : rh < 65 ? t('cv.ok') : rh < 75 ? t('cv.humide') : rh < 85 ? '⚠️ Très humide' : '🔴 Saturation';
   add(t('crit.rh'), rh, '%', rhPts, 10, rhColor, rhVerdict);
-  // Malus combiné RH×Vis : brume sèche + mauvaise transparence mi-trajet
-  if (rh >= 70 && (h.vis_mid ?? 0) < 30) {
+  // Malus combiné RH×Transp : brume obs + axe déjà dégradé = cumul
+  if (rh >= 70 && (h._transp ?? 20) < 12) {
     const rhVisMalus = rh >= 80 ? -8 : -5;
-    add('Brume hygro × Vis.', rh, '%', rhVisMalus, 0, 'red', `⚠️ RH ${Math.round(rh)}% + vis. mi-trajet < 30 km`);
+    add('Brume hygro × Axe', rh, '%', rhVisMalus, 0, 'red', `⚠️ RH ${Math.round(rh)}% + axe dégradé (${h._transp ?? '?'}/20)`);
   }
 
   // ── 9. VENT (10 pts) ──
@@ -2474,9 +2514,9 @@ async function fetchSpot(spot) {
   const urlMid = `${base}&latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=visibility,cloud_cover_low,relative_humidity_2m,cape,wind_speed_80m,wind_speed_120m`;
  // AOD — 3 points : obs, mid, tgt (worst-case)
   const _aqBase = 'https://air-quality-api.open-meteo.com/v1/air-quality';
-  const urlDustObs = `${_aqBase}?latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=dust&timezone=auto`;
-  const urlDust    = `${_aqBase}?latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=dust&timezone=auto`;
-  const urlDustTgt = `${_aqBase}?latitude=${spot.tgt.lat}&longitude=${spot.tgt.lon}&hourly=dust&timezone=auto`;
+  const urlDustObs = `${_aqBase}?latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=dust,pm10&timezone=auto`;
+  const urlDust    = `${_aqBase}?latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=dust,pm10&timezone=auto`;
+  const urlDustTgt = `${_aqBase}?latitude=${spot.tgt.lat}&longitude=${spot.tgt.lon}&hourly=dust,pm10&timezone=auto`;
   // U2 — ERA5 pressure levels pour calcul κ ITU-R P.453
   const urlPres = `https://api.open-meteo.com/v1/forecast?latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=temperature_1000hPa,temperature_925hPa,temperature_850hPa,temperature_700hPa,temperature_600hPa,temperature_500hPa,temperature_400hPa,temperature_300hPa,relative_humidity_1000hPa,relative_humidity_925hPa,relative_humidity_850hPa,relative_humidity_700hPa,relative_humidity_600hPa,relative_humidity_500hPa,relative_humidity_400hPa,relative_humidity_300hPa,geopotential_height_1000hPa,geopotential_height_925hPa,geopotential_height_850hPa,geopotential_height_700hPa,geopotential_height_600hPa,geopotential_height_500hPa,geopotential_height_400hPa,geopotential_height_300hPa&forecast_days=7&timezone=auto`;
   const [r1,r2,r3,r3b,r3c,r4] = await Promise.all([
@@ -2578,6 +2618,8 @@ async function fetchSpot(spot) {
       cape: avg(d2.hourly?.cape),
 wind_shear: (()=>{const w80=avg(d2.hourly?.wind_speed_80m);const w120=avg(d2.hourly?.wind_speed_120m);return(w80!==null&&w120!==null)?Math.abs(w120-w80)/40:null;})(),
 dust: (()=>{ const v=[avg(d3.hourly?.dust),avg(d3b?.hourly?.dust),avg(d3c?.hourly?.dust)].filter(x=>x!==null&&x!==undefined); return v.length?Math.max(...v):null; })(),
+pm10: (()=>{ const v=[avg(d3.hourly?.pm10),avg(d3b?.hourly?.pm10),avg(d3c?.hourly?.pm10)].filter(x=>x!==null&&x!==undefined); return v.length?Math.max(...v):null; })(),
+rh_mid: avg(d2?.hourly?.relative_humidity_2m),
 wind: avg(d1.hourly?.wind_speed_10m),
       vis: (avg(d1.hourly?.visibility)??0)/1000,
       precip: avg(d1.hourly?.precipitation_probability),
@@ -2857,6 +2899,7 @@ function openScoreModal(dataB64) {
   const { items, score, spotName, dateLabel } = data;
   const scored = items.filter(it => it.max > 0);
   const solar  = items.find(it => it.name && it.name.includes('solaire'));
+  const transpItem = items.find(it => it.unit === '/20');
   const good   = scored.filter(it => it.pts / it.max >= 0.75);
   const bad    = scored.filter(it => it.pts / it.max < 0.75 || it.pts < 0);
 
@@ -2878,6 +2921,19 @@ function openScoreModal(dataB64) {
   const solarHtml = solar
     ? `<div class="sep-solar">☀️ Géométrie solaire : ${solar.verdict}</div>` : '';
 
+  // Bloc explication transparence axe
+  const transpHtml = transpItem ? (() => {
+    const tScore = transpItem.val;
+    const tColor = tScore >= 16 ? '#4ade80' : tScore >= 10 ? 'var(--amber)' : 'var(--red)';
+    return `<div class="sep-solar" style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid rgba(255,255,255,.05);">
+      🌫 <strong style="color:${tColor}">Transparence axe : ${tScore}/20</strong>
+      <span style="color:var(--text3);font-size:10px;display:block;margin-top:.15rem;">
+        Indice calculé (RH mi-trajet · dust · PM10 · CAPE) — indépendant du plafonnage API visibilité.
+        ${transpItem.verdict}
+      </span>
+    </div>`;
+  })() : '';
+
   const scColor = score >= 80 ? '#4ade80' : score >= 65 ? 'var(--cyan)' : score >= 45 ? 'var(--amber)' : 'var(--red)';
 
   document.getElementById('score-modal-body').innerHTML = `
@@ -2888,6 +2944,7 @@ function openScoreModal(dataB64) {
     <div class="sep-section sep-bad">⚠️ Ce qui a pénalisé</div>
     ${badHtml}
     ${solarHtml}
+    ${transpHtml}
   `;
   document.getElementById('score-modal-overlay').classList.add('open');
   document.body.style.overflow = 'hidden';
