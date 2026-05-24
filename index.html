@@ -2250,13 +2250,19 @@ function scoreDay(spot, h) {
   const slpVerdict = slp >= 1025 ? t('cv.anticyc') : slp >= 1013 ? t('cv.correct') : '⚠️ Dépression';
   add(t('crit.slp'), slp, 'hPa', slpPts, 5, slpColor, slpVerdict);
 
-  // ── 8. HUMIDITÉ (5 pts) ──
-  // Humidité forte = brume sèche, diffusion — pénalité légère
+  // ── 8. HUMIDITÉ (10 pts) ──
+  // Pas d'élim directe — la visibilité capture déjà la brume.
+  // Malus combiné si RH élevée + vis_mid faible (la vraie combinaison mortelle).
   const rh = h.rh ?? 100;
-  const rhPts = rh < 40 ? 5 : rh < 60 ? 4 : rh < 75 ? 2 : 0;
-  const rhColor = rh < 60 ? 'green' : rh < 80 ? 'amber' : 'red';
-  const rhVerdict = rh < 40 ? t('cv.sec') : rh < 60 ? t('cv.ok') : rh < 80 ? t('cv.humide') : '⚠️ Très humide';
-  add(t('crit.rh'), rh, '%', rhPts, 5, rhColor, rhVerdict);
+  const rhPts = rh < 50 ? 10 : rh < 65 ? 7 : rh < 75 ? 4 : rh < 85 ? 1 : 0;
+  const rhColor = rh < 65 ? 'green' : rh < 80 ? 'amber' : 'red';
+  const rhVerdict = rh < 50 ? t('cv.sec') : rh < 65 ? t('cv.ok') : rh < 75 ? t('cv.humide') : rh < 85 ? '⚠️ Très humide' : '🔴 Saturation';
+  add(t('crit.rh'), rh, '%', rhPts, 10, rhColor, rhVerdict);
+  // Malus combiné RH×Vis : brume sèche + mauvaise transparence mi-trajet
+  if (rh >= 70 && (h.vis_mid ?? 0) < 30) {
+    const rhVisMalus = rh >= 80 ? -8 : -5;
+    add('Brume hygro × Vis.', rh, '%', rhVisMalus, 0, 'red', `⚠️ RH ${Math.round(rh)}% + vis. mi-trajet < 30 km`);
+  }
 
   // ── 9. VENT (10 pts) ──
   // Vent fort = turbulences, poussières soulevées, embruns — réduit la visibilité directe
