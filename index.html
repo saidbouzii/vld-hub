@@ -393,6 +393,80 @@ body::after {
   background:var(--orange-dim); border:1px solid rgba(255,138,0,.3);
   color:var(--orange); font-family:var(--mono);
 }
+/* ── Bouton "Comprendre ce score" dans grille météo ── */
+.mb.explain-btn {
+  background: linear-gradient(160deg, #1a0a2e 0%, #0d0518 100%);
+  border-color: rgba(160,80,255,.45);
+  box-shadow: 0 6px 20px rgba(0,0,0,.7),
+              0 4px 0 rgba(80,20,160,.8),
+              inset 0 1px 0 rgba(180,100,255,.15),
+              inset 0 -1px 0 rgba(0,0,0,.5);
+  cursor: pointer;
+  transform: translateY(0);
+  transition: transform .12s, box-shadow .12s;
+}
+.mb.explain-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 8px rgba(0,0,0,.7),
+              0 1px 0 rgba(80,20,160,.8),
+              inset 0 1px 0 rgba(180,100,255,.1);
+}
+.mb-explain-icon { font-size: 22px; line-height: 1; }
+.mb-explain-lbl  { font-size: 8px; font-family: var(--mono); color: rgba(180,120,255,.8); text-align: center; line-height: 1.3; }
+
+/* ── Modal explication score ── */
+.score-modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,.75); backdrop-filter: blur(6px);
+  align-items: center; justify-content: center;
+}
+.score-modal-overlay.open { display: flex; }
+.score-modal {
+  background: rgba(6,12,22,.98); border: 1px solid rgba(160,80,255,.3);
+  border-radius: 18px; padding: 1.3rem 1.4rem; width: 92vw; max-width: 420px;
+  max-height: 80vh; overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,.9), 0 0 0 1px rgba(160,80,255,.1);
+  font-family: var(--mono); font-size: 11.5px; line-height: 1.75;
+  position: relative;
+}
+.score-modal-close {
+  position: absolute; top: .75rem; right: .9rem;
+  background: none; border: none; color: var(--text3);
+  font-size: 18px; cursor: pointer; line-height: 1;
+}
+.score-modal-close:hover { color: var(--text); }
+.score-modal-title {
+  color: rgba(160,80,255,.9); font-size: 10px; letter-spacing: .07em;
+  margin-bottom: .75rem; padding-bottom: .5rem;
+  border-bottom: 1px solid rgba(160,80,255,.15);
+}
+.score-modal-score {
+  font-family: var(--display); font-size: 28px; color: #fff;
+  letter-spacing: .05em; margin-bottom: .1rem;
+}
+.sep-section { margin-top: .75rem; margin-bottom: .3rem; font-size: 10px; font-weight: 700; letter-spacing: .04em; }
+.sep-good { color: #4ade80; }
+.sep-bad  { color: #fb923c; }
+.sep-item { color: var(--text2); padding-left: .5rem; display: flex; gap: .4rem; align-items: baseline; flex-wrap: wrap; }
+.sep-item span { color: var(--text3); font-size: 10px; }
+.sep-solar { color: var(--text3); font-size: 10px; margin-top: .5rem; padding-top: .5rem; border-top: 1px solid rgba(255,255,255,.05); }
+
+.refr-badge {
+  font-size:9px; display:block; line-height:1; margin-top:1px;
+}
+
+.ts-sunrise-badge.vld-active {
+  background:rgba(0,200,100,.15); border-color:rgba(0,200,100,.4);
+  color:#00c864;
+}
+.ts-sunrise-badge.vld-soon {
+  background:rgba(255,180,0,.15); border-color:rgba(255,180,0,.4);
+  color:#ffb400;
+}
+.ts-sunrise-badge.vld-past {
+  background:rgba(120,120,140,.12); border-color:rgba(120,120,140,.25);
+  color:#8888aa;
+}
 
 /* ═══════════════════════════════════════════════════
    ONGLETS — iOS / Vision Pro style
@@ -1452,7 +1526,7 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
 <div class="time-slicer">
   <span class="time-slicer-label">🌅 FENÊTRE HORAIRE</span>
   <select id="time-window" onchange="if(Object.keys(forecasts).length>0){renderMatrix(false);renderCards(false);renderBanner();}">
-    <option value="now">⚡ Maintenant</option>
+    <option value="now" id="tw-now">⚡ Maintenant (aujourd'hui)</option>
     <option value="avg">Moyenne matin (5h-11h)</option>
     <option value="0">🌅 Lever soleil exact</option>
     <option value="0.5">🌅 +30 min</option>
@@ -1503,6 +1577,15 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
 
   <div id="score-legend-panel" style="display:none;background:rgba(5,11,18,.97);color:var(--text);border-radius:16px;padding:1.1rem 1.3rem;margin-bottom:.75rem;border:1px solid rgba(0,212,255,.15);box-shadow:0 8px 40px rgba(0,0,0,.7);font-family:var(--mono);font-size:12px;line-height:1.7;backdrop-filter:blur(20px);">
     <div style="font-family:var(--display);font-size:18px;letter-spacing:.08em;margin-bottom:.75rem;color:var(--cyan);">🔭 GRILLE DE SCORE /100</div>
+    <div style="margin-bottom:1rem;padding:.6rem .8rem;background:rgba(0,212,255,.05);border-radius:10px;border:1px solid rgba(0,212,255,.1);">
+      <div style="color:var(--cyan);font-size:11px;letter-spacing:.06em;margin-bottom:.4rem;">📡 INDICATEUR DE RÉFRACTION ATMOSPHÉRIQUE</div>
+      <div style="display:flex;gap:1.2rem;flex-wrap:wrap;">
+        <span>⬆️ <span style="color:var(--text2)">Réfraction maximale</span> <span style="color:var(--text3);font-size:10px">(soleil &lt;10°)</span></span>
+        <span>➡️ <span style="color:var(--text2)">Réfraction correcte</span> <span style="color:var(--text3);font-size:10px">(10°–20°)</span></span>
+        <span>⬇️ <span style="color:var(--text2)">Réfraction faible</span> <span style="color:var(--text3);font-size:10px">(&gt;20°)</span></span>
+      </div>
+      <div style="color:var(--text3);font-size:10px;margin-top:.35rem;">Calculé à partir de la position astronomique réelle du soleil aux coordonnées de chaque spot.</div>
+    </div>
     <table style="width:100%;border-collapse:collapse;">
       <thead><tr style="text-align:left;border-bottom:1px solid rgba(0,212,255,.1);">
         <th style="padding:.35rem .6rem;color:var(--text3);font-weight:500;">Score</th>
@@ -2525,12 +2608,60 @@ wind: avg(d1.hourly?.wind_speed_10m),
         vis_mid: (d2.hourly?.visibility?.[hourIdx] ?? 0)/1000 || h.vis_mid,
         spread: (tH!=null && dH!=null) ? tH-dH : h.spread,
       };
-      hourlyScores[offset] = scoreDay(spot, hData).score;
+      const rawScore = scoreDay(spot, hData).score;
+      // Calcul de l'élévation solaire réelle à l'heure exacte de ce spot
+      const obsDate = new Date(sunriseStr);
+      obsDate.setMinutes(obsDate.getMinutes() + Math.round(offset * 60));
+      const elev = solarElevation(spot.obs.lat, spot.obs.lon, obsDate);
+      hourlyScores[offset] = rawScore;
+      hourlyScores[offset + '_elev'] = Math.round(elev * 10) / 10;
     }
     
     daily.push({ date:dt, day, sunriseHour, sunriseStr, hourlyScores, ...scoreDay(spot,h), raw:h });;
   }
   return daily;
+}
+
+// ═══════════════════════════════════════════════════
+// ÉLÉVATION SOLAIRE & COEFFICIENT VLD
+// ═══════════════════════════════════════════════════
+
+// Calcule l'élévation solaire en degrés (formule astronomique standard)
+// lat/lon en degrés décimaux, date = objet Date UTC
+function solarElevation(lat, lon, date) {
+  const toRad = d => d * Math.PI / 180;
+  const toDeg = r => r * 180 / Math.PI;
+  // Jour julien
+  const JD = date.getTime() / 86400000 + 2440587.5;
+  const n = JD - 2451545.0;
+  // Longitude écliptique moyenne du soleil
+  const L = (280.460 + 0.9856474 * n) % 360;
+  const g = toRad((357.528 + 0.9856003 * n) % 360);
+  const lambda = toRad(L + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g));
+  // Obliquité
+  const eps = toRad(23.439 - 0.0000004 * n);
+  // Déclinaison
+  const sinDec = Math.sin(eps) * Math.sin(lambda);
+  const dec = Math.asin(sinDec);
+  // Angle horaire
+  const GMST = (6.697375 + 0.0657098242 * n + (date.getUTCHours() + date.getUTCMinutes()/60)) % 24;
+  const LMST = (GMST + lon / 15) % 24;
+  const HA = toRad((LMST - 12) * 15);
+  // Élévation
+  const latR = toRad(lat);
+  const sinAlt = Math.sin(latR)*Math.sin(dec) + Math.cos(latR)*Math.cos(dec)*Math.cos(HA);
+  return toDeg(Math.asin(sinAlt));
+}
+
+// Coefficient de réfraction VLD selon élévation solaire (basé sur Bennett/VLD)
+function refractionCoeff(elevDeg) {
+  if (elevDeg < 0)   return 0.80; // avant lever : réfraction sub-horizon
+  if (elevDeg < 5)   return 1.00; // 0–5° : réfraction maximale
+  if (elevDeg < 10)  return 0.92; // 5–10°
+  if (elevDeg < 15)  return 0.80; // 10–15°
+  if (elevDeg < 20)  return 0.65; // 15–20°
+  if (elevDeg < 25)  return 0.50; // 20–25°
+  return 0.38;                     // >25° : réfraction négligeable
 }
 
 // ═══════════════════════════════════════════════════
@@ -2594,6 +2725,9 @@ function getScore(fc, di) {
   const tw = document.getElementById('time-window')?.value || '1';
   if (tw === 'avg') return fc[di].score;
   if (tw === 'now') {
+    // "Maintenant" n'a de sens que pour aujourd'hui (di=0)
+    // Pour les jours futurs, on affiche +1h et on grise l'option
+    if (di > 0) return fc[di].hourlyScores?.[1] ?? fc[di].score;
     const now = new Date();
     const offsetH = now.getHours() + now.getMinutes()/60;
     const sunriseH = fc[di]?.sunriseHour ?? 7;
@@ -2604,17 +2738,38 @@ function getScore(fc, di) {
   return fc[di].hourlyScores?.[parseFloat(tw)] ?? fc[di].score;
 }
 
+function getElev(fc, di) {
+  const tw = document.getElementById('time-window')?.value || '1';
+  if (tw === 'avg' || tw === 'now') return null;
+  return fc[di].hourlyScores?.[parseFloat(tw) + '_elev'] ?? null;
+}
+
+function refractionBadge(elev) {
+  if (elev === null) return '';
+  if (elev < 10)  return '<span class="refr-badge refr-max" title="Réfraction maximale (&lt;10°)">⬆️</span>';
+  if (elev < 20)  return '<span class="refr-badge refr-ok"  title="Réfraction correcte (10–20°)">➡️</span>';
+  return                  '<span class="refr-badge refr-low" title="Réfraction faible (&gt;20°)">⬇️</span>';
+}
+
 function renderMatrix(loading) {
   const days=getDays();
   const tw = document.getElementById('time-window')?.value || '1';
   const twLabels = {'avg':'5-11h','0':'Lever','0.5':'+30m','1':'+1h','1.5':'+1h30','2':'+2h','3':'+3h','4':'+4h','5':'+5h'};
   const twLbl = twLabels[tw] || '+1h';
   
-  const firstFc = Object.values(forecasts).find(f => f && f[0]?.sunriseStr);
-  if (firstFc && firstFc[0]?.sunriseStr) {
-    const sr = new Date(firstFc[0].sunriseStr);
-    const el = document.getElementById('ts-sunrise');
-    if (el) el.textContent = `🌅 Lever aujourd'hui: ${sr.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}`;
+  // Badge fenêtre VLD : spot ouvert ou premier dispo
+  updateSunriseBadge(null);
+  // Avertissement visuel si "Maintenant" sélectionné (jours futurs = +1h)
+  const twEl = document.getElementById('time-window');
+  const nowOpt = document.getElementById('tw-now');
+  if (twEl && nowOpt) {
+    if (twEl.value === 'now') {
+      nowOpt.text = '⚡ Maintenant · jours futurs → +1h';
+      twEl.style.borderColor = 'rgba(255,180,0,.5)';
+    } else {
+      nowOpt.text = "⚡ Maintenant (aujourd'hui)";
+      twEl.style.borderColor = '';
+    }
   }
   
   document.getElementById('matrix-head').innerHTML=`<tr>
@@ -2697,6 +2852,60 @@ function renderCards(loading) {
   }).join('');
 }
 
+function openScoreModal(dataB64) {
+  const data = JSON.parse(atob(dataB64));
+  const { items, score, spotName, dateLabel } = data;
+  const scored = items.filter(it => it.max > 0);
+  const solar  = items.find(it => it.name && it.name.includes('solaire'));
+  const good   = scored.filter(it => it.pts / it.max >= 0.75);
+  const bad    = scored.filter(it => it.pts / it.max < 0.75 || it.pts < 0);
+
+  const fmtGood = it => {
+    const pct = Math.round((it.pts / it.max) * 100);
+    return `<div class="sep-item">✅ ${it.name} ${it.val}${it.unit} — ${it.pts}/${it.max} pts <span>(${pct}%)</span></div>`;
+  };
+  const fmtBad = it => {
+    const lost = it.max - it.pts;
+    return `<div class="sep-item">⚠️ ${it.name} ${it.val}${it.unit} — ${it.pts}/${it.max} pts <span>(-${lost} pts · ${it.verdict})</span></div>`;
+  };
+
+  const goodHtml = good.length
+    ? good.map(fmtGood).join('')
+    : `<div class="sep-item" style="color:var(--text3)">Aucun critère optimal</div>`;
+  const badHtml = bad.length
+    ? bad.map(fmtBad).join('')
+    : `<div class="sep-item" style="color:#4ade80">Aucune pénalité — score optimal ✨</div>`;
+  const solarHtml = solar
+    ? `<div class="sep-solar">☀️ Géométrie solaire : ${solar.verdict}</div>` : '';
+
+  const scColor = score >= 80 ? '#4ade80' : score >= 65 ? 'var(--cyan)' : score >= 45 ? 'var(--amber)' : 'var(--red)';
+
+  document.getElementById('score-modal-body').innerHTML = `
+    <div class="score-modal-title">🔭 ANALYSE DU SCORE — ${spotName} · ${dateLabel}</div>
+    <div class="score-modal-score" style="color:${scColor}">${score}<span style="font-size:14px;color:var(--text3)">/100</span></div>
+    <div class="sep-section sep-good">✅ Bonnes conditions</div>
+    ${goodHtml}
+    <div class="sep-section sep-bad">⚠️ Ce qui a pénalisé</div>
+    ${badHtml}
+    ${solarHtml}
+  `;
+  document.getElementById('score-modal-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeScoreModal() {
+  document.getElementById('score-modal-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function buildScoreExplain(items, score, spotId, day, spotName, dateLabel) {
+  const payload = btoa(JSON.stringify({ items, score, spotName, dateLabel }));
+  return `<div class="mb explain-btn" onclick="openScoreModal('${payload}')">
+    <div class="mb-explain-icon">🔭</div>
+    <div class="mb-explain-lbl">Comprendre<br>ce score</div>
+  </div>`;
+}
+
 function renderDayRow(dayData, date, spot) {
   const {items,hasElim,day} = dayData;
   const score = getScore(forecasts[spot.id], day);
@@ -2705,6 +2914,7 @@ function renderDayRow(dayData, date, spot) {
   const did=`dr-${spot.id}-${day}`;
   const k = h.k_bislin;
 
+  const explainBtn = buildScoreExplain(items, score, spot.id, day, spot.name, fullLabel(date));
   return `<div class="drow">
     <div class="drow-hdr ${cls}" onclick="toggleDrow('${did}')">
       <span class="drow-date">${isToday?'📍 ':''} ${fullLabel(date)}</span>
@@ -2712,7 +2922,7 @@ function renderDayRow(dayData, date, spot) {
       <span class="drow-score" style="color:${sc}">${score}</span>
     </div>
     <div class="drow-body" id="${did}">
-      <div class="drow-left">${renderMeteoButtons(items)}</div>
+      <div class="drow-left">${renderMeteoButtons(items)}${explainBtn}</div>
       <div class="drow-right">${renderNewCurveBlock(spot,k)}${renderKMini(k,h)}${renderHWTBlock(spot)}</div>
     </div>
   </div>`;
@@ -2898,6 +3108,35 @@ function toggleCard(id){
   const chev=document.getElementById('chev-'+id);
   const open=body.classList.toggle('open');
   chev.style.transform=open?'rotate(180deg)':'';
+  updateSunriseBadge(open ? id : null);
+}
+
+function updateSunriseBadge(spotId) {
+  const el = document.getElementById('ts-sunrise');
+  if (!el) return;
+  // Si spotId null, chercher la card actuellement ouverte
+  if (!spotId) {
+    const openCard = document.querySelector('[id^="sdb-"].open');
+    if (openCard) spotId = openCard.id.replace('sdb-', '');
+  }
+  const fc = spotId && forecasts[spotId] ? forecasts[spotId]
+           : Object.values(forecasts).find(f => f && f[0]?.sunriseStr);
+  if (!fc || !fc[0]?.sunriseStr) return;
+  const sr = new Date(fc[0].sunriseStr);
+  const winStart = new Date(sr.getTime() + 30*60000);
+  const winEnd   = new Date(sr.getTime() + 2*3600000);
+  const now = new Date();
+  const fmt = d => d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  const diffMin = (winStart - now) / 60000;
+  el.className = 'ts-sunrise-badge ' + (
+    now >= winStart && now <= winEnd ? 'vld-active' :
+    diffMin > 0 && diffMin <= 60     ? 'vld-soon'   : 'vld-past'
+  );
+  const dot = now >= winStart && now <= winEnd ? '\u{1F7E2}' :
+              diffMin > 0 && diffMin <= 60      ? '\u{1F7E1}' : '\u26AA';
+  const spot = SPOTS.find(s => s.id === spotId);
+  const label = spot ? ' (' + spot.name.split(' ').slice(0,2).join(' ') + ')' : '';
+  el.textContent = dot + ' Fen\u00eatre' + label + ': ' + fmt(winStart) + ' \u2192 ' + fmt(winEnd);
 }
 function toggleDrow(id){ const el=document.getElementById(id); if(el) el.classList.toggle('open'); }
 
@@ -5360,5 +5599,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 </script>
+  <!-- Modal explication score -->
+  <div class="score-modal-overlay" id="score-modal-overlay" onclick="if(event.target===this)closeScoreModal()">
+    <div class="score-modal" id="score-modal-content">
+      <button class="score-modal-close" onclick="closeScoreModal()">✕</button>
+      <div id="score-modal-body"></div>
+    </div>
+  </div>
 </body>
 </html>
