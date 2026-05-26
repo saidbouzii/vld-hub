@@ -3045,18 +3045,37 @@ function renderMatrix(loading) {
   
   // Badge fenêtre VLD : spot ouvert ou premier dispo
   updateSunriseBadge(null);
-  // Avertissement visuel si "Maintenant" sélectionné (jours futurs = +1h)
+  // Garde-fou nuit + avertissement visuel Maintenant
   const twEl = document.getElementById('time-window');
   const nowOpt = document.getElementById('tw-now');
   if (twEl && nowOpt) {
-    if (twEl.value === 'now') {
-      const nowH = new Date().getHours();
-      const nowM = String(new Date().getMinutes()).padStart(2,'0');
-      nowOpt.text = `⚡ Maintenant · ${nowH}h${nowM} (tous jours)`;
-      twEl.style.borderColor = 'rgba(0,212,255,.5)';
-    } else {
-      nowOpt.text = "⚡ Maintenant";
+    const nowHour = new Date().getHours() + new Date().getMinutes()/60;
+    const nowH = new Date().getHours();
+    const nowM = String(new Date().getMinutes()).padStart(2,'0');
+    const fc0 = Object.values(forecasts).find(f => f && f[0]);
+    const srH = fc0?.[0]?.sunriseHour ?? 6;
+    const ssH = fc0?.[0]?.sunsetHour  ?? 21;
+    const isNight = nowHour < srH || nowHour > ssH;
+
+    if (isNight) {
+      nowOpt.text = '🌙 Maintenant (nuit — obs. impossible)';
+      nowOpt.disabled = true;
+      nowOpt.style.color = '#555';
+      if (twEl.value === 'now') {
+        twEl.value = '1';
+        twEl.dispatchEvent(new Event('change'));
+      }
       twEl.style.borderColor = '';
+    } else {
+      nowOpt.disabled = false;
+      nowOpt.style.color = '';
+      if (twEl.value === 'now') {
+        nowOpt.text = `⚡ Maintenant · ${nowH}h${nowM} (tous jours)`;
+        twEl.style.borderColor = 'rgba(0,212,255,.5)';
+      } else {
+        nowOpt.text = '⚡ Maintenant';
+        twEl.style.borderColor = '';
+      }
     }
   }
   
