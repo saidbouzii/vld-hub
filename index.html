@@ -364,7 +364,7 @@ body::after {
 }
 
 /* ═══════════════════════════════════════════════════
-   FENÊTRE HORAIRE — glass pill
+   LEVER — glass pill
 ═══════════════════════════════════════════════════ */
 .time-slicer {
   margin:1.25rem 0 .75rem;
@@ -3161,7 +3161,7 @@ function renderCards(loading) {
 
 function openScoreModal(dataB64) {
   const data = JSON.parse(decodeURIComponent(escape(atob(dataB64))));
-  const { items, score, spotName, dateLabel } = data;
+  const { items, score, spotName, dateLabel, creneauBadge } = data;
 
   // Critères avec max > 0 → classés good/bad selon ratio
   const scored = items.filter(it => it.max > 0);
@@ -3223,6 +3223,7 @@ function openScoreModal(dataB64) {
 
   document.getElementById('score-modal-body').innerHTML = `
     <div class="score-modal-title">🔭 ANALYSE DU SCORE — ${spotName} · ${dateLabel}</div>
+    <div style="margin-bottom:.5rem;font-size:11px;color:var(--text3)">${creneauBadge || ''}</div>
     <div class="score-modal-score" style="color:${scColor}">${score}<span style="font-size:14px;color:var(--text3)">/100</span></div>
     ${solarHtml}${aodHtml}${mirageHtml}
     <div class="sep-section sep-good">✅ Bonnes conditions</div>
@@ -3241,11 +3242,30 @@ function closeScoreModal() {
 }
 
 function buildScoreExplain(items, score, spotId, day, spotName, dateLabel) {
-  const payload = btoa(unescape(encodeURIComponent(JSON.stringify({ items, score, spotName, dateLabel }))));
+  const creneauBadge = getCreneauBadge();
+  const payload = btoa(unescape(encodeURIComponent(JSON.stringify({ items, score, spotName, dateLabel, creneauBadge }))));
   return `<div class="mb explain-btn" onclick="openScoreModal('${payload}')">
     <div class="mb-explain-icon">🔭</div>
     <div class="mb-explain-lbl">Comprendre<br>ce score</div>
   </div>`;
+}
+
+// Helper — badge créneau contextuel
+function getCreneauBadge() {
+  const tw = document.getElementById('time-window')?.value || '1';
+  if (_timePeriod === 'soir') {
+    const twe = document.getElementById('time-window-eve')?.value || 'eve-2';
+    const eveH = parseInt(twe.replace('eve',''));
+    if (eveH >= -1) return '🌅 Créneau soir';
+    return '🌇 Coucher';
+  }
+  if (tw === 'now') return '⚡ Maintenant';
+  if (tw === 'avg') return '📊 Moyenne';
+  if (tw === '0')   return '🌄 Lever exact';
+  const h = parseFloat(tw);
+  if (h <= 1)  return '🌄 Lever +' + tw + 'h';
+  if (h <= 2)  return '🌤 Matin +' + tw + 'h';
+  return '☀️ Journée +' + tw + 'h';
 }
 
 function renderDayRow(dayData, date, spot) {
@@ -3330,7 +3350,7 @@ function renderDayRow(dayData, date, spot) {
   return `<div class="drow">
     <div class="drow-hdr ${cls}" onclick="toggleDrow('${did}')">
       <span class="drow-date">${isToday?'📍 ':''} ${fullLabel(date)}</span>
-      <span class="drow-verdict">${verdict(score)}${hasElim?' · ⛔ élim':''}</span>
+      <span class="drow-verdict">${verdict(score)}${hasElim?' · ⛔ élim':''} <span style="font-size:10px;opacity:.7;margin-left:4px">${getCreneauBadge()}</span></span>
       <span class="drow-score" style="color:${sc}">${score}</span>
     </div>
     <div class="drow-body" id="${did}">
@@ -3552,25 +3572,25 @@ function updateSunriseBadge(spotId) {
            : Object.values(forecasts).find(f => f && f[0]?.sunriseStr);
   if (!fc || !fc[0]?.sunriseStr) return;
   const sr = new Date(fc[0].sunriseStr);
-  const winStart = new Date(sr.getTime() + 30*60000);
-  const winEnd   = new Date(sr.getTime() + 2*3600000);
   const now = new Date();
   const fmt = d => d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
-  const diffMin = (winStart - now) / 60000;
+  const diffMin = (sr - now) / 60000;
   el.className = 'ts-sunrise-badge ' + (
-    now >= winStart && now <= winEnd ? 'vld-active' :
-    diffMin > 0 && diffMin <= 60     ? 'vld-soon'   : 'vld-past'
+    Math.abs(diffMin) <= 60          ? 'vld-active' :
+    diffMin > 0 && diffMin <= 120    ? 'vld-soon'   : 'vld-past'
   );
-  const dot = now >= winStart && now <= winEnd ? '\u{1F7E2}' :
-              diffMin > 0 && diffMin <= 60      ? '\u{1F7E1}' : '\u26AA';
+  const dot = Math.abs(diffMin) <= 60       ? '\u{1F7E2}' :
+              diffMin > 0 && diffMin <= 120  ? '\u{1F7E1}' : '\u26AA';
   const spot = SPOTS.find(s => s.id === spotId);
   const label = spot ? ' (' + spot.name.split(' ').slice(0,2).join(' ') + ')' : '';
-  el.textContent = dot + ' Fen\u00eatre' + label + ': ' + fmt(winStart) + ' \u2192 ' + fmt(winEnd);
+  el.textContent = dot + ' Lever' + label + ': ' + fmt(sr);
   // Badge coucher
   const elSs = document.getElementById('ts-sunset');
   if (elSs && fc[0]?.sunsetStr) {
     const ss = new Date(fc[0].sunsetStr);
-    elSs.textContent = '🌇 Coucher: ' + fmt(ss);
+    const diffSs = (ss - now) / 60000;
+    const dotSs = Math.abs(diffSs) <= 60 ? '🟢' : diffSs > 0 && diffSs <= 120 ? '🟡' : '⚪';
+    elSs.textContent = dotSs + ' Coucher' + label + ': ' + fmt(ss);
   }
 }
 function toggleDrow(id){ const el=document.getElementById(id); if(el) el.classList.toggle('open'); }
