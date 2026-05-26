@@ -2281,22 +2281,36 @@ function scoreDay(spot, h) {
   // ── 1. VISIBILITÉ AU POINT D'OBSERVATION (25 pts) ──
   // Critère roi : si on voit pas loin depuis le spot, c'est mort
   const vis = h.vis ?? 0;
-  const visPts = vis > 80 ? 25 : vis > 50 ? 22 : vis > 30 ? 17 : vis > 20 ? 11 : vis > 10 ? 5 : 0;
-  const visColor = vis > 50 ? 'green' : vis > 20 ? 'amber' : 'red';
-  const visVerdict = vis > 80 ? '⭐ Cristalline' : vis > 50 ? t('cv.ok') : vis > 20 ? t('cv.reduite') : `❌ Brume/brouillard`;
+  // Seuils recalibrés sur le plafond réel open-meteo (~40 km max)
+  const visPts = vis > 40 ? 25 : vis > 30 ? 20 : vis > 20 ? 13 : vis > 10 ? 6 : 0;
+  const visColor = vis > 30 ? 'green' : vis > 15 ? 'amber' : 'red';
+  const visVerdict = vis > 40 ? '⭐ Cristalline' : vis > 30 ? t('cv.ok') : vis > 15 ? t('cv.reduite') : `❌ Brume/brouillard`;
   add(t('crit.vis_obs'), vis, 'km', visPts, 25, visColor, visVerdict);
 
   // ── 2. TRANSPARENCE AXE MI-TRAJET (20 pts) ──
   // Indice calculé — indépendant du plafonnage API visibilité
   // Variables : RH mid, dust worst-case, pm10 worst-case, CAPE mid
   (function transparenceAxe() {
-    const rhM   = h.rh_mid ?? h.rh ?? 80;
-    const dust  = h.dust   ?? 0;
-    const pm10  = h.pm10   ?? 0;
-    const cape  = h.cape   ?? 0;
+    const rhM      = h.rh_mid ?? h.rh ?? 80;
+    const dust     = h.dust   ?? 0;
+    const pm10     = h.pm10   ?? 0;
+    const cape     = h.cape   ?? 0;
+    // spread_mid = T - Td au mi-trajet. Faible spread = brume réelle imminente.
+    // En altitude, RH élevée sans spread faible = air humide mais transparent.
+    const spreadM  = h.spread_mid ?? h.spread ?? null;
 
-    // Pénalités indépendantes (budget 20 pts)
-    const penRH   = rhM < 55 ? 0 : rhM < 65 ? 2 : rhM < 75 ? 5 : rhM < 85 ? 9 : 13;
+    // Pénalité brume : basée sur spread plutôt que RH brute
+    // spread > 10° → air sec même si RH haute (altitude) → 0
+    // spread 5-10° → légère humidité → pénalité faible
+    // spread 2-5°  → brume possible → pénalité modérée
+    // spread < 2°  → condensation / brume certaine → pénalité forte
+    // Fallback sur RH si spread non disponible
+    let penRH;
+    if (spreadM !== null) {
+      penRH = spreadM > 10 ? 0 : spreadM > 5 ? 2 : spreadM > 2 ? 6 : spreadM > 0 ? 11 : 14;
+    } else {
+      penRH = rhM < 55 ? 0 : rhM < 65 ? 2 : rhM < 75 ? 5 : rhM < 85 ? 9 : 13;
+    }
     const penDust = dust < 20 ? 0 : dust < 80 ? 3 : dust < 200 ? 7 : 12;
     const penPM10 = pm10 < 30 ? 0 : pm10 < 60 ? 2 : pm10 < 100 ? 4 : 7;
     const penCAPE = cape < 200 ? 0 : cape < 500 ? 1 : cape < 1000 ? 3 : 5;
@@ -2309,7 +2323,7 @@ function scoreDay(spot, h) {
     if      (transpPts >= 18) transpVerdict = '⭐ Axe limpide';
     else if (transpPts >= 14) transpVerdict = t('cv.ok');
     else if (penDust >= 7)    transpVerdict = `❌ Dust ${Math.round(dust)} µg/m³`;
-    else if (penRH >= 9)      transpVerdict = `⚠️ Brume RH ${Math.round(rhM)}%`;
+    else if (penRH >= 9)      transpVerdict = spreadM !== null ? `⚠️ Brume spread ${spreadM.toFixed(1)}°C` : `⚠️ Brume RH ${Math.round(rhM)}%`;
     else if (penPM10 >= 4)    transpVerdict = `⚠️ Haze PM10 ${Math.round(pm10)} µg/m³`;
     else if (penCAPE >= 3)    transpVerdict = `⚠️ Convection CAPE ${Math.round(cape)}`;
     else                      transpVerdict = t('cv.reduite');
@@ -2469,8 +2483,8 @@ function scoreDay(spot, h) {
       let solarFactor = 1.0;
       let solarVerdict, solarColor;
       if (diff > 90) {
-        solarFactor = 1.05; solarColor = 'green';
-        solarVerdict = `☀️ Soleil dos (${Math.round(diff)}°) +5%`;
+        solarFactor = 1.0; solarColor = 'green';
+        solarVerdict = `☀️ Soleil dos (${Math.round(diff)}°) neutre`;
       } else if (diff >= 45) {
         solarFactor = 1.0; solarColor = 'green';
         solarVerdict = `☀️ Soleil latéral (${Math.round(diff)}°)`;
@@ -2619,6 +2633,7 @@ wind_shear: (()=>{const w80=avg(d2.hourly?.wind_speed_80m);const w120=avg(d2.hou
 dust: (()=>{ const v=[avg(d3.hourly?.dust),avg(d3b?.hourly?.dust),avg(d3c?.hourly?.dust)].filter(x=>x!==null&&x!==undefined); return v.length?Math.max(...v):null; })(),
 pm10: (()=>{ const v=[avg(d3.hourly?.pm10),avg(d3b?.hourly?.pm10),avg(d3c?.hourly?.pm10)].filter(x=>x!==null&&x!==undefined); return v.length?Math.max(...v):null; })(),
 rh_mid: avg(d2?.hourly?.relative_humidity_2m),
+spread_mid: (()=>{ const t=avg(d2?.hourly?.temperature_2m); const d=avg(d2?.hourly?.dew_point_2m); return (t!==null&&d!==null)?t-d:null; })(),
 wind: avg(d1.hourly?.wind_speed_10m),
       vis: (avg(d1.hourly?.visibility)??0)/1000,
       precip: avg(d1.hourly?.precipitation_probability),
@@ -2651,7 +2666,7 @@ wind: avg(d1.hourly?.wind_speed_10m),
         precip: d1.hourly?.precipitation_probability?.[hourIdx] ?? h.precip,
         vis_mid: (d2.hourly?.visibility?.[hourIdx] ?? 0)/1000 || h.vis_mid,
         spread: (tH!=null && dH!=null) ? tH-dH : h.spread,
-        dust: h.dust, pm10: h.pm10, rh_mid: h.rh_mid, cape: h.cape,
+        dust: h.dust, pm10: h.pm10, rh_mid: h.rh_mid, spread_mid: h.spread_mid, cape: h.cape,
         _day: h._day, _obsDate: obsDate.toISOString(),
       };
       const rawScore = scoreDay(spot, hData).score;
@@ -2660,7 +2675,7 @@ wind: avg(d1.hourly?.wind_speed_10m),
       hourlyScores[offset + '_elev'] = Math.round(elev * 10) / 10;
     }
     
-    daily.push({ date:dt, day, sunriseHour, sunriseStr, hourlyScores, ...scoreDay(spot,h), raw:h });;
+    daily.push({ date:dt, day, sunriseHour, sunriseStr, hourlyScores, ...scoreDay(spot,h), raw:h, _d1:d1, _d2:d2 });;
   }
   return daily;
 }
@@ -2965,12 +2980,47 @@ function buildScoreExplain(items, score, spotId, day, spotName, dateLabel) {
 }
 
 function renderDayRow(dayData, date, spot) {
-  const {items,hasElim,day} = dayData;
+  const {hasElim,day} = dayData;
   const score = getScore(forecasts[spot.id], day);
   const h = dayData.raw || {};
   const cls=cellClass(score), sc=scoreColor(score), isToday=day===0;
   const did=`dr-${spot.id}-${day}`;
   const k = h.k_bislin;
+
+  // Recalculer les items selon le créneau horaire sélectionné
+  const tw = document.getElementById('time-window')?.value || '1';
+  let items, scoredResult;
+  if (tw === 'avg' || tw === 'now') {
+    scoredResult = scoreDay(spot, h);
+  } else {
+    const offset = parseFloat(tw);
+    const sunriseStr = dayData.sunriseStr;
+    const sunriseHour = dayData.sunriseHour ?? 7;
+    const hourIdx = day * 24 + Math.floor(sunriseHour + offset);
+    const d1 = dayData._d1 ?? {};
+    const d2 = dayData._d2 ?? {};
+    const tH = d1.hourly?.temperature_2m?.[hourIdx];
+    const dH = d1.hourly?.dew_point_2m?.[hourIdx];
+    const obsDate = sunriseStr ? new Date(sunriseStr) : new Date();
+    obsDate.setMinutes(obsDate.getMinutes() + Math.round(offset * 60));
+    const hData = {
+      cloud_low: d1.hourly?.cloud_cover_low?.[hourIdx] ?? h.cloud_low,
+      cloud_mid: d1.hourly?.cloud_cover_mid?.[hourIdx] ?? h.cloud_mid,
+      cloud_high: d1.hourly?.cloud_cover_high?.[hourIdx] ?? h.cloud_high,
+      fog: d1.hourly?.fog?.[hourIdx] ?? h.fog,
+      rh: d1.hourly?.relative_humidity_2m?.[hourIdx] ?? h.rh,
+      slp: (()=>{const P_h=d1.hourly?.surface_pressure?.[hourIdx]??h.slp; const T_K=(tH??h.temp??15)+273.15; const alt=spot.obs.alt||0; return P_h*Math.exp(alt/(29.3*T_K));})(),
+      wind: (()=>{const w=d1.hourly?.wind_speed_10m?.[hourIdx]??h.wind; return (w===999||w===null||w===undefined)?h.wind:w;})(),
+      vis: (d1.hourly?.visibility?.[hourIdx] ?? 0)/1000 || h.vis,
+      precip: d1.hourly?.precipitation_probability?.[hourIdx] ?? h.precip,
+      vis_mid: (d2.hourly?.visibility?.[hourIdx] ?? 0)/1000 || h.vis_mid,
+      spread: (tH!=null && dH!=null) ? tH-dH : h.spread,
+      dust: h.dust, pm10: h.pm10, rh_mid: h.rh_mid, spread_mid: h.spread_mid, cape: h.cape,
+      _day: h._day, _obsDate: obsDate.toISOString(),
+    };
+    scoredResult = scoreDay(spot, hData);
+  }
+  items = scoredResult.items;
 
   const explainBtn = buildScoreExplain(items, score, spot.id, day, spot.name, fullLabel(date));
   return `<div class="drow">
