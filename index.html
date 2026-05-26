@@ -2440,65 +2440,154 @@ function scoreDay(spot, h) {
     add(t('crit.dust'), Math.round(dust), 'µg/m³', dustPts, 15, dustColor, dustVerdict);
   }
 
-  // ── 11. GÉOMÉTRIE SOLAIRE ─────────────────────────
-  // Formule Jean Meeus simplifiée — JS pur, sans API
-  (function solarGeometry() {
+  // ── 11. GÉOMÉTRIE SOLAIRE & ÉCLAIRAGE OPTIQUE (Gemini M1+M3) ──────────
+  // Calcul par orthodromie (grand cercle) + catégories d'éclairage fines
+  // + modulateur AOD adaptatif selon type d'éclairage (Koschmieder/Mie)
+  (function solarGeometryAdvanced() {
     try {
-      const lat = spot.obs.lat * Math.PI / 180;
-      const lon = spot.obs.lon;
-      // Jour julien — utilise l'heure réelle du créneau si fournie (_obsDate), sinon 8h UTC
-      const obsDay = h._obsDate ? new Date(h._obsDate) : (() => { const d = new Date(); d.setDate(d.getDate() + (h._day||0)); d.setUTCHours(8,0,0,0); return d; })();
-      const JD = obsDay.getTime() / 86400000 + 2440587.5;
-      const n  = JD - 2451545.0;
-      const L  = (280.460 + 0.9856474 * n) % 360;
-      const g  = (357.528 + 0.9856003 * n) * Math.PI / 180;
-      const lam = (L + 1.915 * Math.sin(g) + 0.020 * Math.sin(2*g)) * Math.PI / 180;
-      const eps = 23.439 * Math.PI / 180;
+      const toRad = d => d * Math.PI / 180;
+      const toDeg = r => r * 180 / Math.PI;
+
+      // ── Heure d'observation réelle ──
+      let obsDay = h._obsDate ? new Date(h._obsDate) : null;
+      if (!obsDay || isNaN(obsDay.getTime())) {
+        obsDay = new Date(); obsDay.setDate(obsDay.getDate() + (h._day||0)); obsDay.setUTCHours(8,0,0,0);
+      }
+
+      // ── Azimut cible par orthodromie (grand cercle) ──
+      // Plus précis que le parsing regex de spot.azimut pour les longues distances
+      if (!spot.tgt?.lat || !spot.tgt?.lon || !spot.obs?.lat || !spot.obs?.lon) return;
+      const lat1 = toRad(spot.obs.lat), lon1 = toRad(spot.obs.lon);
+      const lat2 = toRad(spot.tgt.lat), lon2 = toRad(spot.tgt.lon);
+      const dLon = lon2 - lon1;
+      const yGC = Math.sin(dLon) * Math.cos(lat2);
+      const xGC = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+      const targetAz = (toDeg(Math.atan2(yGC, xGC)) + 360) % 360;
+
+      // ── Position solaire (Jean Meeus — même précision qu'avant) ──
+      const JD  = obsDay.getTime() / 86400000 + 2440587.5;
+      const n   = JD - 2451545.0;
+      const L   = (280.460 + 0.9856474 * n) % 360;
+      const g   = toRad((357.528 + 0.9856003 * n) % 360);
+      const lam = toRad(L + 1.915 * Math.sin(g) + 0.020 * Math.sin(2*g));
+      const eps = toRad(23.439 - 0.0000004 * n);
       const sinDec = Math.sin(eps) * Math.sin(lam);
       const dec    = Math.asin(sinDec);
-      // Equation du temps (minutes) → correction longitude
-      const RA = Math.atan2(Math.cos(eps)*Math.sin(lam), Math.cos(lam));
-      const B  = (360/365)*(obsDay.getUTCDay()-81)*Math.PI/180;
-      const EoT = 9.87*Math.sin(2*B)-7.53*Math.cos(B)-1.5*Math.sin(B);
-      const solarNoon = 12 - lon/15 - EoT/60; // heure locale UTC
-      const HA = (8 - solarNoon) * 15 * Math.PI / 180; // angle horaire 8h UTC
-      // Altitude solaire
-      const sinAlt = Math.sin(lat)*sinDec + Math.cos(lat)*Math.cos(dec)*Math.cos(HA);
-      const sunAlt  = Math.asin(sinAlt) * 180 / Math.PI;
-      if (sunAlt < -6) return; // nuit / avant aube nautique — pas de malus
-      // Azimut solaire (°N)
-      const cosAz = (sinDec - Math.sin(lat)*sinAlt) / (Math.cos(lat)*Math.cos(Math.asin(sinAlt)));
-      let sunAz = Math.acos(Math.max(-1, Math.min(1, cosAz))) * 180 / Math.PI;
+      // Heure solaire vraie via équation du temps (plus robuste que GMST brut)
+      const RA  = Math.atan2(Math.cos(eps) * Math.sin(lam), Math.cos(lam));
+      const B_eot = toRad((360/365) * ((obsDay.getUTCMonth()*30.44 + obsDay.getUTCDate()) - 81));
+      const EoT = 9.87*Math.sin(2*B_eot) - 7.53*Math.cos(B_eot) - 1.5*Math.sin(B_eot); // minutes
+      const utcH = obsDay.getUTCHours() + obsDay.getUTCMinutes()/60 + obsDay.getUTCSeconds()/3600;
+      const solarNoon = 12 - spot.obs.lon/15 - EoT/60;
+      const HA   = toRad((utcH - solarNoon) * 15);
+      // Élévation
+      const sinAlt = Math.sin(lat1)*sinDec + Math.cos(lat1)*Math.cos(dec)*Math.cos(HA);
+      const sunAlt  = toDeg(Math.asin(Math.max(-1, Math.min(1, sinAlt))));
+      // Azimut solaire
+      const cosAz = (sinDec - Math.sin(lat1) * Math.sin(toRad(sunAlt))) /
+                    (Math.cos(lat1) * Math.cos(toRad(sunAlt)));
+      let sunAz = toDeg(Math.acos(Math.max(-1, Math.min(1, cosAz))));
       if (Math.sin(HA) > 0) sunAz = 360 - sunAz;
-      // Azimut obs→cible depuis spot.azimut (ex: '221°–236°' → prendre valeur médiane)
-      const azStr = String(spot.azimut || '0');
-      const azNums = azStr.match(/[\d.]+/g);
-      let targetAz = 0;
-      if (azNums && azNums.length >= 2) targetAz = (parseFloat(azNums[0]) + parseFloat(azNums[azNums.length-1])) / 2;
-      else if (azNums && azNums.length === 1) targetAz = parseFloat(azNums[0]);
-      // Angle entre soleil et axe de visée
+
+      // ── Delta angulaire horizontal absolu ──
       let diff = Math.abs(sunAz - targetAz) % 360;
       if (diff > 180) diff = 360 - diff;
-      // Application malus/bonus
+
+      // ── Classification éclairage (5 catégories Gemini) ──
+      let lightingType;
+      if (sunAlt < -2) {
+        lightingType = 'NO_SUN';
+      } else if (diff < 12 && sunAlt >= -1 && sunAlt <= 4.5) {
+        lightingType = 'BACKLIGHT_PERFECT'; // ombre chinoise — silhouette noire sur fond lumineux
+      } else if (diff <= 25 && sunAlt < 7) {
+        lightingType = 'BACKLIGHT_GOOD';
+      } else if (diff > 25 && diff <= 90 && sunAlt < 15) {
+        lightingType = 'LATERAL_GRAZING'; // lumière rasante qui détache les reliefs
+      } else {
+        lightingType = 'FRONT_LIGHT'; // diffusion Mie directe dans l'axe
+      }
+
+      // ── Application sur le score selon type d'éclairage ──
       let solarFactor = 1.0;
       let solarVerdict, solarColor;
-      if (diff > 90) {
+
+      if (lightingType === 'NO_SUN') {
+        // Nuit / avant aube nautique — pas de calcul solaire
+        return;
+      } else if (lightingType === 'BACKLIGHT_PERFECT') {
+        // Bonus ombre chinoise : silhouette noire découpe l'horizon
+        solarFactor = 1.10; solarColor = 'green';
+        solarVerdict = `⭐ Rétroéclairage parfait (${Math.round(diff)}°) +10% — ombre chinoise`;
+      } else if (lightingType === 'BACKLIGHT_GOOD') {
         solarFactor = 1.0; solarColor = 'green';
-        solarVerdict = `☀️ Soleil dos (${Math.round(diff)}°) neutre`;
-      } else if (diff >= 45) {
+        solarVerdict = `✅ Contre-jour favorable (${Math.round(diff)}°, élév. ${Math.round(sunAlt)}°)`;
+      } else if (lightingType === 'LATERAL_GRAZING') {
+        // Neutre — lumière rasante améliore le relief mais n'éblouit pas
         solarFactor = 1.0; solarColor = 'green';
-        solarVerdict = `☀️ Soleil latéral (${Math.round(diff)}°)`;
-      } else if (diff >= 20) {
-        solarFactor = 0.85; solarColor = 'amber';
-        solarVerdict = `⚠️ Soleil <45° de l'axe (${Math.round(diff)}°) -15%`;
+        solarVerdict = `☀️ Lumière rasante latérale (${Math.round(diff)}°) — reliefs détachés`;
       } else {
-        solarFactor = 0.70; solarColor = 'red';
-        solarVerdict = `❌ Soleil <20° de l'axe (${Math.round(diff)}°) -30%`;
+        // FRONT_LIGHT : diffusion de Mie dans l'axe, pénalité progressive
+        if (diff <= 20) {
+          solarFactor = 0.70; solarColor = 'red';
+          solarVerdict = `❌ Soleil quasi face (${Math.round(diff)}°) -30% — diffusion Mie maximale`;
+        } else if (diff <= 45) {
+          solarFactor = 0.85; solarColor = 'amber';
+          solarVerdict = `⚠️ Éclairage face partiel (${Math.round(diff)}°) -15%`;
+        } else {
+          solarFactor = 1.0; solarColor = 'green';
+          solarVerdict = `☀️ Soleil dos/latéral (${Math.round(diff)}°) neutre`;
+        }
       }
-      // Appliquer le facteur au score courant
+
+      // Appliquer le facteur solaire au score courant
       score = Math.round(score * solarFactor);
       items.push({ name: '☀️ Géométrie solaire', val: Math.round(diff), unit: '°', pts: 0, max: 0, color: solarColor, verdict: solarVerdict, elim: false });
-    } catch(e) { /* silencieux si calcul impossible */ }
+
+      // ── MODULE 3 : Modulateur AOD adaptatif selon éclairage ──────────
+      // L'AOD est déjà pénalisé dans le critère dust (µg/m³).
+      // Ici on applique un bonus/malus SUPPLÉMENTAIRE sur le score final
+      // en fonction du seuil d'extinction propre à chaque type d'éclairage.
+      // En contre-jour, la silhouette noire tolère plus d'aérosols.
+      // En face/latéral, la diffusion de Mie est directe → seuil plus bas.
+      const aod = h.aod ?? null; // champ optionnel — null si non dispo
+      if (aod !== null) {
+        let aodThresholdPoor, aodThresholdGood;
+        if (lightingType === 'BACKLIGHT_PERFECT') {
+          aodThresholdPoor = 0.19; aodThresholdGood = 0.08;
+        } else if (lightingType === 'BACKLIGHT_GOOD') {
+          aodThresholdPoor = 0.16; aodThresholdGood = 0.07;
+        } else if (lightingType === 'LATERAL_GRAZING') {
+          aodThresholdPoor = 0.13; aodThresholdGood = 0.06;
+        } else {
+          // FRONT_LIGHT — le plus sévère
+          aodThresholdPoor = 0.11; aodThresholdGood = 0.05;
+        }
+        let aodPts = 0, aodColor, aodVerdict;
+        if (aod >= aodThresholdPoor) {
+          aodPts = -12; aodColor = 'red';
+          aodVerdict = `❌ AOD ${aod.toFixed(3)} — extinction optique critique (seuil ${aodThresholdPoor} pour ${lightingType})`;
+        } else if (aod <= aodThresholdGood) {
+          aodPts = 8; aodColor = 'green';
+          aodVerdict = `⭐ AOD ${aod.toFixed(3)} — atmosphère limpide`;
+        } else {
+          aodPts = 0; aodColor = 'amber';
+          aodVerdict = `AOD ${aod.toFixed(3)} — transparence standard`;
+        }
+        score = Math.max(0, score + aodPts);
+        items.push({ name: '🌫️ AOD (éclairage)', val: aod.toFixed(3), unit: '', pts: aodPts, max: 8, color: aodColor, verdict: aodVerdict, elim: false });
+      }
+
+      // ── Mirage inférieur / miroitement thermique ──────────────────────
+      // Risque si soleil déjà haut (>8°) + air pas parfaitement pur
+      // Pénalité de netteté (flou thermique de surface)
+      const transpScore = h._transp ?? 20;
+      if (sunAlt > 8 && transpScore < 14) {
+        const miragePts = -8;
+        score = Math.max(0, score + miragePts);
+        items.push({ name: '🌡️ Mirage inférieur', val: Math.round(sunAlt), unit: '°', pts: miragePts, max: 0, color: 'amber', verdict: `⚠️ Risque miroitement thermique (soleil ${Math.round(sunAlt)}°, axe dégradé)`, elim: false });
+      }
+
+    } catch(e) { console.warn('solarGeometryAdvanced error:', e.message, e.stack); items.push({ name: '☀️ Géométrie solaire', val: 'err', unit: '', pts: 0, max: 0, color: 'red', verdict: '⚠️ Calcul impossible: ' + e.message, elim: false }); }
   })();
 
   // ── SCORE FINAL ──────────────────────────────────
@@ -2667,6 +2756,7 @@ wind: avg(d1.hourly?.wind_speed_10m),
         vis_mid: (d2.hourly?.visibility?.[hourIdx] ?? 0)/1000 || h.vis_mid,
         spread: (tH!=null && dH!=null) ? tH-dH : h.spread,
         dust: h.dust, pm10: h.pm10, rh_mid: h.rh_mid, spread_mid: h.spread_mid, cape: h.cape,
+        aod: h.aod ?? null,
         _day: h._day, _obsDate: obsDate.toISOString(),
       };
       const rawScore = scoreDay(spot, hData).score;
@@ -2675,6 +2765,9 @@ wind: avg(d1.hourly?.wind_speed_10m),
       hourlyScores[offset + '_elev'] = Math.round(elev * 10) / 10;
     }
     
+    // Injecter _obsDate dans h pour que solarGeometryAdvanced ait une date réelle (sunrise + 1h)
+    const mainObsDate = sunriseStr ? new Date(new Date(sunriseStr).getTime() + 60*60*1000) : (() => { const d=new Date(dt); d.setUTCHours(7,0,0,0); return d; })();
+    h._obsDate = mainObsDate.toISOString();
     daily.push({ date:dt, day, sunriseHour, sunriseStr, hourlyScores, ...scoreDay(spot,h), raw:h, _d1:d1, _d2:d2 });;
   }
   return daily;
@@ -2913,11 +3006,17 @@ function renderCards(loading) {
 function openScoreModal(dataB64) {
   const data = JSON.parse(decodeURIComponent(escape(atob(dataB64))));
   const { items, score, spotName, dateLabel } = data;
+
+  // Critères avec max > 0 → classés good/bad selon ratio
   const scored = items.filter(it => it.max > 0);
-  const solar  = items.find(it => it.name && it.name.includes('solaire'));
+  const good   = scored.filter(it => it.pts >= 0 && it.pts / it.max >= 0.75);
+  const bad    = scored.filter(it => it.pts / it.max < 0.75);
+
+  // Items "modificateurs" (max=0) : solaire, AOD, mirage
+  const solar    = items.find(it => it.name && it.name.includes('Géométrie solaire'));
+  const aodItem  = items.find(it => it.name && it.name.includes('AOD'));
+  const mirage   = items.find(it => it.name && it.name.includes('Mirage'));
   const transpItem = items.find(it => it.unit === '/20');
-  const good   = scored.filter(it => it.pts / it.max >= 0.75);
-  const bad    = scored.filter(it => it.pts / it.max < 0.75 || it.pts < 0);
 
   const fmtGood = it => {
     const pct = Math.round((it.pts / it.max) * 100);
@@ -2934,8 +3033,22 @@ function openScoreModal(dataB64) {
   const badHtml = bad.length
     ? bad.map(fmtBad).join('')
     : `<div class="sep-item" style="color:#4ade80">Aucune pénalité — score optimal ✨</div>`;
+
+  // Bloc géométrie solaire + AOD + mirage
+  const solarColor = solar ? (solar.color === 'green' ? '#4ade80' : solar.color === 'amber' ? 'var(--amber)' : 'var(--red)') : '';
   const solarHtml = solar
-    ? `<div class="sep-solar">☀️ Géométrie solaire : ${solar.verdict}</div>` : '';
+    ? `<div class="sep-solar" style="color:${solarColor}">☀️ Géométrie solaire : ${solar.verdict}</div>`
+    : '';
+
+  const aodColor = aodItem ? (aodItem.color === 'green' ? '#4ade80' : aodItem.color === 'amber' ? 'var(--amber)' : 'var(--red)') : '';
+  const aodHtml = aodItem
+    ? `<div class="sep-solar" style="color:${aodColor}">🌫️ ${aodItem.verdict}</div>`
+    : '';
+
+  const mirageColor = mirage ? 'var(--amber)' : '';
+  const mirageHtml = mirage
+    ? `<div class="sep-solar" style="color:${mirageColor}">🌡️ ${mirage.verdict}</div>`
+    : '';
 
   // Bloc explication transparence axe
   const transpHtml = transpItem ? (() => {
@@ -2955,11 +3068,11 @@ function openScoreModal(dataB64) {
   document.getElementById('score-modal-body').innerHTML = `
     <div class="score-modal-title">🔭 ANALYSE DU SCORE — ${spotName} · ${dateLabel}</div>
     <div class="score-modal-score" style="color:${scColor}">${score}<span style="font-size:14px;color:var(--text3)">/100</span></div>
+    ${solarHtml}${aodHtml}${mirageHtml}
     <div class="sep-section sep-good">✅ Bonnes conditions</div>
     ${goodHtml}
     <div class="sep-section sep-bad">⚠️ Ce qui a pénalisé</div>
     ${badHtml}
-    ${solarHtml}
     ${transpHtml}
   `;
   document.getElementById('score-modal-overlay').classList.add('open');
@@ -2991,6 +3104,12 @@ function renderDayRow(dayData, date, spot) {
   const tw = document.getElementById('time-window')?.value || '1';
   let items, scoredResult;
   if (tw === 'avg' || tw === 'now') {
+    // S'assurer que h a une _obsDate correcte pour solarGeometryAdvanced
+    if (!h._obsDate || isNaN(new Date(h._obsDate).getTime())) {
+      const sr = dayData.sunriseStr;
+      const d0 = sr ? new Date(new Date(sr).getTime() + 60*60*1000) : (() => { const d=new Date(); d.setDate(d.getDate()+(h._day||0)); d.setUTCHours(7,0,0,0); return d; })();
+      h._obsDate = d0.toISOString();
+    }
     scoredResult = scoreDay(spot, h);
   } else {
     const offset = parseFloat(tw);
@@ -3016,6 +3135,7 @@ function renderDayRow(dayData, date, spot) {
       vis_mid: (d2.hourly?.visibility?.[hourIdx] ?? 0)/1000 || h.vis_mid,
       spread: (tH!=null && dH!=null) ? tH-dH : h.spread,
       dust: h.dust, pm10: h.pm10, rh_mid: h.rh_mid, spread_mid: h.spread_mid, cape: h.cape,
+      aod: h.aod ?? null,
       _day: h._day, _obsDate: obsDate.toISOString(),
     };
     scoredResult = scoreDay(spot, hData);
@@ -3049,7 +3169,9 @@ const MB_ICONS = {
   'Vis. obs.': `<svg viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="vog" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#60d8f8"/><stop offset="100%" stop-color="#1a7aaa"/></radialGradient></defs><path d="M3 13 Q13 4 23 13 Q13 22 3 13 Z" stroke="#5ab8d8" stroke-width="1.5" fill="none" opacity=".7"/><circle cx="13" cy="13" r="4.5" fill="url(#vog)" opacity=".9"/><circle cx="11.5" cy="11.5" r="1.5" fill="rgba(255,255,255,.4)"/><circle cx="13" cy="13" r="1.5" fill="#0a4a6a"/></svg>`,
   'Vis. maritime': `<svg viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 18 Q7 15 13 18 Q19 21 23 18" stroke="#5ab8d8" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M13 5 L8 15 L18 15 Z" stroke="#7acce0" stroke-width="1.5" fill="rgba(90,180,220,.2)" stroke-linejoin="round"/><path d="M3 21 Q7 19 13 21 Q19 23 23 21" stroke="#4a9ab8" stroke-width="1.5" fill="none" stroke-linecap="round" opacity=".6"/></svg>`,
   'Vis. mi-trajet': `<svg viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 13 Q13 4 23 13 Q13 22 3 13 Z" stroke="#5ab8d8" stroke-width="1.5" fill="none" opacity=".5"/><circle cx="13" cy="13" r="4.5" fill="rgba(56,189,248,.15)"/><line x1="13" y1="5" x2="13" y2="21" stroke="#38bdf8" stroke-width="1" stroke-dasharray="2,2" opacity=".5"/><circle cx="13" cy="13" r="2" fill="#38bdf8" opacity=".8"/></svg>`,
-  'Précipitations': `<svg viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg"><ellipse cx="13" cy="10" rx="7" ry="5" fill="#8ab8d8" opacity=".7"/><ellipse cx="8" cy="11" rx="4.5" ry="3.5" fill="#9acce0" opacity=".7"/><line x1="9" y1="17" x2="7" y2="21" stroke="#60b8e8" stroke-width="1.8" stroke-linecap="round"/><line x1="13" y1="17" x2="11" y2="21" stroke="#50aade" stroke-width="1.8" stroke-linecap="round"/><line x1="17" y1="17" x2="15" y2="21" stroke="#60b8e8" stroke-width="1.8" stroke-linecap="round"/></svg>`
+  'Dust': `<svg viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="13" cy="10" r="5" fill="rgba(205,160,80,.25)" stroke="#c89840" stroke-width="1.2"/><circle cx="8" cy="14" r="3.5" fill="rgba(205,160,80,.2)" stroke="#b88830" stroke-width="1"/><circle cx="18" cy="13" r="3" fill="rgba(205,160,80,.2)" stroke="#b88830" stroke-width="1"/><circle cx="13" cy="17" r="4" fill="rgba(180,130,60,.2)" stroke="#a87820" stroke-width="1"/></svg>`,
+  'Précipitations': `<svg viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg"><ellipse cx="13" cy="10" rx="7" ry="5" fill="#8ab8d8" opacity=".7"/><ellipse cx="8" cy="11" rx="4.5" ry="3.5" fill="#9acce0" opacity=".7"/><line x1="9" y1="17" x2="7" y2="21" stroke="#60b8e8" stroke-width="1.8" stroke-linecap="round"/><line x1="13" y1="17" x2="11" y2="21" stroke="#50aade" stroke-width="1.8" stroke-linecap="round"/><line x1="17" y1="17" x2="15" y2="21" stroke="#60b8e8" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+  'Géométrie solaire': `<svg viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="sug" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fde68a"/><stop offset="100%" stop-color="#f59e0b"/></radialGradient></defs><circle cx="13" cy="13" r="5" fill="url(#sug)" opacity=".95"/><line x1="13" y1="3" x2="13" y2="5.5" stroke="#fbbf24" stroke-width="1.8" stroke-linecap="round"/><line x1="13" y1="20.5" x2="13" y2="23" stroke="#fbbf24" stroke-width="1.8" stroke-linecap="round"/><line x1="3" y1="13" x2="5.5" y2="13" stroke="#fbbf24" stroke-width="1.8" stroke-linecap="round"/><line x1="20.5" y1="13" x2="23" y2="13" stroke="#fbbf24" stroke-width="1.8" stroke-linecap="round"/><line x1="6" y1="6" x2="7.8" y2="7.8" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round"/><line x1="18.2" y1="18.2" x2="20" y2="20" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round"/><line x1="20" y1="6" x2="18.2" y2="7.8" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round"/><line x1="7.8" y1="18.2" x2="6" y2="20" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round"/></svg>`
 };
 
 function getMbIcon(name) {
@@ -3058,7 +3180,7 @@ function getMbIcon(name) {
 }
 
 function renderMeteoButtons(items) {
-  return items.map(it => {
+  const normal = items.filter(it => it.max > 0).map(it => {
     const state = it.elim ? 'elim' : it.color==='amber' ? 'warn' : 'ok';
     const icon = getMbIcon(it.name);
     const badge = it.elim ? '<span class="mb-badge">ÉLIM</span>' : '';
@@ -3069,6 +3191,21 @@ function renderMeteoButtons(items) {
       <div class="mb-val">${it.val}${it.unit}</div>
     </div>`;
   }).join('');
+
+  // Bouton géométrie solaire (max=0 mais nom connu)
+  const solar = items.find(it => it.name && it.name.includes('Géométrie solaire'));
+  let solarBtn = '';
+  if (solar && solar.val !== undefined && solar.val !== 'err') {
+    const solarState = solar.color === 'green' ? 'ok' : solar.color === 'amber' ? 'warn' : 'elim';
+    const solarIcon = getMbIcon('Géométrie solaire');
+    solarBtn = `<div class="mb ${solarState}" title="${solar.verdict || ''}">
+      <div class="mb-icon">${solarIcon}</div>
+      <div class="mb-lbl">Solaire</div>
+      <div class="mb-val">${solar.val}°</div>
+    </div>`;
+  }
+
+  return normal + solarBtn;
 }
 
 function renderNewCurveBlock(spot, k_default) {
