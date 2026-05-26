@@ -2796,6 +2796,32 @@ wind: avg(d1.hourly?.wind_speed_10m),
     const sunsetStr = d1.daily?.sunset?.[day];
     const sunsetHour = sunsetStr ? new Date(sunsetStr).getHours() + new Date(sunsetStr).getMinutes()/60 : 20;
     const hourlyScores = {};
+    // ── Slots heure absolue (pour mode "Maintenant" sur tous les jours) ──
+    // On couvre les heures de la journée (0h–23h) en absolu
+    for (let absH = 0; absH < 24; absH++) {
+      const hourIdx = day*24 + absH;
+      const tH = d1.hourly?.temperature_2m?.[hourIdx];
+      const dH = d1.hourly?.dew_point_2m?.[hourIdx];
+      const obsDate = new Date(); obsDate.setHours(absH, 0, 0, 0); obsDate.setDate(obsDate.getDate() + day);
+      const hDataAbs = {
+        cloud_low: d1.hourly?.cloud_cover_low?.[hourIdx] ?? h.cloud_low,
+        cloud_mid: d1.hourly?.cloud_cover_mid?.[hourIdx] ?? h.cloud_mid,
+        cloud_high: d1.hourly?.cloud_cover_high?.[hourIdx] ?? h.cloud_high,
+        fog: d1.hourly?.fog?.[hourIdx] ?? h.fog,
+        rh: d1.hourly?.relative_humidity_2m?.[hourIdx] ?? h.rh,
+        slp: (()=>{const P_h=d1.hourly?.surface_pressure?.[hourIdx]??h.slp; const T_K=(tH??temp??15)+273.15; const alt=spot.obs.alt||0; return P_h*Math.exp(alt/(29.3*T_K));})(),
+        wind: (()=>{const w=d1.hourly?.wind_speed_10m?.[hourIdx]??h.wind; return (w===999||w===null||w===undefined)?h.wind:w;})(),
+        vis: (d1.hourly?.visibility?.[hourIdx] ?? 0)/1000 || h.vis,
+        precip: d1.hourly?.precipitation_probability?.[hourIdx] ?? h.precip,
+        vis_mid: (d2.hourly?.visibility?.[hourIdx] ?? 0)/1000 || h.vis_mid,
+        spread: (tH!=null && dH!=null) ? tH-dH : h.spread,
+        dust: h.dust, pm10: h.pm10, rh_mid: h.rh_mid, spread_mid: h.spread_mid, cape: h.cape,
+        aod: h.aod ?? null,
+        _day: h._day, _obsDate: obsDate.toISOString(),
+      };
+      hourlyScores['abs_' + absH] = scoreDay(spot, hDataAbs).score;
+      hourlyScores['abs_' + absH + '_elev'] = Math.round(solarElevation(spot.obs.lat, spot.obs.lon, obsDate) * 10) / 10;
+    }
     const timeOffsets = [0, 0.5, 1, 1.5, 2, 3, 4, 5];
     for (const offset of timeOffsets) {
       const hourIdx = day*24 + Math.floor(sunriseHour + offset);
@@ -2971,15 +2997,11 @@ function getScore(fc, di) {
   const tw = document.getElementById('time-window')?.value || '1';
   if (tw === 'avg') return fc[di].score;
   if (tw === 'now') {
-    // "Maintenant" n'a de sens que pour aujourd'hui (di=0)
-    // Pour les jours futurs, on affiche +1h et on grise l'option
-    if (di > 0) return fc[di].hourlyScores?.[1] ?? fc[di].score;
+    // "Maintenant" = heure absolue actuelle, identique pour tous les jours
+    // Ex: 17h15 → on lit le score de 17h pour chaque jour
     const now = new Date();
-    const offsetH = now.getHours() + now.getMinutes()/60;
-    const sunriseH = fc[di]?.sunriseHour ?? 7;
-    const offsets = [0,0.5,1,1.5,2,3,4,5];
-    const closest = offsets.reduce((a,b) => Math.abs((sunriseH+b)-offsetH) < Math.abs((sunriseH+a)-offsetH) ? b : a);
-    return fc[di].hourlyScores?.[closest] ?? fc[di].score;
+    const absH = now.getHours();
+    return fc[di].hourlyScores?.['abs_' + absH] ?? fc[di].score;
   }
   return fc[di].hourlyScores?.[parseFloat(tw)] ?? fc[di].score;
 }
@@ -2990,7 +3012,11 @@ function getElev(fc, di) {
     return fc[di].hourlyScores?.[twe + '_elev'] ?? null;
   }
   const tw = document.getElementById('time-window')?.value || '1';
-  if (tw === 'avg' || tw === 'now') return null;
+  if (tw === 'avg') return null;
+  if (tw === 'now') {
+    const absH = new Date().getHours();
+    return fc[di].hourlyScores?.['abs_' + absH + '_elev'] ?? null;
+  }
   return fc[di].hourlyScores?.[parseFloat(tw) + '_elev'] ?? null;
 }
 
@@ -3006,9 +3032,16 @@ function renderMatrix(loading) {
   const tw = document.getElementById('time-window')?.value || '1';
   const twLabels = {'avg':'5-11h','0':'Lever','0.5':'+30m','1':'+1h','1.5':'+1h30','2':'+2h','3':'+3h','4':'+4h','5':'+5h'};
   const eveLabels = {'eve-5':'-5h','eve-4':'-4h','eve-3':'-3h','eve-2':'-2h','eve-1':'-1h'};
-  const twLbl = _timePeriod === 'soir'
-    ? (eveLabels[document.getElementById('time-window-eve')?.value] || '-2h') + ' coucher'
-    : (twLabels[tw] || '+1h');
+  let twLbl;
+  if (_timePeriod === 'soir') {
+    twLbl = (eveLabels[document.getElementById('time-window-eve')?.value] || '-2h') + ' coucher';
+  } else if (tw === 'now') {
+    const nowH = new Date().getHours();
+    const nowM = String(new Date().getMinutes()).padStart(2,'0');
+    twLbl = `${nowH}h${nowM}`;
+  } else {
+    twLbl = twLabels[tw] || '+1h';
+  }
   
   // Badge fenêtre VLD : spot ouvert ou premier dispo
   updateSunriseBadge(null);
@@ -3017,10 +3050,12 @@ function renderMatrix(loading) {
   const nowOpt = document.getElementById('tw-now');
   if (twEl && nowOpt) {
     if (twEl.value === 'now') {
-      nowOpt.text = '⚡ Maintenant · jours futurs → +1h';
-      twEl.style.borderColor = 'rgba(255,180,0,.5)';
+      const nowH = new Date().getHours();
+      const nowM = String(new Date().getMinutes()).padStart(2,'0');
+      nowOpt.text = `⚡ Maintenant · ${nowH}h${nowM} (tous jours)`;
+      twEl.style.borderColor = 'rgba(0,212,255,.5)';
     } else {
-      nowOpt.text = "⚡ Maintenant (aujourd'hui)";
+      nowOpt.text = "⚡ Maintenant";
       twEl.style.borderColor = '';
     }
   }
