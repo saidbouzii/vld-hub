@@ -1525,7 +1525,7 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
 <!-- TIME SLICER -->
 <div class="time-slicer">
   <span class="time-slicer-label">🌅 FENÊTRE HORAIRE</span>
-  <select id="time-window" onchange="if(Object.keys(forecasts).length>0){renderMatrix(false);renderCards(false);renderBanner();}">
+  <select id="time-window" onchange="setTimePeriod('matin'); if(Object.keys(forecasts).length>0){renderMatrix(false);renderCards(false);renderBanner();}">
     <option value="now" id="tw-now">⚡ Maintenant (aujourd'hui)</option>
     <option value="avg">Moyenne matin (5h-11h)</option>
     <option value="0">🌅 Lever soleil exact</option>
@@ -1538,6 +1538,17 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
     <option value="5">🌅 +5h</option>
   </select>
   <span id="ts-sunrise" class="ts-sunrise-badge">⏳ Charger prévisions</span>
+</div>
+<div class="time-slicer" style="margin-top:.4rem;">
+  <span class="time-slicer-label">🌇 CRÉNEAU SOIR</span>
+  <select id="time-window-eve" onchange="setTimePeriod('soir'); if(Object.keys(forecasts).length>0){renderMatrix(false);renderCards(false);renderBanner();}">
+    <option value="eve-5">🌇 -5h avant coucher</option>
+    <option value="eve-4">🌇 -4h avant coucher</option>
+    <option value="eve-3">🌇 -3h avant coucher</option>
+    <option value="eve-2">🌇 -2h avant coucher ⭐</option>
+    <option value="eve-1">🌇 -1h avant coucher</option>
+  </select>
+  <span id="ts-sunset" class="ts-sunrise-badge" style="background:rgba(255,100,0,.12);border-color:rgba(255,100,0,.3);color:#ff8c00;">🌇 —</span>
 </div>
 
 <!-- ONGLETS -->
@@ -2611,6 +2622,54 @@ async function fetchSpot(spot) {
   'relative_humidity_2m','dew_point_2m','temperature_2m','surface_pressure',
   'precipitation_probability'
 ].join(',');
+
+  // ── Fallback fetch : essaie open-meteo, puis le mirror européen ──
+  async function fetchWithFallback(url) {
+    const eb = document.getElementById('err-banner');
+    const showBanner = (msg, type='warn') => {
+      if (!eb) return;
+      eb.style.display = 'block';
+      eb.style.background = type==='ok' ? 'rgba(34,197,94,.10)' : type==='err' ? 'rgba(239,68,68,.12)' : 'rgba(251,191,36,.10)';
+      eb.style.borderColor = type==='ok' ? 'rgba(34,197,94,.3)' : type==='err' ? 'rgba(239,68,68,.3)' : 'rgba(251,191,36,.3)';
+      eb.style.color = type==='ok' ? '#86efac' : type==='err' ? '#fca5a5' : '#fde68a';
+      eb.textContent = msg;
+    };
+
+    // Instances Open-Meteo indépendantes (hébergées séparément)
+    const mirrors = [
+      'https://api.open-meteo.com',           // primaire
+      'https://api1.open-meteo.com',          // instance 1 (load balancer secondaire)
+      'https://api2.open-meteo.com',          // instance 2
+    ];
+
+    for (let i = 0; i < mirrors.length; i++) {
+      const tryUrl = url.replace('https://api.open-meteo.com', mirrors[i]);
+      if (i > 0) showBanner(`⚠️ Open-Meteo instable — tentative instance ${i+1}/3…`);
+      try {
+        const r = await fetch(tryUrl, { signal: AbortSignal.timeout(i === 0 ? 8000 : 10000) });
+        if (r.ok) {
+          if (i > 0) { showBanner(`✅ Données récupérées via instance de secours ${i+1}`, 'ok'); setTimeout(()=>{if(eb)eb.style.display='none';}, 5000); }
+          return r;
+        }
+        console.warn(`[fallback] instance ${i+1} HTTP ${r.status}`);
+      } catch(e) {
+        console.warn(`[fallback] instance ${i+1} KO:`, e.message);
+      }
+    }
+
+    // Dernier recours : retry instance primaire après 5s (parfois les pannes sont brèves)
+    showBanner('⚠️ Toutes les instances KO — dernier essai dans 5s…');
+    await new Promise(res => setTimeout(res, 5000));
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
+      if (r.ok) { showBanner('✅ Open-Meteo rétabli', 'ok'); setTimeout(()=>{if(eb)eb.style.display='none';}, 4000); return r; }
+      throw new Error(`HTTP ${r.status}`);
+    } catch(e) {
+      showBanner(`❌ Open-Meteo indisponible (${e.message}) — réessaie dans quelques minutes`, 'err');
+      throw new Error(`Open-Meteo indisponible après 4 tentatives : ${e.message}`);
+    }
+  }
+
    const base = `https://api.open-meteo.com/v1/forecast?forecast_days=7&daily=sunrise,sunset&timezone=auto`;
   const urlObs = `${base}&latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=${params}`;
   const urlMid = `${base}&latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=visibility,cloud_cover_low,relative_humidity_2m,cape,wind_speed_80m,wind_speed_120m`;
@@ -2622,8 +2681,8 @@ async function fetchSpot(spot) {
   // U2 — ERA5 pressure levels pour calcul κ ITU-R P.453
   const urlPres = `https://api.open-meteo.com/v1/forecast?latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=temperature_1000hPa,temperature_925hPa,temperature_850hPa,temperature_700hPa,temperature_600hPa,temperature_500hPa,temperature_400hPa,temperature_300hPa,relative_humidity_1000hPa,relative_humidity_925hPa,relative_humidity_850hPa,relative_humidity_700hPa,relative_humidity_600hPa,relative_humidity_500hPa,relative_humidity_400hPa,relative_humidity_300hPa,geopotential_height_1000hPa,geopotential_height_925hPa,geopotential_height_850hPa,geopotential_height_700hPa,geopotential_height_600hPa,geopotential_height_500hPa,geopotential_height_400hPa,geopotential_height_300hPa&forecast_days=7&timezone=auto`;
   const [r1,r2,r3,r3b,r3c,r4] = await Promise.all([
-    fetch(urlObs),
-    fetch(urlMid).catch(e=>{console.warn('urlMid fetch failed:',e);return null;}),
+    fetchWithFallback(urlObs),
+    fetchWithFallback(urlMid).catch(e=>{console.warn('urlMid fetch failed:',e);return null;}),
     fetch(urlDust),
     fetch(urlDustObs).catch(e=>{console.warn('urlDustObs failed:',e);return null;}),
     fetch(urlDustTgt).catch(e=>{console.warn('urlDustTgt failed:',e);return null;}),
@@ -2734,6 +2793,8 @@ wind: avg(d1.hourly?.wind_speed_10m),
         // TIME SLICER - Sunrise & scoring par heure
     const sunriseStr = d1.daily?.sunrise?.[day];
     const sunriseHour = sunriseStr ? new Date(sunriseStr).getHours() + new Date(sunriseStr).getMinutes()/60 : 7;
+    const sunsetStr = d1.daily?.sunset?.[day];
+    const sunsetHour = sunsetStr ? new Date(sunsetStr).getHours() + new Date(sunsetStr).getMinutes()/60 : 20;
     const hourlyScores = {};
     const timeOffsets = [0, 0.5, 1, 1.5, 2, 3, 4, 5];
     for (const offset of timeOffsets) {
@@ -2764,11 +2825,39 @@ wind: avg(d1.hourly?.wind_speed_10m),
       hourlyScores[offset] = rawScore;
       hourlyScores[offset + '_elev'] = Math.round(elev * 10) / 10;
     }
+    // Créneaux soir : h-5 à h-1 avant coucher (offsets négatifs = avant coucher)
+    const eveningOffsets = [-5, -4, -3, -2, -1];
+    for (const offset of eveningOffsets) {
+      const hourIdx = day*24 + Math.floor(sunsetHour + offset);
+      const tH = d1.hourly?.temperature_2m?.[hourIdx];
+      const dH = d1.hourly?.dew_point_2m?.[hourIdx];
+      const obsDate = sunsetStr ? new Date(new Date(sunsetStr).getTime() + offset * 3600000) : new Date();
+      const hData = {
+        cloud_low: d1.hourly?.cloud_cover_low?.[hourIdx] ?? h.cloud_low,
+        cloud_mid: d1.hourly?.cloud_cover_mid?.[hourIdx] ?? h.cloud_mid,
+        cloud_high: d1.hourly?.cloud_cover_high?.[hourIdx] ?? h.cloud_high,
+        fog: d1.hourly?.fog?.[hourIdx] ?? h.fog,
+        rh: d1.hourly?.relative_humidity_2m?.[hourIdx] ?? h.rh,
+        slp: (()=>{const P_h=d1.hourly?.surface_pressure?.[hourIdx]??h.slp; const T_K=(tH??temp??15)+273.15; const alt=spot.obs.alt||0; return P_h*Math.exp(alt/(29.3*T_K));})(),
+        wind: (()=>{const w=d1.hourly?.wind_speed_10m?.[hourIdx]??h.wind; return (w===999||w===null||w===undefined)?h.wind:w;})(),
+        vis: (d1.hourly?.visibility?.[hourIdx] ?? 0)/1000 || h.vis,
+        precip: d1.hourly?.precipitation_probability?.[hourIdx] ?? h.precip,
+        vis_mid: (d2.hourly?.visibility?.[hourIdx] ?? 0)/1000 || h.vis_mid,
+        spread: (tH!=null && dH!=null) ? tH-dH : h.spread,
+        dust: h.dust, pm10: h.pm10, rh_mid: h.rh_mid, spread_mid: h.spread_mid, cape: h.cape,
+        aod: h.aod ?? null,
+        _day: h._day, _obsDate: obsDate.toISOString(),
+      };
+      const rawScore = scoreDay(spot, hData).score;
+      const elev = solarElevation(spot.obs.lat, spot.obs.lon, obsDate);
+      hourlyScores['eve' + offset] = rawScore;
+      hourlyScores['eve' + offset + '_elev'] = Math.round(elev * 10) / 10;
+    }
     
     // Injecter _obsDate dans h pour que solarGeometryAdvanced ait une date réelle (sunrise + 1h)
     const mainObsDate = sunriseStr ? new Date(new Date(sunriseStr).getTime() + 60*60*1000) : (() => { const d=new Date(dt); d.setUTCHours(7,0,0,0); return d; })();
     h._obsDate = mainObsDate.toISOString();
-    daily.push({ date:dt, day, sunriseHour, sunriseStr, hourlyScores, ...scoreDay(spot,h), raw:h, _d1:d1, _d2:d2 });;
+    daily.push({ date:dt, day, sunriseHour, sunriseStr, sunsetHour, sunsetStr, hourlyScores, ...scoreDay(spot,h), raw:h, _d1:d1, _d2:d2 });;
   }
   return daily;
 }
@@ -2819,6 +2908,8 @@ function refractionCoeff(elevDeg) {
 // STATE & RENDER
 // ═══════════════════════════════════════════════════
 let forecasts = {};
+let _timePeriod = 'matin'; // 'matin' ou 'soir'
+function setTimePeriod(p) { _timePeriod = p; }
 let lastAlert = null;
 
 async function fetchAll() {
@@ -2873,6 +2964,10 @@ function verdict(sc){
 function scoreColor(sc){ return sc>=65?'var(--green)':sc>=40?'var(--amber)':'var(--red)'; }
 
 function getScore(fc, di) {
+  if (_timePeriod === 'soir') {
+    const twe = document.getElementById('time-window-eve')?.value || 'eve-2';
+    return fc[di].hourlyScores?.[twe] ?? fc[di].score;
+  }
   const tw = document.getElementById('time-window')?.value || '1';
   if (tw === 'avg') return fc[di].score;
   if (tw === 'now') {
@@ -2890,6 +2985,10 @@ function getScore(fc, di) {
 }
 
 function getElev(fc, di) {
+  if (_timePeriod === 'soir') {
+    const twe = document.getElementById('time-window-eve')?.value || 'eve-2';
+    return fc[di].hourlyScores?.[twe + '_elev'] ?? null;
+  }
   const tw = document.getElementById('time-window')?.value || '1';
   if (tw === 'avg' || tw === 'now') return null;
   return fc[di].hourlyScores?.[parseFloat(tw) + '_elev'] ?? null;
@@ -2906,7 +3005,10 @@ function renderMatrix(loading) {
   const days=getDays();
   const tw = document.getElementById('time-window')?.value || '1';
   const twLabels = {'avg':'5-11h','0':'Lever','0.5':'+30m','1':'+1h','1.5':'+1h30','2':'+2h','3':'+3h','4':'+4h','5':'+5h'};
-  const twLbl = twLabels[tw] || '+1h';
+  const eveLabels = {'eve-5':'-5h','eve-4':'-4h','eve-3':'-3h','eve-2':'-2h','eve-1':'-1h'};
+  const twLbl = _timePeriod === 'soir'
+    ? (eveLabels[document.getElementById('time-window-eve')?.value] || '-2h') + ' coucher'
+    : (twLabels[tw] || '+1h');
   
   // Badge fenêtre VLD : spot ouvert ou premier dispo
   updateSunriseBadge(null);
@@ -3103,7 +3205,35 @@ function renderDayRow(dayData, date, spot) {
   // Recalculer les items selon le créneau horaire sélectionné
   const tw = document.getElementById('time-window')?.value || '1';
   let items, scoredResult;
-  if (tw === 'avg' || tw === 'now') {
+  if (_timePeriod === 'soir') {
+    const twe = document.getElementById('time-window-eve')?.value || 'eve-2';
+    const eveOffset = parseInt(twe.replace('eve',''));
+    const sunsetStr = dayData.sunsetStr;
+    const sunsetHour = dayData.sunsetHour ?? 20;
+    const hourIdx = day * 24 + Math.floor(sunsetHour + eveOffset);
+    const d1 = dayData._d1 ?? {};
+    const d2 = dayData._d2 ?? {};
+    const tH = d1.hourly?.temperature_2m?.[hourIdx];
+    const dH = d1.hourly?.dew_point_2m?.[hourIdx];
+    const obsDate = sunsetStr ? new Date(new Date(sunsetStr).getTime() + eveOffset * 3600000) : new Date();
+    const hData = {
+      cloud_low: d1.hourly?.cloud_cover_low?.[hourIdx] ?? h.cloud_low,
+      cloud_mid: d1.hourly?.cloud_cover_mid?.[hourIdx] ?? h.cloud_mid,
+      cloud_high: d1.hourly?.cloud_cover_high?.[hourIdx] ?? h.cloud_high,
+      fog: d1.hourly?.fog?.[hourIdx] ?? h.fog,
+      rh: d1.hourly?.relative_humidity_2m?.[hourIdx] ?? h.rh,
+      slp: (()=>{const P_h=d1.hourly?.surface_pressure?.[hourIdx]??h.slp; const T_K=(tH??h.temp??15)+273.15; const alt=spot.obs.alt||0; return P_h*Math.exp(alt/(29.3*T_K));})(),
+      wind: (()=>{const w=d1.hourly?.wind_speed_10m?.[hourIdx]??h.wind; return (w===999||w===null||w===undefined)?h.wind:w;})(),
+      vis: (d1.hourly?.visibility?.[hourIdx] ?? 0)/1000 || h.vis,
+      precip: d1.hourly?.precipitation_probability?.[hourIdx] ?? h.precip,
+      vis_mid: (d2.hourly?.visibility?.[hourIdx] ?? 0)/1000 || h.vis_mid,
+      spread: (tH!=null && dH!=null) ? tH-dH : h.spread,
+      dust: h.dust, pm10: h.pm10, rh_mid: h.rh_mid, spread_mid: h.spread_mid, cape: h.cape,
+      aod: h.aod ?? null,
+      _day: h._day, _obsDate: obsDate.toISOString(),
+    };
+    scoredResult = scoreDay(spot, hData);
+  } else if (tw === 'avg' || tw === 'now') {
     // S'assurer que h a une _obsDate correcte pour solarGeometryAdvanced
     if (!h._obsDate || isNaN(new Date(h._obsDate).getTime())) {
       const sr = dayData.sunriseStr;
@@ -3382,6 +3512,12 @@ function updateSunriseBadge(spotId) {
   const spot = SPOTS.find(s => s.id === spotId);
   const label = spot ? ' (' + spot.name.split(' ').slice(0,2).join(' ') + ')' : '';
   el.textContent = dot + ' Fen\u00eatre' + label + ': ' + fmt(winStart) + ' \u2192 ' + fmt(winEnd);
+  // Badge coucher
+  const elSs = document.getElementById('ts-sunset');
+  if (elSs && fc[0]?.sunsetStr) {
+    const ss = new Date(fc[0].sunsetStr);
+    elSs.textContent = '🌇 Coucher: ' + fmt(ss);
+  }
 }
 function toggleDrow(id){ const el=document.getElementById(id); if(el) el.classList.toggle('open'); }
 
