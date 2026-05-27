@@ -1879,9 +1879,12 @@ function resetChecklist() {
 }
 
 // ── Peuplement du select spots ──
+let _compassSelectInitialized = false;
 function populateCompassSpotSelect() {
   const sel = document.getElementById('compass-spot-select');
   if (!sel || typeof SPOTS === 'undefined') return;
+  // Mémoriser la sélection courante avant de re-peupler
+  const prevVal = sel.value;
   sel.innerHTML = '<option value="">— Aucun —</option>';
   SPOTS.forEach(s => {
     const opt = document.createElement('option');
@@ -1889,7 +1892,17 @@ function populateCompassSpotSelect() {
     opt.textContent = s.name + ' (' + (s.dist_km || '?') + ' km)';
     sel.appendChild(opt);
   });
-  sel.addEventListener('change', updateCompassTarget);
+  // Restaurer la sélection précédente si elle existe encore
+  if (prevVal && sel.querySelector('option[value="' + prevVal + '"]')) {
+    sel.value = prevVal;
+  }
+  // N'ajouter le listener QU'UNE SEULE FOIS
+  if (!_compassSelectInitialized) {
+    sel.addEventListener('change', updateCompassTarget);
+    _compassSelectInitialized = true;
+  }
+  // Mettre à jour l'affichage selon la sélection actuelle
+  updateCompassTarget();
 }
 
 function updateCompassTarget() {
@@ -1947,41 +1960,80 @@ function updateCompassDelta() {
 
 function startCompass() {
   const status = document.getElementById('compass-status');
-  // DeviceOrientationEvent (mobile)
+  // iOS 13+ — requestPermission nécessaire
   if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-    // iOS 13+
     DeviceOrientationEvent.requestPermission().then(perm => {
       if (perm === 'granted') listenCompass(status);
-      else if (status) status.textContent = '❌ Permission refusée — autorise l'accès aux capteurs dans les réglages.';
+      else if (status) status.textContent = '❌ Permission refusée — autorise l\'accès aux capteurs dans les réglages.';
     }).catch(() => {
       if (status) status.textContent = '❌ Erreur de permission capteur.';
     });
   } else if (window.DeviceOrientationEvent) {
+    // Android / autres : tenter directement
     listenCompass(status);
+    // Si après 3s aucun événement valide, fallback GPS heading
+    setTimeout(() => {
+      if (_compassCurrentAz === null) {
+        if (status) status.textContent = '⚠️ Capteur magnétique absent — passage en cap GPS (bouge pour obtenir le cap)';
+        startGPSHeading(status);
+      }
+    }, 3000);
   } else {
-    // Fallback GPS uniquement
-    startGPSOnly(status);
+    startGPSHeading(status);
   }
   // GPS pour lat/lon/alt dans tous les cas
   startGPSOnly(status);
 }
 
 function listenCompass(status) {
-  window.addEventListener('deviceorientationabsolute', onOrientation, true);
-  window.addEventListener('deviceorientation', onOrientation, true);
-  if (status) status.textContent = '📡 Boussole active — oriente ton appareil';
+  // Préférer deviceorientationabsolute (Android Chrome) sinon deviceorientation
+  let _gotAbsolute = false;
+  window.addEventListener('deviceorientationabsolute', e => {
+    _gotAbsolute = true;
+    onOrientation(e);
+  }, true);
+  window.addEventListener('deviceorientation', e => {
+    if (!_gotAbsolute) onOrientation(e);
+  }, true);
+  if (status) status.textContent = '📡 Boussole active — oriente ton appareil horizontalement';
+}
+
+function startGPSHeading(status) {
+  // Fallback : cap GPS calculé depuis les positions successives
+  if (!navigator.geolocation) return;
+  let _lastPos = null;
+  navigator.geolocation.watchPosition(pos => {
+    if (_lastPos) {
+      const dlat = pos.coords.latitude - _lastPos.latitude;
+      const dlon = pos.coords.longitude - _lastPos.longitude;
+      const dist = Math.sqrt(dlat*dlat + dlon*dlon);
+      if (dist > 0.00005) { // bouge d'au moins ~5m
+        let heading = Math.atan2(dlon, dlat) * 180 / Math.PI;
+        if (heading < 0) heading += 360;
+        _compassCurrentAz = Math.round(heading);
+        const needle = document.getElementById('compass-needle');
+        if (needle) needle.setAttribute('transform', 'rotate(' + heading + ',100,100)');
+        const azEl = document.getElementById('cstat-azimut');
+        if (azEl) azEl.innerHTML = _compassCurrentAz + '<span class="cstat-unit">°</span>';
+        if (status) status.textContent = '🛰️ Cap GPS : ' + _compassCurrentAz + '° (marche pour orienter)';
+        updateCompassDelta();
+      }
+    }
+    _lastPos = pos.coords;
+  }, null, { enableHighAccuracy: true, maximumAge: 500 });
 }
 
 function onOrientation(e) {
   let heading = null;
   if (e.webkitCompassHeading != null) {
     heading = e.webkitCompassHeading; // iOS
-  } else if (e.absolute && e.alpha != null) {
+  } else if (e.absolute === true && e.alpha != null) {
     heading = (360 - e.alpha) % 360; // Android absolu
-  } else if (e.alpha != null) {
+  } else if (e.alpha != null && e.alpha !== 0) {
+    // Android relatif : approximation, moins fiable
     heading = (360 - e.alpha) % 360;
   }
-  if (heading === null) return;
+  if (heading === null || isNaN(heading)) return;
   _compassCurrentAz = Math.round(heading);
   // Rotation aiguille
   const needle = document.getElementById('compass-needle');
@@ -1989,6 +2041,11 @@ function onOrientation(e) {
   // Stat azimut
   const azEl = document.getElementById('cstat-azimut');
   if (azEl) azEl.innerHTML = Math.round(heading) + '<span class="cstat-unit">°</span>';
+  // Mettre à jour le statut (une seule fois)
+  const status = document.getElementById('compass-status');
+  if (status && status.textContent.includes('oriente')) {
+    status.textContent = '✅ Boussole active — cap ' + Math.round(heading) + '°' + (e.absolute ? ' (absolu)' : ' (relatif)');
+  }
   updateCompassDelta();
 }
 
@@ -5207,7 +5264,7 @@ document.getElementById('score-legend-chevron').style.transform = open ? 'rotate
           <!-- Sélection spot cible -->
           <div class="compass-target-row">
             <span style="color:var(--text3)">Spot cible :</span>
-            <select id="compass-spot-select" style="background:var(--bg-input);border:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:11px;padding:.3rem .6rem;border-radius:6px;outline:none;flex:1;">
+            <select id="compass-spot-select" style="background:var(--bg-input);border:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:11px;padding:.3rem .6rem;border-radius:6px;outline:none;flex:1;" onfocus="if(this.options.length<=1)populateCompassSpotSelect();" onchange="updateCompassTarget()">
               <option value="">— Aucun —</option>
             </select>
             <span id="compass-azimut-target" style="color:var(--orange);display:none">Az. cible : <b id="compass-az-val">—</b>°</span>
