@@ -1456,6 +1456,13 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
   font-size: 11px;
   color: var(--text2);
 }
+
+/* ── LABO PHOTO ── */
+.labo-slider-group { background:rgba(255,255,255,.04); border-radius:10px; padding:.5rem .6rem; }
+.labo-slider-label { font-size:10px; color:var(--text3); margin-bottom:.3rem; display:flex; justify-content:space-between; }
+.labo-slider { width:100%; accent-color:var(--cyan); height:3px; }
+.labo-preset { background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); color:var(--text2); border-radius:8px; padding:.4rem .7rem; font-size:11px; cursor:pointer; white-space:nowrap; }
+.labo-preset:active { background:rgba(0,212,255,.2); }
 </style>
 </head>
 <body>
@@ -1558,6 +1565,7 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
   <button class="tab-btn" onclick="switchTab('creator')" id="tab-btn-creator">🛠️ CRÉATEUR DE SPOT</button>
   <button class="tab-btn" onclick="switchTab('alertes')" id="tab-btn-alertes">📨 ALERTES</button>
   <button class="tab-btn" onclick="switchTab('outils')" id="tab-btn-outils">🧭 OUTILS TERRAIN</button>
+  <button class="tab-btn" onclick="switchTab('labo')" id="tab-btn-labo">🔬 LABO PHOTO</button>
 </div>
 
 <!-- ══════════════════════════════════════
@@ -5070,6 +5078,71 @@ document.getElementById('score-legend-chevron').style.transform = open ? 'rotate
 
 
 <!-- ═══════════════════════════════════════════
+     ONGLET LABO PHOTO
+═══════════════════════════════════════════ -->
+<div class="tab-content" id="tab-labo" style="padding:1rem;">
+  <div style="color:var(--cyan);font-size:11px;letter-spacing:.1em;margin-bottom:1rem;">🔬 LABO PHOTO — RÉCUPÉRATION RELIEFS LOINTAINS</div>
+
+  <div id="labo-drop" onclick="document.getElementById('labo-input').click()"
+    style="border:2px dashed rgba(0,212,255,.3);border-radius:14px;padding:2rem;text-align:center;cursor:pointer;margin-bottom:1rem;transition:border-color .2s;"
+    ondragover="event.preventDefault();this.style.borderColor='var(--cyan)'"
+    ondragleave="this.style.borderColor='rgba(0,212,255,.3)'"
+    ondrop="laboDrop(event)">
+    <div style="font-size:2rem">📷</div>
+    <div style="color:var(--text2);margin-top:.5rem">Appuie pour charger une photo</div>
+    <div style="color:var(--text3);font-size:11px;margin-top:.25rem">JPG, PNG, WEBP</div>
+  </div>
+  <input type="file" id="labo-input" accept="image/*" style="display:none" onchange="laboLoad(this)">
+
+  <div id="labo-viewport" style="position:relative;margin-bottom:.5rem;border-radius:12px;overflow:hidden;background:#000;min-height:120px;max-height:55vw;display:flex;align-items:center;justify-content:center;touch-action:none;cursor:grab;">
+    <canvas id="labo-canvas" style="display:block;transform-origin:0 0;position:absolute;top:0;left:0;"></canvas>
+    <div id="labo-placeholder" style="color:var(--text3);font-size:12px;padding:2rem;position:relative;z-index:2;">Charge une photo pour commencer</div>
+  </div>
+  <!-- Contrôles zoom -->
+  <div id="labo-zoom-bar" style="display:none;align-items:center;gap:.5rem;margin-bottom:.8rem;">
+    <button class="labo-preset" onclick="laboZoom(-0.5)" style="width:36px;font-size:16px;">−</button>
+    <input type="range" id="sl-zoom" min="1" max="8" step="0.1" value="1" style="flex:1;accent-color:var(--cyan);" oninput="laboZoomSlider()">
+    <button class="labo-preset" onclick="laboZoom(0.5)" style="width:36px;font-size:16px;">+</button>
+    <button class="labo-preset" onclick="laboZoomReset()" style="font-size:11px;">1:1</button>
+  </div>
+
+  <div id="labo-controls" style="display:none;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.8rem;">
+      <div class="labo-slider-group"><div class="labo-slider-label">Exposition <span id="val-exposure">0</span></div><input type="range" class="labo-slider" id="sl-exposure" min="-100" max="100" value="0" oninput="laboRender()"></div>
+      <div class="labo-slider-group"><div class="labo-slider-label">Contraste <span id="val-contrast">0</span></div><input type="range" class="labo-slider" id="sl-contrast" min="-100" max="100" value="0" oninput="laboRender()"></div>
+      <div class="labo-slider-group"><div class="labo-slider-label">Hautes lum. <span id="val-highlights">0</span></div><input type="range" class="labo-slider" id="sl-highlights" min="-100" max="100" value="0" oninput="laboRender()"></div>
+      <div class="labo-slider-group"><div class="labo-slider-label">Ombres <span id="val-shadows">0</span></div><input type="range" class="labo-slider" id="sl-shadows" min="-100" max="100" value="0" oninput="laboRender()"></div>
+      <div class="labo-slider-group"><div class="labo-slider-label">Blancs <span id="val-whites">0</span></div><input type="range" class="labo-slider" id="sl-whites" min="-100" max="100" value="0" oninput="laboRender()"></div>
+      <div class="labo-slider-group"><div class="labo-slider-label">Noirs <span id="val-blacks">0</span></div><input type="range" class="labo-slider" id="sl-blacks" min="-100" max="100" value="0" oninput="laboRender()"></div>
+      <div class="labo-slider-group"><div class="labo-slider-label">Netteté <span id="val-sharpness">0</span></div><input type="range" class="labo-slider" id="sl-sharpness" min="0" max="100" value="0" oninput="laboRender()"></div>
+      <div class="labo-slider-group"><div class="labo-slider-label">Saturation <span id="val-saturation">0</span></div><input type="range" class="labo-slider" id="sl-saturation" min="-100" max="100" value="0" oninput="laboRender()"></div>
+      <div class="labo-slider-group"><div class="labo-slider-label">Température <span id="val-temp">0</span></div><input type="range" class="labo-slider" id="sl-temp" min="-100" max="100" value="0" oninput="laboRender()"></div>
+      <div class="labo-slider-group"><div class="labo-slider-label">Vibrance <span id="val-vibrance">0</span></div><input type="range" class="labo-slider" id="sl-vibrance" min="-100" max="100" value="0" oninput="laboRender()"></div>
+    </div>
+    <div style="margin-bottom:.8rem;">
+      <div style="color:var(--text3);font-size:10px;margin-bottom:.4rem;">⚡ PRESETS RAPIDES</div>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+        <button class="labo-preset" onclick="laboPreset('vld')">🏔 Récup. VLD</button>
+        <button class="labo-preset" onclick="laboPreset('haze')">🌫 Anti-brume</button>
+        <button class="labo-preset" onclick="laboPreset('night')">🌙 Lever sombre</button>
+        <button class="labo-preset" onclick="laboPreset('reset')">↺ Reset</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:.5rem;margin-bottom:.6rem;">
+      <button class="labo-preset" style="background:rgba(0,212,255,.15);flex:1" onclick="laboExport()">💾 Télécharger</button>
+      <button class="labo-preset" id="labo-compare-btn" style="flex:1" onclick="laboCompare()">👁 Avant/Après</button>
+    </div>
+    <div style="background:rgba(255,180,0,.06);border:1px solid rgba(255,180,0,.15);border-radius:10px;padding:.5rem .7rem;font-size:10px;color:rgba(255,180,0,.7);margin-bottom:.8rem;">
+      ⚠️ Le labo n'est pas un stockage permanent. Les 20 dernières photos sont conservées temporairement dans le navigateur — télécharge tes résultats.
+    </div>
+    <div id="labo-history-wrap" style="display:none;">
+      <div style="color:var(--text3);font-size:10px;margin-bottom:.4rem;">🗂 HISTORIQUE (20 dernières)</div>
+      <div id="labo-history" style="display:flex;gap:.4rem;overflow-x:auto;padding-bottom:.3rem;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
      ONGLET OUTILS TERRAIN
 ═══════════════════════════════════════════ -->
 <div class="tab-content" id="tab-outils">
@@ -6053,6 +6126,258 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(applyTranslations, 100);
   }
 });
+
+// ── LABO PHOTO ──
+let _laboImg = null;
+let _laboComparing = false;
+
+function laboDrop(e) {
+  e.preventDefault();
+  const file = e.dataTransfer?.files?.[0];
+  if (file) laboLoadFile(file);
+}
+function laboLoad(input) { if (input.files[0]) { laboSaveToDB(input.files[0]); laboLoadFile(input.files[0]); } }
+function laboLoadFile(file) {
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    _laboImg = img;
+    URL.revokeObjectURL(url);
+    const c = document.getElementById('labo-canvas');
+    c.width = img.naturalWidth || img.width;
+    c.height = img.naturalHeight || img.height;
+    document.getElementById('labo-placeholder').style.display = 'none';
+    document.getElementById('labo-controls').style.display = 'block';
+    document.getElementById('labo-zoom-bar').style.display = 'flex';
+    _laboZoom = 1; _laboPanX = 0; _laboPanY = 0;
+    laboRender();
+    laboApplyTransform();
+  };
+  img.onerror = () => {
+    document.getElementById('labo-placeholder').textContent = '❌ Erreur — réessaie';
+    URL.revokeObjectURL(url);
+  };
+  img.src = url;
+}
+
+function laboRender() {
+  if (!_laboImg) return;
+  const c = document.getElementById('labo-canvas');
+  const ctx = c.getContext('2d');
+  ctx.drawImage(_laboImg, 0, 0);
+
+  const g = id => parseInt(document.getElementById(id).value);
+  const exposure = g('sl-exposure'), contrast = g('sl-contrast'),
+        highlights = g('sl-highlights'), shadows = g('sl-shadows'),
+        whites = g('sl-whites'), blacks = g('sl-blacks'),
+        sharpness = g('sl-sharpness'), saturation = g('sl-saturation'),
+        temp = g('sl-temp');
+
+  ['exposure','contrast','highlights','shadows','whites','blacks','sharpness','saturation','temp','vibrance'].forEach(k => {
+    const el = document.getElementById('val-'+k);
+    const sl = document.getElementById('sl-'+k);
+    if (el && sl) el.textContent = sl.value;
+  });
+
+  const id = ctx.getImageData(0, 0, c.width, c.height);
+  const d = id.data;
+  for (let i = 0; i < d.length; i += 4) {
+    let r = d[i], g2 = d[i+1], b = d[i+2];
+    const expF = Math.pow(2, exposure/50);
+    r *= expF; g2 *= expF; b *= expF;
+    r += temp*0.8; b -= temp*0.8;
+    const lum = 0.299*r + 0.587*g2 + 0.114*b;
+    if (lum > 180 && highlights < 0) { const f = 1 + highlights/200*((lum-180)/75); r*=f; g2*=f; b*=f; }
+    else if (lum > 180 && highlights > 0) { const f = 1+highlights/300; r*=f; g2*=f; b*=f; }
+    if (lum < 80 && shadows !== 0) { const f = 1+shadows/150*((80-lum)/80); r+=(r*f-r); g2+=(g2*f-g2); b+=(b*f-b); }
+    if (lum > 220) { r+=whites*0.5; g2+=whites*0.5; b+=whites*0.5; }
+    if (lum < 30)  { r+=blacks*0.3; g2+=blacks*0.3; b+=blacks*0.3; }
+    if (contrast !== 0) { const cf=1+contrast/100; r=(r-128)*cf+128; g2=(g2-128)*cf+128; b=(b-128)*cf+128; }
+    if (saturation !== 0) { const gr=0.299*r+0.587*g2+0.114*b, sf=1+saturation/100; r=gr+(r-gr)*sf; g2=gr+(g2-gr)*sf; b=gr+(b-gr)*sf; }
+    d[i]=Math.max(0,Math.min(255,r)); d[i+1]=Math.max(0,Math.min(255,g2)); d[i+2]=Math.max(0,Math.min(255,b));
+  }
+  ctx.putImageData(id, 0, 0);
+  c.style.filter = sharpness > 0 ? `contrast(${1+sharpness/200})` : '';
+}
+
+function laboPreset(name) {
+  const P = {
+    vld:   {exposure:10,contrast:40,highlights:-60,shadows:70,whites:-20,blacks:10,sharpness:50,saturation:-20,temp:-15,vibrance:0},
+    haze:  {exposure:20,contrast:50,highlights:-80,shadows:80,whites:-40,blacks:0, sharpness:60,saturation:-40,temp:-25,vibrance:0},
+    night: {exposure:60,contrast:30,highlights:-40,shadows:90,whites:-30,blacks:20,sharpness:40,saturation:-10,temp:0,  vibrance:0},
+    reset: {exposure:0, contrast:0, highlights:0,  shadows:0, whites:0,  blacks:0, sharpness:0, saturation:0,  temp:0,  vibrance:0},
+  };
+  const p = P[name]; if (!p) return;
+  Object.entries(p).forEach(([k,v]) => { const el=document.getElementById('sl-'+k); if(el) el.value=v; });
+  laboRender();
+}
+
+function laboExport() {
+  const c = document.getElementById('labo-canvas');
+  const a = document.createElement('a');
+  a.download = 'vld_labo_' + Date.now() + '.jpg';
+  a.href = c.toDataURL('image/jpeg', 0.95);
+  a.click();
+}
+
+function laboCompare() {
+  if (!_laboImg) return;
+  const c = document.getElementById('labo-canvas');
+  const btn = document.getElementById('labo-compare-btn');
+  if (!_laboComparing) {
+    c.getContext('2d').drawImage(_laboImg, 0, 0);
+    c.style.filter = '';
+    btn.textContent = '👁 Retour traitement';
+    _laboComparing = true;
+  } else {
+    laboRender();
+    btn.textContent = '👁 Avant/Après';
+    _laboComparing = false;
+  }
+}
+
+// ── LABO HISTORIQUE (IndexedDB, 20 photos max) ──
+const LABO_DB_NAME = 'vld_labo', LABO_DB_STORE = 'photos', LABO_MAX = 20;
+let _laboDB = null;
+
+function laboOpenDB() {
+  return new Promise((res, rej) => {
+    if (_laboDB) return res(_laboDB);
+    const req = indexedDB.open(LABO_DB_NAME, 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(LABO_DB_STORE, {keyPath:'id', autoIncrement:true});
+    req.onsuccess = e => { _laboDB = e.target.result; res(_laboDB); };
+    req.onerror = () => rej();
+  });
+}
+
+async function laboSaveToDB(file) {
+  try {
+    const db = await laboOpenDB();
+    const tx = db.transaction(LABO_DB_STORE, 'readwrite');
+    const store = tx.objectStore(LABO_DB_STORE);
+    // Lire le blob
+    const buf = await file.arrayBuffer();
+    store.add({ name: file.name, type: file.type, data: buf, ts: Date.now() });
+    tx.oncomplete = async () => {
+      // Garder max 20 — supprimer les plus anciens
+      const db2 = await laboOpenDB();
+      const tx2 = db2.transaction(LABO_DB_STORE, 'readwrite');
+      const store2 = tx2.objectStore(LABO_DB_STORE);
+      const all = await new Promise(r => { const req = store2.getAll(); req.onsuccess = () => r(req.result); });
+      if (all.length > LABO_MAX) {
+        const toDelete = all.sort((a,b) => a.ts-b.ts).slice(0, all.length - LABO_MAX);
+        toDelete.forEach(item => store2.delete(item.id));
+      }
+      laboRenderHistory();
+    };
+  } catch(e) { console.warn('labo save error', e); }
+}
+
+async function laboRenderHistory() {
+  try {
+    const db = await laboOpenDB();
+    const tx = db.transaction(LABO_DB_STORE, 'readonly');
+    const store = tx.objectStore(LABO_DB_STORE);
+    const all = await new Promise(r => { const req = store.getAll(); req.onsuccess = () => r(req.result); });
+    const wrap = document.getElementById('labo-history-wrap');
+    const hist = document.getElementById('labo-history');
+    if (!all.length) { wrap.style.display='none'; return; }
+    wrap.style.display = 'block';
+    hist.innerHTML = all.sort((a,b) => b.ts-a.ts).map(item => {
+      const url = URL.createObjectURL(new Blob([item.data], {type:item.type}));
+      return `<div style="flex:0 0 64px;cursor:pointer;" onclick="laboLoadFromDB(${item.id})" title="${item.name}">
+        <img src="${url}" style="width:64px;height:48px;object-fit:cover;border-radius:6px;border:1px solid rgba(255,255,255,.1);" onload="URL.revokeObjectURL(this.src)">
+        <div style="font-size:9px;color:var(--text3);text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">${item.name.slice(0,10)}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+async function laboLoadFromDB(id) {
+  try {
+    const db = await laboOpenDB();
+    const tx = db.transaction(LABO_DB_STORE, 'readonly');
+    const store = tx.objectStore(LABO_DB_STORE);
+    const item = await new Promise(r => { const req = store.get(id); req.onsuccess = () => r(req.result); });
+    if (!item) return;
+    const blob = new Blob([item.data], {type: item.type});
+    laboLoadFile(blob);
+  } catch(e) {}
+}
+
+// ── ZOOM / PAN ──
+let _laboZoom = 1, _laboPanX = 0, _laboPanY = 0;
+let _laboDrag = false, _laboDragSX = 0, _laboDragSY = 0, _laboDragPX = 0, _laboDragPY = 0;
+let _laboLastDist = 0;
+
+function laboApplyTransform() {
+  const c = document.getElementById('labo-canvas');
+  const vp = document.getElementById('labo-viewport');
+  if (!c || !_laboImg) return;
+  // Adapter la taille du canvas au viewport
+  const vpW = vp.clientWidth, vpH = vp.clientHeight || vpW * 0.55;
+  const scaleBase = Math.min(vpW / _laboImg.width, vpH / _laboImg.height);
+  const s = scaleBase * _laboZoom;
+  const maxPanX = Math.max(0, (_laboImg.width * s - vpW) / 2);
+  const maxPanY = Math.max(0, (_laboImg.height * s - vpH) / 2);
+  _laboPanX = Math.max(-maxPanX, Math.min(maxPanX, _laboPanX));
+  _laboPanY = Math.max(-maxPanY, Math.min(maxPanY, _laboPanY));
+  const tx = (vpW - _laboImg.width * s) / 2 + _laboPanX;
+  const ty = (vpH - _laboImg.height * s) / 2 + _laboPanY;
+  c.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
+  c.style.transformOrigin = '0 0';
+  vp.style.height = vpH + 'px';
+  document.getElementById('sl-zoom').value = _laboZoom;
+  vp.style.cursor = _laboZoom > 1 ? 'grab' : 'default';
+}
+
+function laboZoom(delta) {
+  _laboZoom = Math.max(1, Math.min(8, _laboZoom + delta));
+  if (_laboZoom === 1) { _laboPanX = 0; _laboPanY = 0; }
+  laboApplyTransform();
+}
+function laboZoomSlider() {
+  _laboZoom = parseFloat(document.getElementById('sl-zoom').value);
+  if (_laboZoom === 1) { _laboPanX = 0; _laboPanY = 0; }
+  laboApplyTransform();
+}
+function laboZoomReset() { _laboZoom = 1; _laboPanX = 0; _laboPanY = 0; laboApplyTransform(); }
+
+// Touch pinch-to-zoom
+(function initLaboTouch() {
+  document.addEventListener('DOMContentLoaded', () => {
+    laboRenderHistory();
+    const vp = document.getElementById('labo-viewport');
+    if (!vp) return;
+
+    // Mouse drag
+    vp.addEventListener('mousedown', e => { if (_laboZoom <= 1) return; _laboDrag=true; _laboDragSX=e.clientX; _laboDragSY=e.clientY; _laboDragPX=_laboPanX; _laboDragPY=_laboPanY; vp.style.cursor='grabbing'; });
+    window.addEventListener('mousemove', e => { if (!_laboDrag) return; _laboPanX=_laboDragPX+(e.clientX-_laboDragSX); _laboPanY=_laboDragPY+(e.clientY-_laboDragSY); laboApplyTransform(); });
+    window.addEventListener('mouseup', () => { _laboDrag=false; if(document.getElementById('labo-viewport')) document.getElementById('labo-viewport').style.cursor=_laboZoom>1?'grab':'default'; });
+
+    // Touch drag + pinch
+    vp.addEventListener('touchstart', e => {
+      if (e.touches.length === 2) {
+        _laboLastDist = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+      } else if (e.touches.length === 1 && _laboZoom > 1) {
+        _laboDrag=true; _laboDragSX=e.touches[0].clientX; _laboDragSY=e.touches[0].clientY; _laboDragPX=_laboPanX; _laboDragPY=_laboPanY;
+      }
+    }, {passive:true});
+    vp.addEventListener('touchmove', e => {
+      if (e.touches.length === 2) {
+        const dist = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+        if (_laboLastDist > 0) { _laboZoom = Math.max(1, Math.min(8, _laboZoom * (dist/_laboLastDist))); laboApplyTransform(); }
+        _laboLastDist = dist;
+      } else if (_laboDrag && e.touches.length === 1) {
+        _laboPanX=_laboDragPX+(e.touches[0].clientX-_laboDragSX); _laboPanY=_laboDragPY+(e.touches[0].clientY-_laboDragSY); laboApplyTransform();
+      }
+    }, {passive:true});
+    vp.addEventListener('touchend', () => { _laboDrag=false; _laboLastDist=0; });
+
+    // Scroll wheel zoom
+    vp.addEventListener('wheel', e => { e.preventDefault(); laboZoom(e.deltaY < 0 ? 0.3 : -0.3); }, {passive:false});
+  });
+})();
 </script>
   <!-- Modal explication score -->
   <div class="score-modal-overlay" id="score-modal-overlay" onclick="if(event.target===this)closeScoreModal()">
