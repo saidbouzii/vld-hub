@@ -2350,9 +2350,8 @@ function scoreDay(spot, h) {
   // Poids des couches selon géométrie
   // Cible haute (>2000m depuis montagne) : nuages moyens très importants
   // Cible basse (maritime <500m) : nuages bas et brume sont tout
-  const wLow  = rayBlocksLow  ? 1.0 : 0.15; // facteur multiplicatif du poids
+  const wLow  = rayBlocksLow  ? 1.0 : 0.15;
   const wMid  = rayBlocksMid  ? 1.0 : 0.20;
-  const wHigh = 0.5; // cirrus toujours semi-pénalisants (diffusion)
 
   // ── 1. VISIBILITÉ AU POINT D'OBSERVATION (25 pts) ──
   // Critère roi : si on voit pas loin depuis le spot, c'est mort
@@ -2437,14 +2436,24 @@ function scoreDay(spot, h) {
                   : `❌ Couvert`;
   add(t('crit.cloud_mid'), mc, '%', mcPts, mcMax || 1, mcColor, mcVerdict);
 
-  // ── 5. NUAGES HAUTS / CIRRUS (10 pts × wHigh) ──
-  // Cirrus épais = voile blanchâtre qui réduit contraste et distance visible
+  // ── 5. NUAGES HAUTS / CIRRUS — poids scalé par distance ──
+  // À courte distance (<150km) : cirrus peu gênants (diffusion faible)
+  // À longue distance (>300km) : voile de cirrus = contraste effondré
+  // Formule : wHigh = 0.3 + 0.7 × clamp(dist_km / 400, 0, 1)
+  // → 150km : wHigh ≈ 0.56  → 300km : wHigh ≈ 0.83  → 400km+ : wHigh = 1.0
+  const dist_km = spot.dist_km ?? 100;
+  const wHighDist = Math.min(1.0, 0.3 + 0.7 * Math.min(dist_km / 400, 1));
   const hc = h.cloud_high ?? 100;
-  const hcBase = hc < 10 ? 10 : hc < 30 ? 7 : hc < 60 ? 4 : 1;
-  const hcPts  = Math.round(hcBase * wHigh);
-  const hcMax  = Math.round(10 * wHigh);
-  const hcColor = hc < 30 ? 'green' : hc < 60 ? 'amber' : 'red';
-  const hcVerdict = hc < 10 ? '⭐ Ciel pur' : hc < 30 ? t('cv.ok') : hc < 60 ? '⚠️ Cirrus' : '❌ Voile épais';
+  // Barème plus sévère : 80% cirrus sur 400km = quasi-éliminatoire
+  const hcBase = hc < 10 ? 15 : hc < 25 ? 11 : hc < 45 ? 6 : hc < 65 ? 2 : 0;
+  const hcPts  = Math.round(hcBase * wHighDist);
+  const hcMax  = Math.round(15 * wHighDist);
+  const hcColor = hc < 25 ? 'green' : hc < 50 ? 'amber' : 'red';
+  const hcVerdict = hc < 10 ? '⭐ Ciel pur'
+                  : hc < 25 ? t('cv.ok')
+                  : hc < 50 ? `⚠️ Cirrus (${dist_km}km)`
+                  : hc < 70 ? `❌ Voile épais (${dist_km}km)`
+                  : `❌ Cirrus dense — axe dégradé`;
   add(t('crit.cloud_high'), hc, '%', hcPts, hcMax || 1, hcColor, hcVerdict);
 
   // ── 6. PRÉCIPITATIONS (15 pts) ──
