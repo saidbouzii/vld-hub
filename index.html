@@ -500,6 +500,42 @@ body::after {
 .tab-content.active { display:block; animation:fadeUp .38s var(--ease); }
 @keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
 
+/* ── HAMBURGER MENU (accueil seulement) ── */
+.tab-nav.hidden-on-accueil { display:none; }
+
+#hamburger-btn {
+  display:none;
+  align-items:center; gap:.5rem;
+  background:rgba(255,255,255,.04);
+  backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  border:1px solid rgba(255,255,255,.08); border-radius:12px;
+  color:var(--text3); cursor:pointer;
+  font-family:var(--font); font-size:13px; font-weight:600; letter-spacing:.03em;
+  padding:.6rem 1.2rem;
+  margin:1rem 0 0;
+  transition:all .28s var(--ease);
+}
+#hamburger-btn.visible { display:flex; }
+#hamburger-btn:hover { color:var(--text); background:rgba(0,212,255,.07); border-color:rgba(0,212,255,.2); }
+#hamburger-btn svg { flex-shrink:0; }
+
+#hamburger-menu {
+  display:none;
+  flex-direction:column; gap:4px;
+  background:rgba(5,11,18,.95);
+  backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
+  border:1px solid rgba(255,255,255,.08); border-radius:16px;
+  padding:.6rem;
+  margin-bottom:1rem;
+  animation:fadeUp .22s var(--ease);
+  position:relative; z-index:100;
+}
+#hamburger-menu.open { display:flex; }
+#hamburger-menu .tab-btn {
+  justify-content:flex-start;
+  width:100%;
+}
+
 /* ═══════════════════════════════════════════════════
    LOAD ROW
 ═══════════════════════════════════════════════════ */
@@ -1542,6 +1578,23 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
   </div>
 </div>
 
+<!-- HAMBURGER (visible seulement sur Accueil) -->
+<button id="hamburger-btn" onclick="toggleHamburger()">
+  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+    <line x1="2" y1="4" x2="16" y2="4"/><line x1="2" y1="9" x2="16" y2="9"/><line x1="2" y1="14" x2="16" y2="14"/>
+  </svg>
+  MENU
+</button>
+<div id="hamburger-menu">
+  <button class="tab-btn" onclick="switchTab('previsions');toggleHamburger(true)">📡 PRÉVISIONS SPOT</button>
+  <button class="tab-btn" onclick="switchTab('carte');toggleHamburger(true)">🗺️ CARTE</button>
+  <button class="tab-btn" onclick="switchTab('creator');toggleHamburger(true)">🛠️ CRÉATEUR DE SPOT</button>
+  <button class="tab-btn" onclick="switchTab('alertes');toggleHamburger(true)">📨 ALERTES</button>
+  <button class="tab-btn" onclick="switchTab('outils');toggleHamburger(true)">🧭 OUTILS TERRAIN</button>
+  <button class="tab-btn" onclick="switchTab('labo');toggleHamburger(true)">🔬 LABO PHOTO</button>
+  <button class="tab-btn" onclick="switchTab('communaute');toggleHamburger(true)">👥 COMMUNAUTÉ</button>
+</div>
+
 <!-- ONGLETS -->
 <div class="tab-nav">
   <button class="tab-btn active" onclick="switchTab('accueil')" id="tab-btn-accueil">🏔️ ACCUEIL</button>
@@ -1856,8 +1909,15 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
   }
 
   carousel.addEventListener('scroll', onScroll, { passive: true });
-  // Init position sur carte centrale (index 2)
-  setTimeout(() => { hlScrollTo(2); onScroll(); }, 80);
+  // Init centré sur Prévisions (data-idx="2")
+  setTimeout(() => {
+    const target = carousel.querySelector('.hl-card[data-idx="2"]');
+    if (!target) return;
+    const carouselRect = carousel.getBoundingClientRect();
+    const cardRect = target.getBoundingClientRect();
+    carousel.scrollLeft += cardRect.left - carouselRect.left - (carousel.offsetWidth / 2 - CARD_W / 2);
+    onScroll();
+  }, 150);
 })();
 </script>
 
@@ -4327,6 +4387,21 @@ function switchTab(tabId) {
   if (tabId === 'carte') initVLDMap();
   if (tabId === 'outils') initOutilsTab();
   if (tabId === 'previsions') initRadarOnce();
+
+  // Sur Accueil : masquer tab-nav, montrer hamburger
+  // Sur les autres : montrer tab-nav, cacher hamburger
+  const isAccueil = (tabId === 'accueil');
+  document.querySelector('.tab-nav').classList.toggle('hidden-on-accueil', isAccueil);
+  document.getElementById('hamburger-btn').classList.toggle('visible', isAccueil);
+  if (!isAccueil) {
+    document.getElementById('hamburger-menu').classList.remove('open');
+  }
+}
+
+function toggleHamburger(forceClose) {
+  const menu = document.getElementById('hamburger-menu');
+  if (forceClose) { menu.classList.remove('open'); return; }
+  menu.classList.toggle('open');
 }
 
 // ═══════════════════════════════════════════════════
@@ -6572,6 +6647,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.documentElement.lang = _lang;
     setTimeout(applyTranslations, 100);
   }
+  // Init hamburger : Accueil est actif par défaut
+  document.querySelector('.tab-nav').classList.add('hidden-on-accueil');
+  document.getElementById('hamburger-btn').classList.add('visible');
 });
 
 // ── LABO PHOTO ──
