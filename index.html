@@ -1542,51 +1542,360 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
   </div>
 </div>
 
-<!-- TIME SLICER -->
-<div class="time-slicer">
-  <span class="time-slicer-label">🌅 FENÊTRE HORAIRE</span>
-  <select id="time-window" onchange="setTimePeriod('matin'); if(Object.keys(forecasts).length>0){renderMatrix(false);renderCards(false);renderBanner();}">
-    <option value="now" id="tw-now">⚡ Maintenant (aujourd'hui)</option>
-    <option value="avg">Moyenne matin (5h-11h)</option>
-    <option value="0">🌅 Lever soleil exact</option>
-    <option value="0.5">🌅 +30 min</option>
-    <option value="1" selected>🌅 +1h ⭐ (Meilleure clarté)</option>
-    <option value="1.5">🌅 +1h30</option>
-    <option value="2">🌅 +2h</option>
-    <option value="3">🌅 +3h</option>
-    <option value="4">🌅 +4h</option>
-    <option value="5">🌅 +5h</option>
-  </select>
-  <span id="ts-sunrise" class="ts-sunrise-badge">⏳ Charger prévisions</span>
-</div>
-<div class="time-slicer" style="margin-top:.4rem;">
-  <span class="time-slicer-label">🌇 CRÉNEAU SOIR</span>
-  <select id="time-window-eve" onchange="setTimePeriod('soir'); if(Object.keys(forecasts).length>0){renderMatrix(false);renderCards(false);renderBanner();}">
-    <option value="eve-5">🌇 -5h avant coucher</option>
-    <option value="eve-4">🌇 -4h avant coucher</option>
-    <option value="eve-3">🌇 -3h avant coucher</option>
-    <option value="eve-2">🌇 -2h avant coucher ⭐</option>
-    <option value="eve-1">🌇 -1h avant coucher</option>
-  </select>
-  <span id="ts-sunset" class="ts-sunrise-badge" style="background:rgba(255,100,0,.12);border-color:rgba(255,100,0,.3);color:#ff8c00;">🌇 —</span>
-</div>
-
 <!-- ONGLETS -->
 <div class="tab-nav">
   <button class="tab-btn active" onclick="switchTab('accueil')" id="tab-btn-accueil">🏔️ ACCUEIL</button>
+  <button class="tab-btn" onclick="switchTab('previsions')" id="tab-btn-previsions">📡 PRÉVISIONS SPOT</button>
   <button class="tab-btn" onclick="switchTab('carte')" id="tab-btn-carte">🗺️ CARTE</button>
   <button class="tab-btn" onclick="switchTab('creator')" id="tab-btn-creator">🛠️ CRÉATEUR DE SPOT</button>
   <button class="tab-btn" onclick="switchTab('alertes')" id="tab-btn-alertes">📨 ALERTES</button>
   <button class="tab-btn" onclick="switchTab('outils')" id="tab-btn-outils">🧭 OUTILS TERRAIN</button>
   <button class="tab-btn" onclick="switchTab('labo')" id="tab-btn-labo">🔬 LABO PHOTO</button>
+  <button class="tab-btn" onclick="switchTab('communaute')" id="tab-btn-communaute">👥 COMMUNAUTÉ</button>
 </div>
 
 <!-- ══════════════════════════════════════
-     ONGLET ACCUEIL
+     ONGLET ACCUEIL — HERO SECTION
 ══════════════════════════════════════ -->
 <div class="tab-content active" id="tab-accueil">
 
-  <!-- LOAD ROW -->
+<style>
+/* ═══════════════════════════════════════════════════
+   HERO LANDING v2 — carousel mobile + arc desktop
+═══════════════════════════════════════════════════ */
+.hero-landing {
+  position: relative;
+  text-align: center;
+  padding: 3rem 0 0;
+  overflow: hidden;
+}
+
+/* Orbe violet */
+.hero-landing-orb {
+  position: absolute;
+  top: -80px; left: 50%;
+  transform: translateX(-50%);
+  width: 420px; height: 320px;
+  background: radial-gradient(ellipse, rgba(110,50,210,0.55) 0%, transparent 70%);
+  filter: blur(70px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Titre */
+.hl-title {
+  position: relative; z-index: 1;
+  font-family: var(--display);
+  font-weight: 900;
+  font-size: clamp(2rem, 9vw, 3.4rem);
+  line-height: 1.06;
+  letter-spacing: -.01em;
+  color: #fff;
+  margin-bottom: .5rem;
+  padding: 0 1rem;
+}
+.hl-title .hl-accent {
+  color: #7ef87e;
+  text-shadow: 0 0 40px rgba(100,255,100,0.4);
+}
+
+/* Tagline */
+.hl-sub {
+  position: relative; z-index: 1;
+  font-family: var(--mono);
+  font-size: clamp(9px, 2.5vw, 11px);
+  color: rgba(255,255,255,0.42);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  max-width: 300px;
+  margin: 0 auto .9rem;
+  line-height: 1.65;
+}
+
+/* CTA vert */
+.hl-cta {
+  position: relative; z-index: 1;
+  display: inline-flex; align-items: center; gap: .4rem;
+  background: linear-gradient(135deg, #6ef87e, #3dd68c);
+  color: #061a0d;
+  font-family: var(--mono);
+  font-size: 11px; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase;
+  padding: .75rem 1.8rem;
+  border-radius: 40px; border: none; cursor: pointer;
+  transition: all .25s;
+  box-shadow: 0 0 32px rgba(110,248,126,0.28);
+  margin-bottom: 2.4rem;
+}
+.hl-cta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 48px rgba(110,248,126,0.45);
+}
+
+/* ═══ CAROUSEL MOBILE ═══ */
+.hl-carousel-wrap {
+  position: relative; z-index: 1;
+  width: 100%;
+  overflow: hidden; /* masque ce qui déborde */
+}
+
+/* Piste scrollable */
+.hl-carousel {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 10px 0 28px;
+  /* Centre la 1ère card visible */
+  scroll-padding-left: calc(50% - 90px);
+  /* Fade gauche/droite pour l'effet "arc" */
+  mask-image: linear-gradient(to right,
+    transparent 0%,
+    black 12%,
+    black 88%,
+    transparent 100%);
+  -webkit-mask-image: linear-gradient(to right,
+    transparent 0%,
+    black 12%,
+    black 88%,
+    transparent 100%);
+}
+.hl-carousel::-webkit-scrollbar { display: none; }
+
+/* Spacer pour centrer la 1ère et dernière card */
+.hl-carousel-spacer {
+  flex-shrink: 0;
+  width: calc(50% - 90px);
+}
+
+/* ═══ CARD ═══ */
+.hl-card {
+  flex-shrink: 0;
+  width: 160px;
+  height: 240px;
+  border-radius: 20px;
+  overflow: hidden;
+  cursor: pointer;
+  position: relative;
+  border: 1.5px solid rgba(255,255,255,0.10);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+  scroll-snap-align: center;
+  transition: transform .35s cubic-bezier(.4,0,.2,1),
+              box-shadow .35s, border-color .35s;
+  background: #0b1322;
+  /* Arc : les cards de côté sont légèrement plus petites et inclinées via JS */
+}
+
+.hl-card img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  display: block;
+  transition: transform .4s;
+  border: none; outline: none;
+}
+
+/* Card créateur : fond sombre, image contenue */
+.hl-card.card-contain img {
+  object-fit: contain;
+  padding: 12px;
+  background: #0b1322;
+}
+
+.hl-card-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top,
+    rgba(0,0,0,0.78) 0%,
+    rgba(0,0,0,0.15) 45%,
+    transparent 100%);
+  pointer-events: none;
+}
+
+.hl-card-label {
+  position: absolute; bottom: 12px;
+  left: 0; right: 0; text-align: center;
+  font-family: var(--mono);
+  font-size: 10px; font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase;
+  color: rgba(255,255,255,0.85);
+  pointer-events: none;
+}
+
+/* Hover */
+.hl-card:hover {
+  transform: translateY(-8px) scale(1.02);
+  border-color: rgba(110,248,126,0.45);
+  box-shadow: 0 22px 55px rgba(0,0,0,0.7), 0 0 24px rgba(110,248,126,0.18);
+}
+.hl-card:hover img { transform: scale(1.05); }
+
+/* Indicateurs dots */
+.hl-dots {
+  display: flex; justify-content: center; gap: 6px;
+  margin-top: -10px; padding-bottom: 8px;
+  position: relative; z-index: 1;
+}
+.hl-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  transition: background .3s, transform .3s;
+  cursor: pointer;
+}
+.hl-dot.active {
+  background: #7ef87e;
+  transform: scale(1.3);
+}
+</style>
+
+<!-- ═══ HERO LANDING ═══ -->
+<div class="hero-landing">
+  <div class="hero-landing-orb"></div>
+
+  <div class="hl-title">
+    VLD <span class="hl-accent">HUB</span><br>
+    Capturez l'impossible
+  </div>
+
+  <div class="hl-sub">
+    Repoussez les frontières du visible ·<br>
+    Prédisez · Traquiez · Photographiez
+  </div>
+
+  <button class="hl-cta" onclick="switchTab('previsions')">
+    🔭 L'HORIZON N'EST PLUS UNE LIMITE
+  </button>
+
+  <!-- Carousel -->
+  <div class="hl-carousel-wrap">
+    <div class="hl-carousel" id="hlCarousel">
+
+      <div class="hl-carousel-spacer"></div>
+
+      <div class="hl-card" onclick="switchTab('carte')" data-idx="0">
+        <img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/file_000000000a2471f4b22be45f4ee04c2b.png" alt="Carte" loading="lazy" style="object-position: center 55%;">
+        <div class="hl-card-overlay"></div>
+        <div class="hl-card-label">🗺️ Carte</div>
+      </div>
+
+      <div class="hl-card" onclick="switchTab('labo')" data-idx="1">
+        <img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/ChatGPT%20Image%2031%20mai%202026%2C%2012_48_21.png" alt="Labo Photo" loading="lazy">
+        <div class="hl-card-overlay"></div>
+        <div class="hl-card-label">🔬 Labo Photo</div>
+      </div>
+
+      <div class="hl-card" onclick="switchTab('previsions')" data-idx="2">
+        <img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/ChatGPT%20Image%2031%20mai%202026%2C%2012_52_13.png" alt="Prévisions" loading="lazy">
+        <div class="hl-card-overlay"></div>
+        <div class="hl-card-label">📡 Prévisions</div>
+      </div>
+
+      <div class="hl-card" onclick="switchTab('communaute')" data-idx="3">
+        <img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/1000030440%20(1).png" alt="Communauté" loading="lazy" style="object-position: center 42%;">
+        <div class="hl-card-overlay"></div>
+        <div class="hl-card-label">👥 Communauté</div>
+      </div>
+
+      <div class="hl-card card-contain" onclick="switchTab('creator')" data-idx="4">
+        <img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/1000030426-removebg-preview.png" alt="Créateur" loading="lazy">
+        <div class="hl-card-overlay"></div>
+        <div class="hl-card-label">🛠️ Créateur</div>
+      </div>
+
+      <div class="hl-carousel-spacer"></div>
+    </div>
+  </div>
+
+  <!-- Dots indicateurs -->
+  <div class="hl-dots" id="hlDots">
+    <div class="hl-dot active" onclick="hlScrollTo(0)"></div>
+    <div class="hl-dot" onclick="hlScrollTo(1)"></div>
+    <div class="hl-dot" onclick="hlScrollTo(2)"></div>
+    <div class="hl-dot" onclick="hlScrollTo(3)"></div>
+    <div class="hl-dot" onclick="hlScrollTo(4)"></div>
+  </div>
+
+</div><!-- /hero-landing -->
+
+<script>
+(function(){
+  const carousel = document.getElementById('hlCarousel');
+  const dots = document.querySelectorAll('#hlDots .hl-dot');
+  const cards = carousel.querySelectorAll('.hl-card');
+  const CARD_W = 160, GAP = 14;
+
+  function hlScrollTo(idx) {
+    const spacerW = carousel.querySelector('.hl-carousel-spacer').offsetWidth;
+    const offset = spacerW + idx * (CARD_W + GAP);
+    carousel.scrollTo({ left: offset, behavior: 'smooth' });
+  }
+  window.hlScrollTo = hlScrollTo;
+
+  // Mettre à jour les dots + effet de perspective au scroll
+  function onScroll() {
+    const spacerW = carousel.querySelector('.hl-carousel-spacer').offsetWidth;
+    const centerX = carousel.scrollLeft + carousel.offsetWidth / 2;
+
+    let closestIdx = 0, minDist = Infinity;
+    cards.forEach((card, i) => {
+      const cardCenter = spacerW + i * (CARD_W + GAP) + CARD_W / 2;
+      const dist = Math.abs(centerX - cardCenter);
+      if (dist < minDist) { minDist = dist; closestIdx = i; }
+
+      // Effet perspective : inclinaison + opacité selon distance du centre
+      const ratio = Math.min(dist / (carousel.offsetWidth * 0.5), 1);
+      const rotY = (cardCenter < centerX ? 1 : -1) * ratio * 22;
+      const scale = 1 - ratio * 0.12;
+      const opacity = 1 - ratio * 0.35;
+      card.style.transform = `perspective(900px) rotateY(${rotY}deg) scale(${scale})`;
+      card.style.opacity = opacity;
+    });
+
+    dots.forEach((d, i) => d.classList.toggle('active', i === closestIdx));
+  }
+
+  carousel.addEventListener('scroll', onScroll, { passive: true });
+  // Init position sur carte centrale (index 2)
+  setTimeout(() => { hlScrollTo(2); onScroll(); }, 80);
+})();
+</script>
+
+</div><!-- /tab-accueil -->
+
+<!-- ══════════════════════════════════════
+     ONGLET PRÉVISIONS SPOT (ex-accueil)
+══════════════════════════════════════ -->
+<div class="tab-content" id="tab-previsions">
+
+  <!-- TIME SLICER -->
+  <div class="time-slicer">
+    <span class="time-slicer-label">🌅 FENÊTRE HORAIRE</span>
+    <select id="time-window" onchange="setTimePeriod('matin'); if(Object.keys(forecasts).length>0){renderMatrix(false);renderCards(false);renderBanner();}">
+      <option value="now" id="tw-now">⚡ Maintenant (aujourd'hui)</option>
+      <option value="avg">Moyenne matin (5h-11h)</option>
+      <option value="0">🌅 Lever soleil exact</option>
+      <option value="0.5">🌅 +30 min</option>
+      <option value="1" selected>🌅 +1h ⭐ (Meilleure clarté)</option>
+      <option value="1.5">🌅 +1h30</option>
+      <option value="2">🌅 +2h</option>
+      <option value="3">🌅 +3h</option>
+      <option value="4">🌅 +4h</option>
+      <option value="5">🌅 +5h</option>
+    </select>
+    <span id="ts-sunrise" class="ts-sunrise-badge">⏳ Charger prévisions</span>
+  </div>
+  <div class="time-slicer" style="margin-top:.4rem;">
+    <span class="time-slicer-label">🌇 CRÉNEAU SOIR</span>
+    <select id="time-window-eve" onchange="setTimePeriod('soir'); if(Object.keys(forecasts).length>0){renderMatrix(false);renderCards(false);renderBanner();}">
+      <option value="eve-5">🌇 -5h avant coucher</option>
+      <option value="eve-4">🌇 -4h avant coucher</option>
+      <option value="eve-3">🌇 -3h avant coucher</option>
+      <option value="eve-2">🌇 -2h avant coucher ⭐</option>
+      <option value="eve-1">🌇 -1h avant coucher</option>
+    </select>
+    <span id="ts-sunset" class="ts-sunrise-badge" style="background:rgba(255,100,0,.12);border-color:rgba(255,100,0,.3);color:#ff8c00;">🌇 —</span>
+  </div>
   <div class="load-row">
     <button class="load-btn" id="fetch-btn" onclick="fetchAll()">⟳ PRÉVISIONS 7 JOURS</button>
     <div class="prog" id="prog"><div class="prog-fill" id="prog-fill"></div></div>
@@ -1673,7 +1982,19 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
   <div class="section-lbl">🎯 SPOTS · DÉTAIL PAR JOUR</div>
   <div class="spot-cards" id="spot-cards"></div>
 
-</div><!-- /tab-accueil -->
+</div><!-- /tab-previsions -->
+
+<!-- ══════════════════════════════════════
+     ONGLET COMMUNAUTÉ (placeholder)
+══════════════════════════════════════ -->
+<div class="tab-content" id="tab-communaute" style="padding:2rem 1rem;text-align:center;">
+  <div style="font-family:var(--display);font-size:2rem;letter-spacing:.1em;color:var(--cyan);margin-bottom:.75rem;">👥 COMMUNAUTÉ</div>
+  <div style="font-family:var(--mono);font-size:12px;color:var(--text3);max-width:320px;margin:0 auto;line-height:1.7;">
+    Fonctionnalité en cours de développement.<br>
+    Partage de photos, vote pour les spots, records partagés — bientôt disponible.
+  </div>
+  <div style="margin-top:1.5rem;display:inline-block;padding:.5rem 1.2rem;border-radius:20px;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.25);color:#a78bfa;font-family:var(--mono);font-size:11px;letter-spacing:.08em;">BIENTÔT</div>
+</div>
 
 <!-- ══════════════════════════════════════
      ONGLET CARTE
@@ -4005,6 +4326,7 @@ function switchTab(tabId) {
   if (tabId === 'creator') { renderCustomSpotsList(); renderGererSpots(); }
   if (tabId === 'carte') initVLDMap();
   if (tabId === 'outils') initOutilsTab();
+  if (tabId === 'previsions') initRadarOnce();
 }
 
 // ═══════════════════════════════════════════════════
@@ -4446,10 +4768,48 @@ function initVLDMap() {
       zoomControl: true,
       attributionControl: false,
     });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+
+    // Tuiles satellite ESRI (lisible en plein soleil)
+    const tilesSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
       maxZoom: 19,
-    }).addTo(_vldMap);
-    L.control.attribution({prefix: false}).addTo(_vldMap);
+    });
+    // Tuiles labels par-dessus satellite
+    const tilesLabels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19, opacity: 0.8,
+    });
+    // Tuiles terrain (alternative lisible)
+    const tilesTerrain = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19,
+    });
+
+    tilesSat.addTo(_vldMap);
+    tilesLabels.addTo(_vldMap);
+    window._vldMapLayers = { sat: tilesSat, labels: tilesLabels, terrain: tilesTerrain };
+    window._vldMapMode = 'sat';
+
+    // Bouton bascule satellite ↔ terrain
+    const toggleBtn = L.Control.extend({
+      onAdd: function() {
+        const btn = L.DomUtil.create('button', '');
+        btn.innerHTML = '🗺️ Terrain';
+        btn.style.cssText = 'background:#1a2a3a;color:#fff;border:1px solid rgba(0,212,255,0.4);font-size:11px;font-family:monospace;padding:5px 10px;border-radius:6px;cursor:pointer;';
+        btn.onclick = function(e) {
+          L.DomEvent.stopPropagation(e);
+          const ml = window._vldMapLayers;
+          if (window._vldMapMode === 'sat') {
+            _vldMap.removeLayer(ml.sat); _vldMap.removeLayer(ml.labels);
+            ml.terrain.addTo(_vldMap);
+            window._vldMapMode = 'terrain'; btn.innerHTML = '🛰️ Satellite';
+          } else {
+            _vldMap.removeLayer(ml.terrain);
+            ml.sat.addTo(_vldMap); ml.labels.addTo(_vldMap);
+            window._vldMapMode = 'sat'; btn.innerHTML = '🗺️ Terrain';
+          }
+        };
+        return btn;
+      }
+    });
+    new toggleBtn({ position: 'topright' }).addTo(_vldMap);
   }
   renderMapSpots();
 }
@@ -4483,8 +4843,14 @@ function renderMapSpots() {
 
     // Ligne de visée
     const line = L.polyline([obsLL, tgtLL], {
-      color, weight: 2.5, opacity: 0.85, dashArray: score === null ? '6,4' : null,
+      color: '#fff', weight: 3, opacity: 0.95, dashArray: score === null ? '6,4' : null,
+      // Contour sombre pour lisibilité sur satellite
     }).addTo(_vldMap);
+    // Ligne de contour
+    const lineOutline = L.polyline([obsLL, tgtLL], {
+      color: color, weight: 6, opacity: 0.45, dashArray: score === null ? '6,4' : null,
+    }).addTo(_vldMap);
+    _mapLayers.push(lineOutline);
 
     // Clic sur la ligne → modal profil combiné
     line.on('click', (e) => {
@@ -4507,8 +4873,8 @@ ${scoreStr}
 
     // Marqueur A — observateur
     const iconA = L.divIcon({
-      html: `<div style="background:${color};color:#050b12;font-family:monospace;font-size:9px;font-weight:900;padding:1px 4px;border-radius:3px;white-space:nowrap;">A</div>`,
-      className:'', iconAnchor:[6,8],
+      html: `<div style="background:${color};color:#000;font-family:monospace;font-size:10px;font-weight:900;padding:2px 5px;border-radius:4px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.8);border:1.5px solid rgba(0,0,0,0.4)">A</div>`,
+      className:'', iconAnchor:[8,10],
     });
     const mA = L.marker(obsLL, {icon: iconA}).addTo(_vldMap);
     mA.bindTooltip(spot.name, {permanent:false, direction:'top', className:'leaflet-tooltip'});
@@ -4516,8 +4882,8 @@ ${scoreStr}
 
     // Marqueur B — cible
     const iconB = L.divIcon({
-      html: `<div style="background:var(--surface,#0a1a2b);color:${color};border:1px solid ${color};font-family:monospace;font-size:9px;font-weight:900;padding:1px 4px;border-radius:3px;">B</div>`,
-      className:'', iconAnchor:[6,8],
+      html: `<div style="background:#fff;color:#000;border:2px solid ${color};font-family:monospace;font-size:10px;font-weight:900;padding:2px 5px;border-radius:4px;box-shadow:0 2px 6px rgba(0,0,0,0.8);">B</div>`,
+      className:'', iconAnchor:[8,10],
     });
     const mB = L.marker(tgtLL, {icon: iconB}).addTo(_vldMap);
     mB.bindTooltip(spot.target || 'Cible', {permanent:false, direction:'top'});
@@ -4784,8 +5150,8 @@ function createSpot() {
   // Reset form
   resetCreatorForm();
   
-  // Retour à l'accueil
-  switchTab('accueil');
+  // Retour aux prévisions
+  switchTab('previsions');
   
   alert(`✅ Spot "${name}" créé avec succès !\nLes prévisions météo sont en cours de chargement...`);
 }
@@ -5583,9 +5949,11 @@ const I18N = {
     'auth.btn.title.logout': 'Cliquer pour se déconnecter',
     // Onglets
     'tab.accueil': '🏔️ ACCUEIL',
+    'tab.previsions': '📡 PRÉVISIONS SPOT',
     'tab.carte': '🗺️ CARTE',
     'tab.creator': '🛠️ CRÉATEUR DE SPOT',
     'tab.alertes': '📨 ALERTES',
+    'tab.communaute': '👥 COMMUNAUTÉ',
     // Time slicer
     'ts.label': '🌅 FENÊTRE HORAIRE',
     'ts.sunrise.pending': '⏳ Charger prévisions',
@@ -6105,9 +6473,11 @@ function applyTranslations() {
   // Onglets
   const tabMap = {
     'tab-btn-accueil': 'tab.accueil',
+    'tab-btn-previsions': 'tab.previsions',
     'tab-btn-carte': 'tab.carte',
     'tab-btn-creator': 'tab.creator',
     'tab-btn-alertes': 'tab.alertes',
+    'tab-btn-communaute': 'tab.communaute',
   };
   Object.entries(tabMap).forEach(([id, key]) => {
     const el = document.getElementById(id);
@@ -6466,13 +6836,21 @@ function laboZoomReset() { _laboZoom = 1; _laboPanX = 0; _laboPanY = 0; laboAppl
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-(function initRadar() {
+let _radarInited = false;
+function initRadarOnce() {
+  if (_radarInited) {
+    if (window._radarMap) { window._radarMap.invalidateSize(); }
+    return;
+  }
+  _radarInited = true;
+
   const map = L.map('radar-map', {
     center: [40, 10], zoom: 4,
     zoomControl: false, attributionControl: false,
     dragging: false, scrollWheelZoom: false,
     doubleClickZoom: false, touchZoom: false, keyboard: false
   });
+  window._radarMap = map;
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 6, opacity: 1
   }).addTo(map);
@@ -6594,7 +6972,7 @@ function laboZoomReset() { _laboZoom = 1; _laboPanX = 0; _laboPanY = 0; laboAppl
   map.whenReady(() => {
     setTimeout(() => { resize(); requestAnimationFrame(draw); }, 400);
   });
-})();
+}
 </script>
 </body>
 </html>
