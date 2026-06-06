@@ -498,6 +498,215 @@ body::after {
 .tab-content.active { display:block; animation:fadeUp .38s var(--ease); }
 @keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
 
+/* ── ONGLET COMMUNAUTÉ ── */
+.comm-layout {
+  display:grid;
+  grid-template-columns: 180px 1fr 220px;
+  min-height: calc(100vh - 120px);
+  gap:0;
+}
+.comm-sidebar {
+  background: rgba(10,15,30,.95);
+  border-right: 1px solid rgba(0,212,255,.12);
+  padding: 1.2rem .8rem;
+  display:flex; flex-direction:column; gap:.5rem;
+}
+.comm-brand {
+  font-family: var(--display);
+  font-size:.75rem; letter-spacing:.15em;
+  color: var(--amber, #f59e0b);
+  margin-bottom:.8rem; padding-bottom:.8rem;
+  border-bottom: 1px solid rgba(245,158,11,.2);
+}
+.comm-nav { display:flex; flex-direction:column; gap:.4rem; }
+.comm-nav-btn {
+  background: transparent;
+  border: none; border-radius: 8px;
+  padding:.55rem .75rem;
+  text-align:left; cursor:pointer;
+  font-family: var(--mono); font-size:11px;
+  color: var(--text3); transition: all .2s;
+}
+.comm-nav-btn:hover { background: rgba(0,212,255,.07); color: var(--cyan); }
+.comm-nav-btn.active { background: rgba(245,158,11,.12); color: #f59e0b; }
+
+.comm-main {
+  padding: 1.5rem 1.2rem;
+  overflow-y: auto;
+}
+
+/* Panneau statut */
+.comm-status-panel {
+  background: rgba(10,15,30,.95);
+  border-left: 1px solid rgba(0,212,255,.12);
+  padding: 1.2rem 1rem;
+  display:flex; flex-direction:column; gap:1rem;
+}
+.comm-status-title {
+  font-family:var(--display); font-size:.7rem; letter-spacing:.1em;
+  color: #fff; margin:0;
+}
+.comm-status-card {
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(0,212,255,.1);
+  border-radius:10px; padding:.9rem;
+  display:flex; flex-direction:column; gap:.5rem;
+}
+.comm-status-user { font-family:var(--mono); font-size:11px; color:var(--cyan); }
+.comm-status-row { display:flex; align-items:center; gap:.3rem; }
+.comm-status-label { font-family:var(--mono); font-size:10px; color:var(--text3); }
+.comm-status-val { font-family:var(--display); font-size:1.1rem; color:#f59e0b; font-weight:700; }
+.comm-progress-track {
+  width:100%; height:5px; border-radius:3px;
+  background: rgba(255,255,255,.08); overflow:hidden;
+}
+.comm-progress-bar {
+  height:100%; border-radius:3px;
+  background: linear-gradient(90deg,#f59e0b,#fcd34d);
+  transition: width .6s ease;
+}
+.comm-status-hint { font-family:var(--mono); font-size:9.5px; color:var(--text3); line-height:1.5; }
+.comm-status-badge {
+  background: linear-gradient(135deg,#f59e0b,#fcd34d);
+  color:#0a0f1e; border-radius:6px; padding:.3rem .6rem;
+  font-family:var(--display); font-size:10px; letter-spacing:.05em;
+  text-align:center; font-weight:700;
+}
+.comm-gamif-table { display:flex; flex-direction:column; gap:.3rem; }
+.comm-gamif-title { font-family:var(--mono); font-size:9.5px; color:var(--text3); text-transform:uppercase; letter-spacing:.1em; margin-bottom:.2rem; }
+.comm-gamif-row {
+  display:flex; justify-content:space-between; align-items:center;
+  font-family:var(--mono); font-size:10px; color:var(--text2);
+  padding:.25rem 0; border-bottom:1px solid rgba(255,255,255,.04);
+}
+.comm-gamif-bonus { color:#f59e0b; font-weight:700; }
+
+/* Vues internes */
+.comm-empty-state {
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  min-height:300px; gap:.75rem; text-align:center;
+  color:var(--text3); font-family:var(--mono); font-size:12px;
+}
+.comm-empty-icon { font-size:2.5rem; opacity:.4; }
+
+/* Entrées journal */
+.comm-journal-list { display:flex; flex-direction:column; gap:.75rem; }
+.comm-journal-card {
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(0,212,255,.1);
+  border-radius:10px; padding:.9rem 1rem;
+  display:flex; flex-direction:column; gap:.4rem;
+  transition: border-color .2s;
+}
+.comm-journal-card:hover { border-color: rgba(245,158,11,.3); }
+.comm-jcard-header { display:flex; justify-content:space-between; align-items:center; }
+.comm-jcard-spot { font-family:var(--display); font-size:.75rem; letter-spacing:.06em; color:var(--cyan); }
+.comm-jcard-date { font-family:var(--mono); font-size:10px; color:var(--text3); }
+.comm-jcard-score {
+  font-family:var(--display); font-size:1.2rem; font-weight:700;
+}
+.comm-jcard-conditions { font-family:var(--mono); font-size:10px; }
+.comm-jcard-comment { font-family:var(--mono); font-size:11px; color:var(--text2); line-height:1.5; }
+.comm-jcard-metrics { display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.2rem; }
+.comm-metric-chip {
+  font-family:var(--mono); font-size:9.5px;
+  background: rgba(0,212,255,.07);
+  border: 1px solid rgba(0,212,255,.15);
+  color:var(--cyan); border-radius:5px; padding:.15rem .45rem;
+}
+
+/* Modal formulaire */
+.comm-modal-overlay {
+  position:fixed; inset:0; z-index:9999;
+  background: rgba(0,0,0,.75); backdrop-filter:blur(4px);
+  display:flex; align-items:center; justify-content:center;
+  padding:1rem;
+}
+.comm-modal-box {
+  background: #0d1424;
+  border: 1px solid rgba(0,212,255,.2);
+  border-radius:14px; width:100%; max-width:480px;
+  max-height:90vh; overflow-y:auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,.6);
+}
+.comm-modal-header {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:.9rem 1.2rem;
+  border-bottom: 1px solid rgba(0,212,255,.1);
+}
+.comm-modal-title { font-family:var(--display); font-size:.85rem; letter-spacing:.06em; color:#fff; }
+.comm-modal-close {
+  background:none; border:none; color:var(--text3); cursor:pointer;
+  font-size:1rem; line-height:1; padding:.2rem;
+}
+.comm-modal-close:hover { color:#fff; }
+.comm-modal-body { padding:1rem 1.2rem; display:flex; flex-direction:column; gap:.8rem; }
+
+.comm-prefill-row { display:flex; gap:.4rem; flex-wrap:wrap; }
+.comm-prefill-chip {
+  font-family:var(--mono); font-size:10px;
+  background: rgba(245,158,11,.1);
+  border: 1px solid rgba(245,158,11,.25);
+  color:#f59e0b; border-radius:6px; padding:.25rem .6rem;
+}
+.comm-prefill-metrics { display:flex; gap:.35rem; flex-wrap:wrap; }
+
+.comm-field-label { font-family:var(--mono); font-size:10.5px; color:var(--text3); text-transform:uppercase; letter-spacing:.07em; }
+.comm-radio-group { display:flex; gap:.6rem; flex-wrap:wrap; }
+.comm-radio {
+  font-family:var(--mono); font-size:11px; color:var(--text2);
+  cursor:pointer; display:flex; align-items:center; gap:.3rem;
+}
+.comm-textarea {
+  width:100%; background:rgba(255,255,255,.04);
+  border:1px solid rgba(0,212,255,.15); border-radius:8px;
+  color:#fff; font-family:var(--mono); font-size:12px;
+  padding:.6rem .8rem; resize:vertical; outline:none;
+  transition: border-color .2s; box-sizing:border-box;
+}
+.comm-textarea:focus { border-color: rgba(0,212,255,.4); }
+.comm-file-input { font-family:var(--mono); font-size:11px; color:var(--text3); }
+.comm-submit-btn {
+  background: linear-gradient(135deg,#f59e0b,#fbbf24);
+  border:none; border-radius:8px; padding:.65rem 1.2rem;
+  font-family:var(--display); font-size:.75rem; letter-spacing:.07em;
+  color:#0a0f1e; cursor:pointer; font-weight:700;
+  transition: opacity .2s; width:100%;
+}
+.comm-submit-btn:hover { opacity:.88; }
+
+.drow-journal-card {
+  display: inline-block;
+  margin-top: .65rem;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  transition: transform .22s, filter .22s;
+}
+.drow-journal-card:hover {
+  transform: scale(1.05);
+  filter: drop-shadow(0 6px 18px rgba(0,212,255,.35));
+}
+.drow-journal-card img {
+  width: 180px;
+  height: 180px;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,.5));
+}
+.drow-journal-card-text { display: none; }
+.drow-journal-card-label { display: none; }
+.drow-journal-card-sub { display: none; }
+
+/* Responsive communauté */
+@media (max-width:700px) {
+  .comm-layout { grid-template-columns: 1fr; }
+  .comm-sidebar { flex-direction:row; border-right:none; border-bottom:1px solid rgba(0,212,255,.12); padding:.6rem; }
+  .comm-nav { flex-direction:row; }
+  .comm-status-panel { border-left:none; border-top:1px solid rgba(0,212,255,.12); order:3; }
+}
+
 /* ── HAMBURGER MENU (accueil seulement) ── */
 .tab-nav.hidden-on-accueil { display:none; }
 
@@ -562,6 +771,27 @@ body::after {
   letter-spacing:.05em; padding:.5rem 1rem; border-radius:9px;
 }
 .load-btn.secondary:hover { border-color:rgba(0,212,255,.3); color:var(--cyan); }
+
+/* ── Time nav buttons ── */
+.tnav-btn {
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.1);
+  color:var(--text2);
+  font-size:11px;
+  font-family:var(--mono);
+  letter-spacing:.04em;
+  padding:.28rem .7rem;
+  border-radius:8px;
+  cursor:pointer;
+  transition:all .18s;
+}
+.tnav-btn:hover { background:rgba(0,212,255,.08); border-color:rgba(0,212,255,.3); color:var(--cyan); }
+.tnav-btn.tnav-active {
+  background:rgba(0,212,255,.12);
+  border-color:rgba(0,212,255,.45);
+  color:var(--cyan);
+  font-weight:600;
+}
 
 .prog{flex:1;height:2px;background:rgba(255,255,255,.06);border-radius:1px;overflow:hidden;display:none;min-width:60px}
 .prog-fill{height:100%;background:linear-gradient(90deg,var(--cyan),var(--green));border-radius:1px;transition:width .4s;width:0%}
@@ -1824,7 +2054,7 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
   scrollbar-width: none;
   padding: 10px 0 28px;
   /* Centre la 1ère card visible */
-  scroll-padding-left: calc(50% - 90px);
+  scroll-padding-left: calc(50% - 100px);
   /* Fade gauche/droite pour l'effet "arc" */
   mask-image: linear-gradient(to right,
     transparent 0%,
@@ -1842,25 +2072,26 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
 /* Spacer pour centrer la 1ère et dernière card */
 .hl-carousel-spacer {
   flex-shrink: 0;
-  width: calc(50% - 90px);
+  width: calc(50% - 100px);
 }
 
 /* ═══ CARD ═══ */
 .hl-card {
   flex-shrink: 0;
-  width: 160px;
-  height: 240px;
+  width: 180px;
+  height: 270px;
   border-radius: 20px;
   overflow: hidden;
   cursor: pointer;
   position: relative;
-  border: 1.5px solid rgba(255,255,255,0.10);
-  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+  border: none;
+  outline: 1.5px solid rgba(255,255,255,0.18);
+  outline-offset: -1px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.6), inset 0 0 0 1.5px rgba(255,255,255,0.10);
   scroll-snap-align: center;
   transition: transform .35s cubic-bezier(.4,0,.2,1),
-              box-shadow .35s, border-color .35s;
+              box-shadow .35s, outline-color .35s;
   background: #0b1322;
-  /* Arc : les cards de côté sont légèrement plus petites et inclinées via JS */
 }
 
 .hl-card img {
@@ -1901,8 +2132,8 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
 /* Hover */
 .hl-card:hover {
   transform: translateY(-8px) scale(1.02);
-  border-color: rgba(110,248,126,0.45);
-  box-shadow: 0 22px 55px rgba(0,0,0,0.7), 0 0 24px rgba(110,248,126,0.18);
+  outline-color: rgba(110,248,126,0.6);
+  box-shadow: 0 22px 55px rgba(0,0,0,0.7), 0 0 24px rgba(110,248,126,0.18), inset 0 0 0 1.5px rgba(110,248,126,0.3);
 }
 .hl-card:hover img { transform: scale(1.05); }
 
@@ -1966,13 +2197,13 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
         <div class="hl-card-label">📡 Prévisions</div>
       </div>
 
-      <div class="hl-card" onclick="switchTab('communaute')" data-idx="3">
+      <div class="hl-card" onclick="switchTab('communaute')" data-idx="3" style="width:192px;height:266px;">
         <img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/1000030440%20(1).png" alt="Communauté" loading="lazy" style="object-position: center 42%;">
         <div class="hl-card-overlay"></div>
         <div class="hl-card-label">👥 Communauté</div>
       </div>
 
-      <div class="hl-card card-contain" onclick="switchTab('creator')" data-idx="4">
+      <div class="hl-card card-contain" onclick="switchTab('creator')" data-idx="4" style="width:188px;height:278px;">
         <img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/1000030426-removebg-preview.png" alt="Créateur" loading="lazy">
         <div class="hl-card-overlay"></div>
         <div class="hl-card-label">🛠️ Créateur</div>
@@ -1998,7 +2229,7 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
   const carousel = document.getElementById('hlCarousel');
   const dots = document.querySelectorAll('#hlDots .hl-dot');
   const cards = carousel.querySelectorAll('.hl-card');
-  const CARD_W = 160, GAP = 14;
+  const CARD_W = 180, GAP = 14;
 
   function hlScrollTo(idx) {
     const spacerW = carousel.querySelector('.hl-carousel-spacer').offsetWidth;
@@ -2082,6 +2313,17 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
     <button class="load-btn" id="fetch-btn" onclick="fetchAll()">⟳ PRÉVISIONS 7 JOURS</button>
     <div class="prog" id="prog"><div class="prog-fill" id="prog-fill"></div></div>
     <div class="status-txt" id="status-txt">Prêt · 6 spots chargés</div>
+  </div>
+
+  <!-- NAVIGATEUR TEMPOREL J-14 / J-7 / Maintenant / J+7 -->
+  <div id="time-nav-bar" style="display:flex;align-items:center;justify-content:center;gap:.4rem;margin:.55rem 0 .3rem;flex-wrap:wrap;">
+    <span style="font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:.06em;margin-right:.2rem;">📅 PÉRIODE</span>
+    <button class="tnav-btn" id="tnav-m14" onclick="setDayOffset(-14)" title="J-14 à J-8 (passé)">◀◀ J-14</button>
+    <button class="tnav-btn" id="tnav-m7"  onclick="setDayOffset(-7)"  title="J-7 à J-1 (passé)">◀ J-7</button>
+    <button class="tnav-btn tnav-active" id="tnav-0" onclick="setDayOffset(0)" title="Aujourd'hui → J+6 (prévisions)">⚡ Maintenant</button>
+  </div>
+  <div id="time-nav-hint" style="display:none;text-align:center;font-size:10px;font-family:var(--mono);color:var(--amber);padding:.2rem .6rem .3rem;background:rgba(251,146,60,.06);border-radius:8px;margin-bottom:.4rem;">
+    🕐 Mode historique — données Open-Meteo réanalysées
   </div>
   <div id="err-banner" style="display:none;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:12px;padding:8px 12px;margin:6px 0;font-family:var(--mono);font-size:11px;color:#fca5a5;white-space:pre-wrap;"></div>
 
@@ -2169,13 +2411,83 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
 <!-- ══════════════════════════════════════
      ONGLET COMMUNAUTÉ (placeholder)
 ══════════════════════════════════════ -->
-<div class="tab-content" id="tab-communaute" style="padding:2rem 1rem;text-align:center;">
-  <div style="font-family:var(--display);font-size:2rem;letter-spacing:.1em;color:var(--cyan);margin-bottom:.75rem;">👥 COMMUNAUTÉ</div>
-  <div style="font-family:var(--mono);font-size:12px;color:var(--text3);max-width:320px;margin:0 auto;line-height:1.7;">
-    Fonctionnalité en cours de développement.<br>
-    Partage de photos, vote pour les spots, records partagés — bientôt disponible.
+<div class="tab-content" id="tab-communaute" style="padding:0;overflow:hidden;">
+  <div class="comm-layout">
+
+    <!-- ── SIDEBAR GAUCHE ── -->
+    <aside class="comm-sidebar">
+      <div class="comm-brand">SKY-RANGE</div>
+      <nav class="comm-nav">
+        <button class="comm-nav-btn active" id="comm-btn-journal" onclick="switchCommView('journal')">📓 Mon Journal</button>
+        <button class="comm-nav-btn" id="comm-btn-fil" onclick="switchCommView('fil')">🌐 Fil Communautaire</button>
+      </nav>
+    </aside>
+
+    <!-- ── ZONE CENTRALE ── -->
+    <main class="comm-main" id="comm-main">
+      <!-- injecté par switchCommView() -->
+    </main>
+
+    <!-- ── PANNEAU STATUT BÊTA ── -->
+    <aside class="comm-status-panel">
+      <h3 class="comm-status-title">Statut Bêta-Testeur</h3>
+      <div class="comm-status-card">
+        <div class="comm-status-user" id="comm-user-name">—</div>
+        <div class="comm-status-row">
+          <span class="comm-status-label">Rapports validés</span>
+          <span class="comm-status-val" id="comm-report-count">0</span><span class="comm-status-label">/10</span>
+        </div>
+        <div class="comm-progress-track">
+          <div class="comm-progress-bar" id="comm-progress-bar" style="width:0%"></div>
+        </div>
+        <div class="comm-status-hint" id="comm-status-hint">Soumets ton 1er rapport pour +2 mois d'accès !</div>
+        <div class="comm-status-badge" id="comm-founder-badge" style="display:none">⭐ Bêta Fondateur</div>
+      </div>
+
+      <div class="comm-gamif-table">
+        <div class="comm-gamif-title">Barème</div>
+        <div class="comm-gamif-row"><span>1 rapport</span><span class="comm-gamif-bonus">+2 mois</span></div>
+        <div class="comm-gamif-row"><span>3 rapports</span><span class="comm-gamif-bonus">+5 spots</span></div>
+        <div class="comm-gamif-row"><span>10 rapports</span><span class="comm-gamif-bonus">⭐ Fondateur</span></div>
+      </div>
+    </aside>
+
   </div>
-  <div style="margin-top:1.5rem;display:inline-block;padding:.5rem 1.2rem;border-radius:20px;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.25);color:#a78bfa;font-family:var(--mono);font-size:11px;letter-spacing:.08em;">BIENTÔT</div>
+
+  <!-- ── MODAL FORMULAIRE JOURNAL ── -->
+  <div id="comm-journal-modal" class="comm-modal-overlay" style="display:none" onclick="closeJournalModal(event)">
+    <div class="comm-modal-box">
+      <div class="comm-modal-header">
+        <span class="comm-modal-title" id="comm-modal-title">📓 Documenter une journée</span>
+        <button class="comm-modal-close" onclick="closeJournalModal()">✕</button>
+      </div>
+      <div class="comm-modal-body">
+        <!-- Données météo pré-remplies (lecture seule) -->
+        <div class="comm-prefill-row">
+          <div class="comm-prefill-chip" id="cm-spot">—</div>
+          <div class="comm-prefill-chip" id="cm-date">—</div>
+          <div class="comm-prefill-chip" id="cm-score">Score —</div>
+        </div>
+        <div class="comm-prefill-metrics" id="cm-metrics"></div>
+
+        <!-- Champs utilisateur -->
+        <label class="comm-field-label">Conditions observées</label>
+        <div class="comm-radio-group">
+          <label class="comm-radio"><input type="radio" name="comm-conditions" value="excellentes"> 🟢 Excellentes</label>
+          <label class="comm-radio"><input type="radio" name="comm-conditions" value="moyennes" checked> 🟡 Moyennes</label>
+          <label class="comm-radio"><input type="radio" name="comm-conditions" value="faibles"> 🔴 Faibles</label>
+        </div>
+
+        <label class="comm-field-label">Commentaire libre</label>
+        <textarea class="comm-textarea" id="cm-comment" rows="3" placeholder="Ex : Canigou parfaitement visible à l'aube, silhouette nette jusqu'à 9h…"></textarea>
+
+        <label class="comm-field-label">Photo (optionnel)</label>
+        <input type="file" accept="image/*" id="cm-photo" class="comm-file-input">
+
+        <button class="comm-submit-btn" onclick="submitJournalEntry()">💾 Sauvegarder le rapport</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ══════════════════════════════════════
@@ -3218,7 +3530,7 @@ function scoreDay(spot, h) {
 // ═══════════════════════════════════════════════════
 // FETCH
 // ═══════════════════════════════════════════════════
-async function fetchSpot(spot) {
+async function fetchSpot(spot, pastDays = 0) {
  const params = [
   'visibility','wind_speed_10m','cloud_cover_low','cloud_cover_mid','cloud_cover_high',
   'relative_humidity_2m','dew_point_2m','temperature_2m','surface_pressure',
@@ -3272,16 +3584,17 @@ async function fetchSpot(spot) {
     }
   }
 
-   const base = `https://api.open-meteo.com/v1/forecast?forecast_days=7&daily=sunrise,sunset&timezone=auto`;
+   const base = `https://api.open-meteo.com/v1/forecast?forecast_days=7${pastDays > 0 ? `&past_days=${pastDays}` : ''}&daily=sunrise,sunset&timezone=auto`;
   const urlObs = `${base}&latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=${params}`;
   const urlMid = `${base}&latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=visibility,cloud_cover_low,relative_humidity_2m,cape,wind_speed_80m,wind_speed_120m`;
  // AOD — 3 points : obs, mid, tgt (worst-case)
   const _aqBase = 'https://air-quality-api.open-meteo.com/v1/air-quality';
-  const urlDustObs = `${_aqBase}?latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=dust,pm10&timezone=auto`;
-  const urlDust    = `${_aqBase}?latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=dust,pm10&timezone=auto`;
-  const urlDustTgt = `${_aqBase}?latitude=${spot.tgt.lat}&longitude=${spot.tgt.lon}&hourly=dust,pm10&timezone=auto`;
+  const _aqPast = pastDays > 0 ? `&past_days=${pastDays}` : '';
+  const urlDustObs = `${_aqBase}?latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=dust,pm10&timezone=auto${_aqPast}`;
+  const urlDust    = `${_aqBase}?latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=dust,pm10&timezone=auto${_aqPast}`;
+  const urlDustTgt = `${_aqBase}?latitude=${spot.tgt.lat}&longitude=${spot.tgt.lon}&hourly=dust,pm10&timezone=auto${_aqPast}`;
   // U2 — ERA5 pressure levels pour calcul κ ITU-R P.453
-  const urlPres = `https://api.open-meteo.com/v1/forecast?latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=temperature_1000hPa,temperature_925hPa,temperature_850hPa,temperature_700hPa,temperature_600hPa,temperature_500hPa,temperature_400hPa,temperature_300hPa,relative_humidity_1000hPa,relative_humidity_925hPa,relative_humidity_850hPa,relative_humidity_700hPa,relative_humidity_600hPa,relative_humidity_500hPa,relative_humidity_400hPa,relative_humidity_300hPa,geopotential_height_1000hPa,geopotential_height_925hPa,geopotential_height_850hPa,geopotential_height_700hPa,geopotential_height_600hPa,geopotential_height_500hPa,geopotential_height_400hPa,geopotential_height_300hPa&forecast_days=7&timezone=auto`;
+  const urlPres = `https://api.open-meteo.com/v1/forecast?latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=temperature_1000hPa,temperature_925hPa,temperature_850hPa,temperature_700hPa,temperature_600hPa,temperature_500hPa,temperature_400hPa,temperature_300hPa,relative_humidity_1000hPa,relative_humidity_925hPa,relative_humidity_850hPa,relative_humidity_700hPa,relative_humidity_600hPa,relative_humidity_500hPa,relative_humidity_400hPa,relative_humidity_300hPa,geopotential_height_1000hPa,geopotential_height_925hPa,geopotential_height_850hPa,geopotential_height_700hPa,geopotential_height_600hPa,geopotential_height_500hPa,geopotential_height_400hPa,geopotential_height_300hPa&forecast_days=7${pastDays > 0 ? `&past_days=${pastDays}` : ''}&timezone=auto`;
   const [r1,r2,r3,r3b,r3c,r4] = await Promise.all([
     fetchWithFallback(urlObs),
     fetchWithFallback(urlMid).catch(e=>{console.warn('urlMid fetch failed:',e);return null;}),
@@ -3304,8 +3617,12 @@ async function fetchSpot(spot) {
   const d4 = r4 ? await r4.json().catch(()=>null) : null;
   if(d4?.error) console.warn('urlPres ERA5:', d4.reason);
   const daily = [];
+  // En mode historique (pastDays>0), open-meteo renvoie [pastDays + 7] jours.
+  // Les jours 0..(pastDays-1) sont dans le passé. On veut lire les 7 premiers.
+  const dayStart = 0; // toujours 0 : les jours qu'on veut sont au début (passé) ou au milieu (futur normal)
   for (let day=0; day<7; day++) {
-    const s=day*24+5, e=day*24+11;
+    const absDay = day; // index dans le tableau retourné par l'API
+    const s=absDay*24+5, e=absDay*24+11;
     const avg = arr => {
       if(!arr || !Array.isArray(arr)) return null;
       // Filtre les valeurs nulles ET la valeur sentinelle 999 d'open-meteo (vent non dispo)
@@ -3315,8 +3632,8 @@ async function fetchSpot(spot) {
     const temp=avg(d1.hourly?.temperature_2m);
     const dew=avg(d1.hourly?.dew_point_2m);
     const P_mbar = avg(d1.hourly?.surface_pressure) || 1013.25;
-    const T850 = (()=>{const a=d4?.hourly?.temperature_850hPa;if(!a)return null;const v=a.slice(day*24+5,day*24+11).filter(x=>x!=null&&!isNaN(x));return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;})();
-    const H850 = (()=>{const a=d4?.hourly?.geopotential_height_850hPa;if(!a)return null;const v=a.slice(day*24+5,day*24+11).filter(x=>x!=null&&!isNaN(x));return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;})();
+    const T850 = (()=>{const a=d4?.hourly?.temperature_850hPa;if(!a)return null;const v=a.slice(absDay*24+5,absDay*24+11).filter(x=>x!=null&&!isNaN(x));return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;})();
+    const H850 = (()=>{const a=d4?.hourly?.geopotential_height_850hPa;if(!a)return null;const v=a.slice(absDay*24+5,absDay*24+11).filter(x=>x!=null&&!isNaN(x));return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;})();
 
     // ── U2 — κ ERA5 multi-niveaux ITU-R P.453 ──────────────────
     let k_bislin;
@@ -3540,11 +3857,11 @@ let _timePeriod = 'matin'; // 'matin' ou 'soir'
 function setTimePeriod(p) { _timePeriod = p; }
 let lastAlert = null;
 
-async function fetchAll() {
+async function fetchAll(pastDays = 0) {
   const btn = document.getElementById('fetch-btn');
   btn.disabled=true; btn.textContent=t('btn.fetch.loading');
   document.getElementById('prog').style.display='block';
-  setStatus('Interrogation Open-Meteo…');
+  setStatus(pastDays > 0 ? `Chargement historique J-${pastDays}…` : 'Interrogation Open-Meteo…');
   renderMatrix(true); renderCards(true);
   // Séquençage avec délai 350ms entre spots pour éviter les 429 Open-Meteo
   const results = [];
@@ -3552,7 +3869,7 @@ async function fetchAll() {
     if (i > 0) await new Promise(r => setTimeout(r, 350));
     const s = SPOTS[i];
     setStatus(`Chargement ${s.name}… (${i+1}/${SPOTS.length})`);
-    const r = await Promise.allSettled([fetchSpot(s)]);
+    const r = await Promise.allSettled([fetchSpot(s, pastDays)]);
     results.push(r[0]);
     setProgress(Math.round((i+1)/SPOTS.length*100));
   }
@@ -3578,8 +3895,37 @@ async function fetchAll() {
   updateMapIfVisible();
 }
 
-function getDays(){ return Array.from({length:7},(_,i)=>{ const d=new Date(); d.setDate(d.getDate()+i); return d; }); }
+function getDays(){ return Array.from({length:7},(_,i)=>{ const d=new Date(); d.setDate(d.getDate()+i+_dayOffset); return d; }); }
 function dayLabel(d){ return d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric'}).replace('.','/').replace(' ',''); }
+
+// ── Navigation temporelle ──────────────────────────────────────────────────
+let _dayOffset = 0; // 0 = futur (prévisions), -7 = J-7, -14 = J-14, 7 = J+7
+
+function setDayOffset(offset) {
+  _dayOffset = offset;
+
+  // Mise à jour des boutons actifs
+  ['tnav-m14','tnav-m7','tnav-0','tnav-p7'].forEach(id => {
+    document.getElementById(id)?.classList.remove('tnav-active');
+  });
+  const map = {'-14':'tnav-m14','-7':'tnav-m7','0':'tnav-0'};
+  document.getElementById(map[String(offset)])?.classList.add('tnav-active');
+
+  // Hint mode historique
+  const hint = document.getElementById('time-nav-hint');
+  if (hint) hint.style.display = offset < 0 ? 'block' : 'none';
+
+  // Si les prévisions sont déjà chargées, refetch ou juste re-render
+  const hasFuture = Object.values(forecasts).some(f => f && f.length > 0);
+  if (hasFuture || offset !== 0) {
+    if (offset < 0) {
+      fetchAll(Math.abs(offset));
+    } else {
+      renderMatrix(false);
+      renderCards(false);
+    }
+  }
+}
 function fullLabel(d){ return d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'}); }
 function cellClass(sc){ return sc>=65?'great':sc>=40?'good':'poor'; }
 function verdict(sc){
@@ -3935,6 +4281,26 @@ function renderDayRow(dayData, date, spot) {
   items = scoredResult.items;
 
   const explainBtn = buildScoreExplain(items, score, spot.id, day, spot.name, fullLabel(date));
+
+  // Card widget Journal de Bord
+  const isPast = day < 0;
+  const isPresent = day === 0;
+  const journalSubLabel = (isPast || isPresent) ? 'Documenter la journée' : 'Planifier la sortie';
+  const journalPayload = JSON.stringify({
+    score: score,
+    transp: h.transparenceAxe ?? (scoredResult.items?.find(i=>i.k==='transp')?.val ?? null),
+    rh: h.rh ?? null,
+    wind: h.wind ?? null,
+    slp: h.slp ?? null,
+  }).replace(/'/g, '&apos;');
+  const journalBtn = `<div class="drow-journal-card" onclick="openJournalEntry('${spot.id}', ${journalPayload}, '${fullLabel(date).replace(/'/g, "\\'")}'); switchTab('communaute')" role="button" tabindex="0">
+    <img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/refs/heads/main/1000031340%20(3).png" alt="Journal de Bord" loading="lazy">
+    <div class="drow-journal-card-text">
+      <span class="drow-journal-card-label">JOURNAL<br>DE BORD</span>
+      <span class="drow-journal-card-sub">${journalSubLabel}</span>
+    </div>
+  </div>`;
+
   return `<div class="drow">
     <div class="drow-hdr ${cls}" onclick="toggleDrow('${did}')">
       <span class="drow-date">${isToday?'📍 ':''} ${fullLabel(date)}</span>
@@ -3942,7 +4308,7 @@ function renderDayRow(dayData, date, spot) {
       <span class="drow-score" style="color:${sc}">${score}</span>
     </div>
     <div class="drow-body" id="${did}">
-      <div class="drow-left">${renderMeteoButtons(items)}${explainBtn}</div>
+      <div class="drow-left">${renderMeteoButtons(items)}${explainBtn}${journalBtn}</div>
       <div class="drow-right">${renderNewCurveBlock(spot,k)}${renderKMini(k,h)}${renderHWTBlock(spot)}</div>
     </div>
   </div>`;
@@ -4509,6 +4875,7 @@ function switchTab(tabId) {
   if (tabId === 'carte') initVLDMap();
   if (tabId === 'outils') initOutilsTab();
   if (tabId === 'previsions') initRadarOnce();
+  if (tabId === 'communaute') initCommunauteTab();
 
   // Sur Accueil : masquer tab-nav, montrer hamburger
   // Sur les autres : montrer tab-nav, cacher hamburger
@@ -5713,8 +6080,175 @@ document.getElementById('score-legend-chevron').style.transform = open ? 'rotate
   
 </script>
 
+<script>
+// ══════════════════════════════════════════════════
+//  COMMUNAUTÉ — Journal d'Observation
+// ══════════════════════════════════════════════════
 
+// ── Storage helpers ──────────────────────────────
+const JOURNAL_KEY = 'vld_journal_entries';
 
+function journalGetLocal() {
+  try { return JSON.parse(localStorage.getItem(JOURNAL_KEY) || '[]'); } catch(e) { return []; }
+}
+function journalSaveLocal(entries) {
+  localStorage.setItem(JOURNAL_KEY, JSON.stringify(entries));
+}
+
+// ── Init tab ─────────────────────────────────────
+window.initCommunauteTab = function() {
+  updateBetaPanel();
+  switchCommView('journal');
+};
+
+function updateBetaPanel() {
+  const user = window.currentUser;
+  const nameEl = document.getElementById('comm-user-name');
+  const countEl = document.getElementById('comm-report-count');
+  const barEl = document.getElementById('comm-progress-bar');
+  const hintEl = document.getElementById('comm-status-hint');
+  const badgeEl = document.getElementById('comm-founder-badge');
+
+  if (nameEl) nameEl.textContent = user ? (user.displayName || user.email) : 'Non connecté';
+
+  const entries = journalGetLocal();
+  const count = entries.length;
+  if (countEl) countEl.textContent = count;
+  if (barEl) barEl.style.width = Math.min(100, (count / 10) * 100) + '%';
+
+  if (count >= 10) {
+    if (hintEl) hintEl.textContent = 'Statut Fondateur débloqué ! 🎉';
+    if (badgeEl) badgeEl.style.display = 'block';
+  } else if (count === 0) {
+    if (hintEl) hintEl.textContent = "Soumets ton 1er rapport pour +2 mois d'accès !";
+  } else {
+    const remaining = 10 - count;
+    if (hintEl) hintEl.textContent = "Encore " + remaining + " rapport" + (remaining>1?"s":"") + " pour le statut Fondateur";
+  }
+}
+
+// ── Switch vue interne ────────────────────────────
+window.switchCommView = function(view) {
+  document.querySelectorAll('.comm-nav-btn').forEach(function(b){ b.classList.remove('active'); });
+  const btn = document.getElementById('comm-btn-' + view);
+  if (btn) btn.classList.add('active');
+
+  const main = document.getElementById('comm-main');
+  if (!main) return;
+
+  if (view === 'journal') renderJournalView(main);
+  else renderFilView(main);
+};
+
+// ── Vue Journal ───────────────────────────────────
+function renderJournalView(container) {
+  const entries = journalGetLocal();
+
+  if (entries.length === 0) {
+    container.innerHTML = '<div class="comm-empty-state"><div class="comm-empty-icon">📓</div><div style="font-size:13px;color:var(--text2);">Ton journal est vide.</div><div>Clique sur <strong style="color:#f59e0b;">📝 Documenter</strong> sous une card de prévision pour créer ta première entrée.</div></div>';
+    return;
+  }
+
+  const cards = entries.map(function(e) {
+    const cond = e.conditions === 'excellentes' ? '🟢 Excellentes'
+               : e.conditions === 'faibles' ? '🔴 Faibles'
+               : '🟡 Moyennes';
+    const sc = e.score != null ? e.score : '—';
+    const scColor = sc >= 75 ? '#4ade80' : sc >= 50 ? '#facc15' : '#f87171';
+    const metrics = (e.metrics || []).map(function(m){ return '<span class="comm-metric-chip">'+m+'</span>'; }).join('');
+    return '<div class="comm-journal-card"><div class="comm-jcard-header"><span class="comm-jcard-spot">'+(e.spotName||'—')+'</span><span class="comm-jcard-date">'+(e.dateLabel||'—')+'</span><span class="comm-jcard-score" style="color:'+scColor+'">'+sc+'</span></div><div class="comm-jcard-conditions">'+cond+'</div>'+(e.comment?'<div class="comm-jcard-comment">'+e.comment+'</div>':'')+(metrics?'<div class="comm-jcard-metrics">'+metrics+'</div>':'')+'</div>';
+  }).join('');
+
+  container.innerHTML = '<div style="font-family:var(--display);font-size:.75rem;letter-spacing:.1em;color:#f59e0b;margin-bottom:1rem;">MON JOURNAL D'OBSERVATION</div><div class="comm-journal-list">'+cards+'</div>';
+}
+
+// ── Vue Fil ───────────────────────────────────────
+function renderFilView(container) {
+  container.innerHTML = '<div class="comm-empty-state"><div class="comm-empty-icon">🌐</div><div style="font-size:13px;color:var(--text2);">Fil communautaire</div><div>Les observations de la communauté SKY-RANGE apparaîtront ici — bientôt disponible.</div></div>';
+}
+
+// ── Ouvrir formulaire depuis une card jour ────────
+window.openJournalEntry = function(spotId, dayData, dateLabel) {
+  const modal = document.getElementById('comm-journal-modal');
+  if (!modal) return;
+
+  const spot = (typeof SPOTS !== 'undefined' ? SPOTS : []).find(function(s){ return s.id === spotId; });
+  document.getElementById('cm-spot').textContent = spot ? spot.name : spotId;
+  document.getElementById('cm-date').textContent = dateLabel;
+  document.getElementById('cm-score').textContent = 'Score ' + (dayData.score != null ? dayData.score : '—');
+
+  const metricsEl = document.getElementById('cm-metrics');
+  const mArr = [];
+  if (dayData.transp != null) mArr.push('Transp. '+Math.round(dayData.transp)+'%');
+  if (dayData.rh != null) mArr.push('Hum. '+Math.round(dayData.rh)+'%');
+  if (dayData.wind != null) mArr.push('Vent '+Math.round(dayData.wind)+' km/h');
+  if (dayData.slp != null) mArr.push(Math.round(dayData.slp)+' hPa');
+  metricsEl.innerHTML = mArr.map(function(m){ return '<span class="comm-metric-chip">'+m+'</span>'; }).join('');
+
+  modal._pendingData = Object.assign({ spotId: spotId, spotName: spot ? spot.name : spotId, dateLabel: dateLabel }, dayData);
+
+  document.getElementById('cm-comment').value = '';
+  document.getElementById('cm-photo').value = '';
+  document.querySelectorAll('input[name="comm-conditions"]').forEach(function(r){ r.checked = r.value === 'moyennes'; });
+
+  modal.style.display = 'flex';
+};
+
+window.closeJournalModal = function(e) {
+  if (e && e.target !== document.getElementById('comm-journal-modal')) return;
+  document.getElementById('comm-journal-modal').style.display = 'none';
+};
+
+window.submitJournalEntry = function() {
+  const modal = document.getElementById('comm-journal-modal');
+  const pending = modal._pendingData || {};
+  const condEl = document.querySelector('input[name="comm-conditions"]:checked');
+  const conditions = condEl ? condEl.value : 'moyennes';
+  const comment = document.getElementById('cm-comment').value.trim();
+
+  const entry = {
+    id: (pending.spotId || 'x') + '_' + Date.now(),
+    spotId: pending.spotId,
+    spotName: pending.spotName,
+    dateLabel: pending.dateLabel,
+    score: pending.score != null ? pending.score : null,
+    conditions: conditions,
+    comment: comment,
+    metrics: [
+      pending.transp != null ? 'Transp. '+Math.round(pending.transp)+'%' : null,
+      pending.rh != null ? 'Hum. '+Math.round(pending.rh)+'%' : null,
+      pending.wind != null ? 'Vent '+Math.round(pending.wind)+' km/h' : null,
+    ].filter(Boolean),
+    timestamp: Date.now(),
+  };
+
+  const entries = journalGetLocal();
+  entries.unshift(entry);
+  journalSaveLocal(entries);
+
+  // Tenter Firestore si connecté
+  if (window.currentUser && window.db) {
+    import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js').then(function(fs) {
+      fs.setDoc(fs.doc(window.db, 'users', window.currentUser.uid, 'journal', entry.id), entry)
+        .catch(function(e){ console.warn('Firestore journal save failed', e); });
+    });
+  }
+
+  modal.style.display = 'none';
+  updateBetaPanel();
+
+  const btn = document.querySelector('.comm-submit-btn');
+  if (btn) {
+    btn.textContent = '✅ Rapport sauvegardé !';
+    setTimeout(function(){ btn.textContent = '💾 Sauvegarder le rapport'; }, 2500);
+  }
+
+  if (document.getElementById('comm-btn-journal') && document.getElementById('comm-btn-journal').classList.contains('active')) {
+    const main = document.getElementById('comm-main');
+    if (main) renderJournalView(main);
+  }
+};
+</script>
 
 
 <!-- ═══════════════════════════════════════════
