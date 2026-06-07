@@ -699,6 +699,97 @@ body::after {
 .drow-journal-card-label { display: none; }
 .drow-journal-card-sub { display: none; }
 
+/* Nav separator */
+.comm-nav-sep {
+  font-family: var(--display);
+  font-size: 9px;
+  letter-spacing: .12em;
+  color: rgba(0,212,255,.4);
+  padding: .6rem .5rem .2rem;
+  text-transform: uppercase;
+}
+
+/* Forum cards */
+.forum-card {
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(0,212,255,.12);
+  border-radius: 12px;
+  padding: .9rem 1rem;
+  margin-bottom: .6rem;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+}
+.forum-card:hover { border-color: rgba(0,212,255,.3); background: rgba(0,212,255,.04); }
+.forum-card-header { display:flex; align-items:center; gap:.6rem; margin-bottom:.35rem; }
+.forum-card-avatar {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: linear-gradient(135deg,#00d8ff22,#60a5fa33);
+  border: 1px solid rgba(0,212,255,.3);
+  display:flex; align-items:center; justify-content:center;
+  font-size: 13px; flex-shrink:0;
+}
+.forum-card-author { font-family:var(--display); font-size:11px; color:#60a5fa; }
+.forum-card-date { font-size:9px; color:rgba(150,170,200,.5); margin-left:auto; }
+.forum-card-title { font-family:var(--display); font-size:13px; color:#e0eeff; margin-bottom:.3rem; }
+.forum-card-body { font-size:11px; color:rgba(180,200,220,.7); line-height:1.5; }
+.forum-card-tags { display:flex; gap:.4rem; margin-top:.5rem; flex-wrap:wrap; }
+.forum-tag {
+  font-size:9px; padding:2px 7px; border-radius:10px;
+  background:rgba(0,212,255,.1); color:#00d8ff;
+  border:1px solid rgba(0,212,255,.2); font-family:var(--display); letter-spacing:.06em;
+}
+.forum-card-footer { display:flex; gap:1rem; margin-top:.55rem; font-size:10px; color:rgba(150,170,200,.5); }
+.forum-card-footer span { cursor:pointer; transition:color .15s; }
+.forum-card-footer span:hover { color:#00d8ff; }
+
+/* Bouton nouveau post */
+.forum-new-btn {
+  display:flex; align-items:center; gap:.5rem;
+  background:rgba(0,212,255,.1); border:1px solid rgba(0,212,255,.25);
+  color:#00d8ff; font-family:var(--display); font-size:11px;
+  letter-spacing:.07em; padding:.55rem 1rem; border-radius:20px;
+  cursor:pointer; transition:all .2s; margin-bottom:1rem;
+}
+.forum-new-btn:hover { background:rgba(0,212,255,.18); border-color:rgba(0,212,255,.5); }
+
+/* Modal nouveau post */
+.forum-compose-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,.7);
+  display:flex; align-items:center; justify-content:center;
+  z-index:3000; backdrop-filter:blur(4px);
+}
+.forum-compose-box {
+  background:#0d1628; border:1px solid rgba(0,212,255,.25);
+  border-radius:16px; padding:1.4rem; width:90%; max-width:480px;
+  max-height:90vh; overflow-y:auto;
+}
+.forum-compose-title {
+  font-family:var(--display); font-size:13px; color:#00d8ff;
+  letter-spacing:.1em; margin-bottom:1rem;
+}
+.forum-compose-field { margin-bottom:.8rem; }
+.forum-compose-field label { font-size:10px; color:rgba(150,180,210,.6); font-family:var(--display); letter-spacing:.08em; display:block; margin-bottom:.3rem; }
+.forum-compose-field input,
+.forum-compose-field select,
+.forum-compose-field textarea {
+  width:100%; background:rgba(255,255,255,.04);
+  border:1px solid rgba(0,212,255,.15); border-radius:8px;
+  color:#e0eeff; font-size:12px; padding:.5rem .7rem;
+  font-family:var(--font); box-sizing:border-box;
+}
+.forum-compose-field textarea { min-height:80px; resize:vertical; }
+.forum-compose-actions { display:flex; gap:.6rem; justify-content:flex-end; margin-top:1rem; }
+.forum-compose-cancel { background:none; border:1px solid rgba(255,255,255,.1); color:rgba(200,220,240,.5); border-radius:8px; padding:.4rem .9rem; font-size:11px; cursor:pointer; }
+.forum-compose-submit { background:rgba(0,212,255,.15); border:1px solid rgba(0,212,255,.3); color:#00d8ff; border-radius:8px; padding:.4rem .9rem; font-size:11px; cursor:pointer; font-family:var(--display); }
+.forum-compose-submit:hover { background:rgba(0,212,255,.25); }
+.forum-tag-check {
+  display:inline-flex; align-items:center; gap:.3rem;
+  font-size:10px; color:#cce0f0; cursor:pointer;
+  background:rgba(255,255,255,.04); border:1px solid rgba(0,212,255,.12);
+  border-radius:10px; padding:3px 8px;
+}
+.forum-tag-check input { accent-color:#00d8ff; }
+
 /* Responsive communauté */
 @media (max-width:700px) {
   .comm-layout { grid-template-columns: 1fr; }
@@ -833,6 +924,10 @@ body::after {
 @keyframes radarDotBlink {
   0%, 100% { opacity:1; transform:scale(1); }
   50%       { opacity:0.2; transform:scale(0.6); }
+}
+@keyframes regimePulse {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50%       { box-shadow: 0 0 8px 1px rgba(96,165,250,.18); }
 }
 
 /* ═══════════════════════════════════════════════════
@@ -2422,6 +2517,11 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
       <nav class="comm-nav">
         <button class="comm-nav-btn active" id="comm-btn-journal" onclick="switchCommView('journal')">📓 Mon Journal</button>
         <button class="comm-nav-btn" id="comm-btn-fil" onclick="switchCommView('fil')">🌐 Fil Communautaire</button>
+        <div class="comm-nav-sep">FORUM</div>
+        <button class="comm-nav-btn" id="comm-btn-conditions" onclick="switchCommView('conditions')">🌤️ Conditions du jour</button>
+        <button class="comm-nav-btn" id="comm-btn-captures" onclick="switchCommView('captures')">📸 Captures extrêmes</button>
+        <button class="comm-nav-btn" id="comm-btn-materiel" onclick="switchCommView('materiel')">🔭 Matériel & Technique</button>
+        <button class="comm-nav-btn" id="comm-btn-spots" onclick="switchCommView('spots')">📍 Spots & Reconnaissances</button>
       </nav>
     </aside>
 
@@ -2456,38 +2556,40 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
 
   </div>
 
-  <!-- ── MODAL FORMULAIRE JOURNAL ── -->
-  <div id="comm-journal-modal" class="comm-modal-overlay" style="display:none" onclick="closeJournalModal(event)">
-    <div class="comm-modal-box">
-      <div class="comm-modal-header">
-        <span class="comm-modal-title" id="comm-modal-title">📓 Documenter une journée</span>
-        <button class="comm-modal-close" onclick="closeJournalModal()">✕</button>
+  </div>
+</div>
+
+<!-- ── MODAL FORMULAIRE JOURNAL (hors du tab pour éviter overflow:hidden) ── -->
+<div id="comm-journal-modal" class="comm-modal-overlay" style="display:none;z-index:9999;" onclick="closeJournalModal(event)">
+  <div class="comm-modal-box">
+    <div class="comm-modal-header">
+      <span class="comm-modal-title" id="comm-modal-title">📓 Documenter une journée</span>
+      <button class="comm-modal-close" onclick="closeJournalModalForce()">✕</button>
+    </div>
+    <div class="comm-modal-body">
+      <!-- Données météo pré-remplies (lecture seule) -->
+      <div class="comm-prefill-row">
+        <div class="comm-prefill-chip" id="cm-spot">—</div>
+        <div class="comm-prefill-chip" id="cm-date">—</div>
+        <div class="comm-prefill-chip" id="cm-score">Score —</div>
       </div>
-      <div class="comm-modal-body">
-        <!-- Données météo pré-remplies (lecture seule) -->
-        <div class="comm-prefill-row">
-          <div class="comm-prefill-chip" id="cm-spot">—</div>
-          <div class="comm-prefill-chip" id="cm-date">—</div>
-          <div class="comm-prefill-chip" id="cm-score">Score —</div>
-        </div>
-        <div class="comm-prefill-metrics" id="cm-metrics"></div>
+      <div class="comm-prefill-metrics" id="cm-metrics"></div>
 
-        <!-- Champs utilisateur -->
-        <label class="comm-field-label">Conditions observées</label>
-        <div class="comm-radio-group">
-          <label class="comm-radio"><input type="radio" name="comm-conditions" value="excellentes"> 🟢 Excellentes</label>
-          <label class="comm-radio"><input type="radio" name="comm-conditions" value="moyennes" checked> 🟡 Moyennes</label>
-          <label class="comm-radio"><input type="radio" name="comm-conditions" value="faibles"> 🔴 Faibles</label>
-        </div>
-
-        <label class="comm-field-label">Commentaire libre</label>
-        <textarea class="comm-textarea" id="cm-comment" rows="3" placeholder="Ex : Canigou parfaitement visible à l'aube, silhouette nette jusqu'à 9h…"></textarea>
-
-        <label class="comm-field-label">Photo (optionnel)</label>
-        <input type="file" accept="image/*" id="cm-photo" class="comm-file-input">
-
-        <button class="comm-submit-btn" onclick="submitJournalEntry()">💾 Sauvegarder le rapport</button>
+      <!-- Champs utilisateur -->
+      <label class="comm-field-label">Conditions observées</label>
+      <div class="comm-radio-group">
+        <label class="comm-radio"><input type="radio" name="comm-conditions" value="excellentes"> 🟢 Excellentes</label>
+        <label class="comm-radio"><input type="radio" name="comm-conditions" value="moyennes" checked> 🟡 Moyennes</label>
+        <label class="comm-radio"><input type="radio" name="comm-conditions" value="faibles"> 🔴 Faibles</label>
       </div>
+
+      <label class="comm-field-label">Commentaire libre</label>
+      <textarea class="comm-textarea" id="cm-comment" rows="3" placeholder="Ex : Canigou parfaitement visible à l'aube, silhouette nette jusqu'à 9h…"></textarea>
+
+      <label class="comm-field-label">Photo (optionnel)</label>
+      <input type="file" accept="image/*" id="cm-photo" class="comm-file-input">
+
+      <button class="comm-submit-btn" onclick="submitJournalEntry()">💾 Sauvegarder le rapport</button>
     </div>
   </div>
 </div>
@@ -3518,15 +3620,86 @@ function scoreDay(spot, h) {
   })();
 
   // ── SCORE FINAL ──────────────────────────────────
-  // Pas de plafond arbitraire. Score proportionnel réel 0-100.
-  // Pénalité douce si précipitations fortes (pas d'élimination binaire)
-  const rawPct = maxScore > 0 ? Math.min(100, Math.round((score / maxScore) * 100)) : 0;
+  const rawPct = maxScore > 0 ? Math.min(95, Math.round((score / maxScore) * 100)) : 0;
 
-  // Seul cas d'élimination vraie : précipitations >70% (pluie certaine = visibilité 0)
+  // ── RÉGIMES FAVORABLES (bonus vers 100) ──────────
+  const regimes = [];
+
+  // 🔵 Anticyclone : pression ≥ 1022 hPa
+  const slpVal = h.slp ?? 0;
+  if (slpVal >= 1022) {
+    regimes.push({
+      key: 'anticyclone',
+      label: '🔵 Anticyclone',
+      desc: `${Math.round(slpVal)} hPa — stabilité maximale`,
+      color: '#60a5fa',
+      bg: 'rgba(37,99,235,.13)',
+      border: 'rgba(96,165,250,.35)',
+    });
+  }
+
+  // ❄️ Post-front froid : pression ≥ 1018 + vent de secteur N/NW (300–360° ou 0–30°)
+  const windDir = h.wind_dir ?? null;
+  const windSpd = h.wind ?? 0;
+  const isNorthWind = windDir !== null && ((windDir >= 300 && windDir <= 360) || (windDir >= 0 && windDir <= 45));
+  if (slpVal >= 1018 && isNorthWind && (h.rh ?? 100) < 65) {
+    regimes.push({
+      key: 'postfront',
+      label: '❄️ Post-front froid',
+      desc: `Vent N/NW ${Math.round(windSpd)} km/h · air sec · pression ${Math.round(slpVal)} hPa`,
+      color: '#a5f3fc',
+      bg: 'rgba(8,145,178,.13)',
+      border: 'rgba(165,243,252,.3)',
+    });
+  }
+
+  // 💨 Mistral : vent NW/N (280–360°) > 28 km/h
+  // Activé si type montagne/corse OU si particularites.mistral coché dans le créateur
+  const isMistralSpot = spot.type === 'montagne_pyrenees'
+    || spot.type === 'mediterranee_corse'
+    || spot.particularites?.mistral === true;
+  const isMistralWind = windDir !== null && windDir >= 280 && windDir <= 360 && windSpd >= 28;
+  if (isMistralSpot && isMistralWind) {
+    regimes.push({
+      key: 'mistral',
+      label: '💨 Mistral',
+      desc: `${Math.round(windSpd)} km/h · dir. ${Math.round(windDir)}° — purge atmosphérique`,
+      color: '#86efac',
+      bg: 'rgba(22,163,74,.12)',
+      border: 'rgba(134,239,172,.3)',
+    });
+  }
+
+  // 🟤 Poussières sahariennes fréquentes : dust > 80 µg/m³ ET particularites.dust coché
+  // Alerte : ce spot est connu pour être exposé, la situation actuelle le confirme
+  const dustVal = h.dust ?? null;
+  if (spot.particularites?.dust === true && dustVal !== null && dustVal > 80) {
+    regimes.push({
+      key: 'dust_alert',
+      label: '🟤 Dust saharien',
+      desc: `${Math.round(dustVal)} µg/m³ — spot exposé · visibilité dégradée`,
+      color: '#fbbf24',
+      bg: 'rgba(120,80,10,.18)',
+      border: 'rgba(251,191,36,.35)',
+    });
+  }
+
+  // Bonus score : +5 si régime FAVORABLE (anticyclone, post-front, mistral)
+  // La dust est une ALERTE → pas de bonus
+  const favorableRegimes = regimes.filter(r => r.key !== 'dust_alert');
+  const regimeBonus = favorableRegimes.length > 0 ? 5 : 0;
   const hardElim = precip > 70;
-  const finalScore = hardElim ? Math.min(rawPct, 20) : rawPct;
+  const boostedScore = Math.min(100, rawPct + regimeBonus);
+  const finalScore = hardElim ? Math.min(boostedScore, 20) : boostedScore;
 
-  return { score: finalScore, rawScore: rawPct, items, hasElim: hardElim };
+  // Ajouter les régimes comme items spéciaux (type='regime')
+  regimes.forEach(r => {
+    items.push({ name: r.label, val: r.desc, unit: '', pts: 0, max: 0,
+      color: 'green', verdict: r.desc, elim: false, regime: true,
+      regimeColor: r.color, regimeBg: r.bg, regimeBorder: r.border });
+  });
+
+  return { score: finalScore, rawScore: rawPct, items, hasElim: hardElim, regimes };
 }
 
 // ═══════════════════════════════════════════════════
@@ -3534,7 +3707,7 @@ function scoreDay(spot, h) {
 // ═══════════════════════════════════════════════════
 async function fetchSpot(spot, pastDays = 0) {
  const params = [
-  'visibility','wind_speed_10m','cloud_cover_low','cloud_cover_mid','cloud_cover_high',
+  'visibility','wind_speed_10m','wind_direction_10m','cloud_cover_low','cloud_cover_mid','cloud_cover_high',
   'relative_humidity_2m','dew_point_2m','temperature_2m','surface_pressure',
   'precipitation_probability'
 ].join(',');
@@ -3704,6 +3877,7 @@ pm10: (()=>{ const v=[avg(d3.hourly?.pm10),avg(d3b?.hourly?.pm10),avg(d3c?.hourl
 rh_mid: avg(d2?.hourly?.relative_humidity_2m),
 spread_mid: (()=>{ const t=avg(d2?.hourly?.temperature_2m); const d=avg(d2?.hourly?.dew_point_2m); return (t!==null&&d!==null)?t-d:null; })(),
 wind: avg(d1.hourly?.wind_speed_10m),
+      wind_dir: avg(d1.hourly?.wind_direction_10m),
       vis: (avg(d1.hourly?.visibility)??0)/1000,
       precip: avg(d1.hourly?.precipitation_probability),
       vis_mid: (avg(d2.hourly?.visibility)??0)/1000,
@@ -3738,6 +3912,7 @@ wind: avg(d1.hourly?.wind_speed_10m),
         spread: (tH!=null && dH!=null) ? tH-dH : h.spread,
         dust: h.dust, pm10: h.pm10, rh_mid: h.rh_mid, spread_mid: h.spread_mid, cape: h.cape,
         aod: h.aod ?? null,
+        wind_dir: d1.hourly?.wind_direction_10m?.[hourIdx] ?? h.wind_dir ?? null,
         _day: h._day, _obsDate: obsDate.toISOString(),
       };
       hourlyScores['abs_' + absH] = scoreDay(spot, hDataAbs).score;
@@ -3765,6 +3940,7 @@ wind: avg(d1.hourly?.wind_speed_10m),
         spread: (tH!=null && dH!=null) ? tH-dH : h.spread,
         dust: h.dust, pm10: h.pm10, rh_mid: h.rh_mid, spread_mid: h.spread_mid, cape: h.cape,
         aod: h.aod ?? null,
+        wind_dir: d1.hourly?.wind_direction_10m?.[hourIdx] ?? h.wind_dir ?? null,
         _day: h._day, _obsDate: obsDate.toISOString(),
       };
       const rawScore = scoreDay(spot, hData).score;
@@ -3793,6 +3969,7 @@ wind: avg(d1.hourly?.wind_speed_10m),
         spread: (tH!=null && dH!=null) ? tH-dH : h.spread,
         dust: h.dust, pm10: h.pm10, rh_mid: h.rh_mid, spread_mid: h.spread_mid, cape: h.cape,
         aod: h.aod ?? null,
+        wind_dir: d1.hourly?.wind_direction_10m?.[hourIdx] ?? h.wind_dir ?? null,
         _day: h._day, _obsDate: obsDate.toISOString(),
       };
       const rawScore = scoreDay(spot, hData).score;
@@ -4240,6 +4417,7 @@ function renderDayRow(dayData, date, spot) {
       spread: (tH!=null && dH!=null) ? tH-dH : h.spread,
       dust: h.dust, pm10: h.pm10, rh_mid: h.rh_mid, spread_mid: h.spread_mid, cape: h.cape,
       aod: h.aod ?? null,
+      wind_dir: d1.hourly?.wind_direction_10m?.[hourIdx] ?? h.wind_dir ?? null,
       _day: h._day, _obsDate: obsDate.toISOString(),
     };
     scoredResult = scoreDay(spot, hData);
@@ -4276,6 +4454,7 @@ function renderDayRow(dayData, date, spot) {
       spread: (tH!=null && dH!=null) ? tH-dH : h.spread,
       dust: h.dust, pm10: h.pm10, rh_mid: h.rh_mid, spread_mid: h.spread_mid, cape: h.cape,
       aod: h.aod ?? null,
+      wind_dir: d1.hourly?.wind_direction_10m?.[hourIdx] ?? h.wind_dir ?? null,
       _day: h._day, _obsDate: obsDate.toISOString(),
     };
     scoredResult = scoreDay(spot, hData);
@@ -4295,7 +4474,12 @@ function renderDayRow(dayData, date, spot) {
     wind: h.wind ?? null,
     slp: h.slp ?? null,
   }).replace(/'/g, '&apos;');
-  const journalBtn = `<div class="drow-journal-card" onclick="openJournalEntry('${spot.id}', ${journalPayload}, '${fullLabel(date).replace(/'/g, "\\'")}'); switchTab('communaute')" role="button" tabindex="0">
+  const journalBtn = `<div class="drow-journal-card"
+    data-spot-id="${spot.id}"
+    data-journal-payload='${journalPayload}'
+    data-date-label="${fullLabel(date).replace(/"/g, '&quot;')}"
+    onclick="handleJournalCardClick(this)"
+    role="button" tabindex="0">
     <img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/refs/heads/main/1000031340%20(3).png" alt="Journal de Bord" loading="lazy">
     <div class="drow-journal-card-text">
       <span class="drow-journal-card-label">JOURNAL<br>DE BORD</span>
@@ -4340,7 +4524,7 @@ function getMbIcon(name) {
 }
 
 function renderMeteoButtons(items) {
-  const normal = items.filter(it => it.max > 0).map(it => {
+  const normal = items.filter(it => it.max > 0 && !it.regime).map(it => {
     const state = it.elim ? 'elim' : it.color==='amber' ? 'warn' : 'ok';
     const icon = getMbIcon(it.name);
     const badge = it.elim ? '<span class="mb-badge">ÉLIM</span>' : '';
@@ -4352,7 +4536,7 @@ function renderMeteoButtons(items) {
     </div>`;
   }).join('');
 
-  // Bouton géométrie solaire (max=0 mais nom connu)
+  // Bouton géométrie solaire
   const solar = items.find(it => it.name && it.name.includes('Géométrie solaire'));
   let solarBtn = '';
   if (solar && solar.val !== undefined && solar.val !== 'err') {
@@ -4365,7 +4549,33 @@ function renderMeteoButtons(items) {
     </div>`;
   }
 
-  return normal + solarBtn;
+  // Cards régimes favorables
+  const regimeItems = items.filter(it => it.regime);
+  let regimeHtml = '';
+  if (regimeItems.length > 0) {
+    regimeHtml = regimeItems.map(r => `
+      <div class="mb-regime" style="
+        background:${r.regimeBg};
+        border:1px solid ${r.regimeBorder};
+        border-radius:12px;
+        padding:.45rem .7rem;
+        display:flex;
+        align-items:center;
+        gap:.55rem;
+        min-width:0;
+        grid-column: 1 / -1;
+        animation: regimePulse 2.5s ease-in-out infinite;
+      ">
+        <span style="font-size:18px;flex-shrink:0;line-height:1">${r.name.split(' ')[0]}</span>
+        <div style="min-width:0">
+          <div style="font-family:var(--display);font-size:11px;letter-spacing:.07em;color:${r.regimeColor};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.name.replace(/^[^\s]+\s/,'')}</div>
+          <div style="font-family:var(--mono);font-size:9px;color:rgba(200,220,240,.6);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.val}</div>
+        </div>
+        <span style="margin-left:auto;font-family:var(--display);font-size:10px;color:${r.regimeColor};opacity:.8;flex-shrink:0">+5</span>
+      </div>`).join('');
+  }
+
+  return normal + solarBtn + regimeHtml;
 }
 
 function renderNewCurveBlock(spot, k_default) {
@@ -6130,16 +6340,249 @@ function updateBetaPanel() {
 }
 
 // ── Switch vue interne ────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════
+// FORUM — localStorage + éditeur d'articles
+// ══════════════════════════════════════════════════════════════════════════
+const FORUM_KEY = 'vld_forum_posts';
+
+function forumGetPosts() {
+  try { return JSON.parse(localStorage.getItem(FORUM_KEY) || '[]'); } catch(e) { return []; }
+}
+function forumSavePosts(posts) {
+  try { localStorage.setItem(FORUM_KEY, JSON.stringify(posts)); } catch(e) {}
+}
+
+const FORUM_RUBRIQUES = {
+  conditions: { label: '🌤️ Conditions du jour',     icon: '🌤️', color: '#60a5fa', tags: ['Conditions','Météo','Anticyclone','Front froid','Alerte'] },
+  captures:   { label: '📸 Captures extrêmes',       icon: '📸', color: '#86efac', tags: ['Photo','VLD','Record','Pyrenées','Alpes','Corse'] },
+  materiel:   { label: '🔭 Matériel & Technique',    icon: '🔭', color: '#f59e0b', tags: ['Optique','Digiscoping','Sony','Kowa','Nikon','Astuce'] },
+  spots:      { label: '📍 Spots & Reconnaissances', icon: '📍', color: '#f87171', tags: ['Spot','Reco','France','Tunisie','Nouveau spot'] },
+};
+
+// ── Rendu liste des posts ─────────────────────────────────────────────────
+function forumRenderPosts(rubrique, container) {
+  const rub = FORUM_RUBRIQUES[rubrique];
+  const all = forumGetPosts().filter(function(p) { return p.rubrique === rubrique; });
+
+  let html = '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem;">'
+    + '<div style="font-family:var(--display);font-size:.75rem;letter-spacing:.1em;color:' + rub.color + ';">' + rub.label.toUpperCase() + '</div>'
+    + '<button class="forum-new-btn" onclick="forumOpenEditor(&apos;' + rubrique + '&apos;, null)">✏️ Rédiger un article</button>'
+    + '</div>';
+
+  if (all.length === 0) {
+    html += '<div class="comm-empty-state">'
+      + '<div class="comm-empty-icon">' + rub.icon + '</div>'
+      + '<div style="font-size:13px;color:var(--text2);">Aucun article dans cette rubrique.</div>'
+      + '<div>Sois le premier à partager !</div>'
+      + '</div>';
+  } else {
+    all.forEach(function(p) {
+      const tags = (p.tags || []).map(function(t) { return '<span class="forum-tag">' + t + '</span>'; }).join('');
+      const d = new Date(p.timestamp);
+      const dateStr = d.toLocaleDateString('fr-FR', { day:'2-digit', month:'short', year:'numeric' });
+      const preview = p.body.replace(/<[^>]*>/g, '').substring(0, 120) + (p.body.length > 120 ? '…' : '');
+
+      html += '<div class="forum-card" onclick="forumOpenReader(&apos;' + p.id + '&apos;)">'
+        + '<div class="forum-card-header">'
+        + '<div class="forum-card-avatar">' + rub.icon + '</div>'
+        + '<span class="forum-card-author">' + escHtml(p.author || 'Observateur') + '</span>'
+        + '<span class="forum-card-date">' + dateStr + '</span>'
+        + '</div>'
+        + '<div class="forum-card-title">' + escHtml(p.title) + '</div>'
+        + '<div class="forum-card-body">' + escHtml(preview) + '</div>'
+        + (tags ? '<div class="forum-card-tags">' + tags + '</div>' : '')
+        + '<div class="forum-card-footer" onclick="event.stopPropagation()">'
+        + '<span onclick="forumLike(&apos;' + p.id + '&apos;,this,&apos;' + rubrique + '&apos;)">👍 ' + (p.likes || 0) + '</span>'
+        + '<span>💬 ' + (p.replies || 0) + ' réponses</span>'
+        + '<span style="margin-left:auto;color:#f87171;" onclick="forumDelete(&apos;' + p.id + '&apos;,&apos;' + rubrique + '&apos;)">🗑️</span>'
+        + '</div>'
+        + '</div>';
+    });
+  }
+  container.innerHTML = html;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Like / Delete ─────────────────────────────────────────────────────────
+window.forumLike = function(postId, el, rubrique) {
+  const posts = forumGetPosts();
+  const p = posts.find(function(x) { return x.id === postId; });
+  if (p) { p.likes = (p.likes || 0) + 1; forumSavePosts(posts); el.textContent = '👍 ' + p.likes; }
+};
+
+window.forumDelete = function(postId, rubrique) {
+  if (!confirm('Supprimer cet article ?')) return;
+  let posts = forumGetPosts().filter(function(p) { return p.id !== postId; });
+  forumSavePosts(posts);
+  const main = document.getElementById('comm-main');
+  if (main) forumRenderPosts(rubrique, main);
+};
+
+// ── Éditeur d'article (création) ─────────────────────────────────────────
+window.forumOpenEditor = function(rubrique, postId) {
+  const rub = FORUM_RUBRIQUES[rubrique];
+  const existing = postId ? forumGetPosts().find(function(p) { return p.id === postId; }) : null;
+
+  const tagsHtml = rub.tags.map(function(t) {
+    const checked = existing && (existing.tags || []).indexOf(t) !== -1 ? ' checked' : '';
+    return '<label class="forum-tag-check"><input type="checkbox" name="ftag" value="' + t + '"' + checked + '> ' + t + '</label>';
+  }).join('');
+
+  const overlay = document.createElement('div');
+  overlay.id = 'forum-editor-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:4000;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:2rem 1rem;backdrop-filter:blur(6px);';
+
+  overlay.innerHTML = '<div style="background:#0d1628;border:1px solid rgba(0,212,255,.25);border-radius:16px;width:100%;max-width:640px;padding:1.5rem;">'
+
+    // Header
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.2rem;">'
+    + '<div style="font-family:var(--display);font-size:13px;letter-spacing:.1em;color:' + rub.color + ';">'
+    + (existing ? '✏️ Modifier' : '✏️ Nouvel article') + ' — ' + rub.label + '</div>'
+    + '<button onclick="forumCloseEditor()" style="background:none;border:none;color:rgba(200,220,240,.5);font-size:18px;cursor:pointer;line-height:1;">✕</button>'
+    + '</div>'
+
+    // Pseudo + Titre
+    + '<div style="display:grid;grid-template-columns:1fr 2fr;gap:.7rem;margin-bottom:.8rem;">'
+    + '<div><label style="font-size:9px;color:rgba(150,180,210,.6);font-family:var(--display);letter-spacing:.08em;display:block;margin-bottom:.3rem;">TON PSEUDO</label>'
+    + '<input id="fc-author" type="text" value="' + escHtml((existing && existing.author) || '') + '" placeholder="Ton pseudo…" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(0,212,255,.15);border-radius:8px;color:#e0eeff;font-size:12px;padding:.45rem .7rem;box-sizing:border-box;"></div>'
+    + '<div><label style="font-size:9px;color:rgba(150,180,210,.6);font-family:var(--display);letter-spacing:.08em;display:block;margin-bottom:.3rem;">TITRE DE L\'ARTICLE</label>'
+    + '<input id="fc-title" type="text" value="' + escHtml((existing && existing.title) || '') + '" placeholder="Titre accrocheur…" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(0,212,255,.15);border-radius:8px;color:#e0eeff;font-size:12px;padding:.45rem .7rem;box-sizing:border-box;"></div>'
+    + '</div>'
+
+    // Barre d'outils formatting
+    + '<div style="display:flex;gap:.4rem;margin-bottom:.4rem;flex-wrap:wrap;">'
+    + ['<b>G</b>','<i>I</i>','<u>U</u>'].map(function(lbl,i){
+        const cmds = ['bold','italic','underline'];
+        return '<button onclick="document.execCommand(\'' + cmds[i] + '\',false,null);document.getElementById(\'fc-body\').focus()" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#cce0f0;border-radius:5px;width:28px;height:26px;cursor:pointer;font-size:12px;">'+lbl+'</button>';
+      }).join('')
+    + '<button onclick="document.execCommand(\'insertUnorderedList\',false,null);document.getElementById(\'fc-body\').focus()" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#cce0f0;border-radius:5px;padding:0 8px;height:26px;cursor:pointer;font-size:11px;">• Liste</button>'
+    + '<button onclick="document.execCommand(\'insertOrderedList\',false,null);document.getElementById(\'fc-body\').focus()" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#cce0f0;border-radius:5px;padding:0 8px;height:26px;cursor:pointer;font-size:11px;">1. Liste</button>'
+    + '<button onclick="forumInsertHR()" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#cce0f0;border-radius:5px;padding:0 8px;height:26px;cursor:pointer;font-size:11px;">─ Séparateur</button>'
+    + '</div>'
+
+    // Zone de rédaction (contenteditable)
+    + '<div id="fc-body" contenteditable="true" style="min-height:200px;background:rgba(255,255,255,.04);border:1px solid rgba(0,212,255,.15);border-radius:8px;color:#e0eeff;font-size:13px;line-height:1.7;padding:.7rem .9rem;margin-bottom:.8rem;outline:none;overflow-y:auto;" placeholder="Rédige ton article ici…">'
+    + (existing ? existing.body : '')
+    + '</div>'
+
+    // Tags
+    + '<div style="margin-bottom:1rem;">'
+    + '<label style="font-size:9px;color:rgba(150,180,210,.6);font-family:var(--display);letter-spacing:.08em;display:block;margin-bottom:.4rem;">TAGS</label>'
+    + '<div style="display:flex;flex-wrap:wrap;gap:.4rem;">' + tagsHtml + '</div>'
+    + '</div>'
+
+    // Actions
+    + '<div style="display:flex;gap:.6rem;justify-content:flex-end;">'
+    + '<button onclick="forumCloseEditor()" style="background:none;border:1px solid rgba(255,255,255,.12);color:rgba(200,220,240,.5);border-radius:8px;padding:.45rem 1rem;font-size:11px;cursor:pointer;">Annuler</button>'
+    + '<button onclick="forumSubmitPost(&apos;' + rubrique + '&apos;,&apos;' + (postId || '') + '&apos;)" style="background:rgba(0,212,255,.15);border:1px solid rgba(0,212,255,.35);color:#00d8ff;border-radius:8px;padding:.45rem 1.2rem;font-size:11px;cursor:pointer;font-family:var(--display);letter-spacing:.06em;">💾 Publier</button>'
+    + '</div>'
+
+    + '</div>';
+
+  document.body.appendChild(overlay);
+
+  // CSS contenteditable placeholder
+  const style = document.createElement('style');
+  style.textContent = '#fc-body:empty:before{content:attr(placeholder);color:rgba(150,180,210,.35);pointer-events:none;}';
+  overlay.appendChild(style);
+};
+
+window.forumInsertHR = function() {
+  document.getElementById('fc-body').focus();
+  document.execCommand('insertHTML', false, '<hr style="border:none;border-top:1px solid rgba(0,212,255,.2);margin:.6rem 0;">');
+};
+
+window.forumCloseEditor = function() {
+  const el = document.getElementById('forum-editor-overlay');
+  if (el) el.remove();
+};
+
+window.forumSubmitPost = function(rubrique, postId) {
+  const author = (document.getElementById('fc-author').value.trim()) || 'Observateur';
+  const title  = document.getElementById('fc-title').value.trim();
+  const body   = document.getElementById('fc-body').innerHTML.trim();
+  if (!title) { alert('Le titre est requis.'); return; }
+  if (!body || body === '<br>') { alert('Le contenu est requis.'); return; }
+  const tags = Array.from(document.querySelectorAll('input[name="ftag"]:checked')).map(function(i) { return i.value; });
+
+  const posts = forumGetPosts();
+  if (postId) {
+    const p = posts.find(function(x) { return x.id === postId; });
+    if (p) { p.author = author; p.title = title; p.body = body; p.tags = tags; p.edited = Date.now(); }
+  } else {
+    posts.unshift({ id:'p_'+Date.now(), rubrique:rubrique, author:author, title:title, body:body, tags:tags, likes:0, replies:0, timestamp:Date.now() });
+  }
+  forumSavePosts(posts);
+  forumCloseEditor();
+
+  const main = document.getElementById('comm-main');
+  if (main) forumRenderPosts(rubrique, main);
+};
+
+// ── Lecteur d'article ─────────────────────────────────────────────────────
+window.forumOpenReader = function(postId) {
+  const posts = forumGetPosts();
+  const p = posts.find(function(x) { return x.id === postId; });
+  if (!p) return;
+  const rub = FORUM_RUBRIQUES[p.rubrique];
+  const d = new Date(p.timestamp).toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  const tags = (p.tags || []).map(function(t) { return '<span class="forum-tag">' + escHtml(t) + '</span>'; }).join('');
+
+  const overlay = document.createElement('div');
+  overlay.id = 'forum-reader-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:4000;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:2rem 1rem;backdrop-filter:blur(6px);';
+
+  overlay.innerHTML = '<div style="background:#0d1628;border:1px solid rgba(0,212,255,.2);border-radius:16px;width:100%;max-width:640px;padding:1.5rem;">'
+    + '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1rem;">'
+    + '<div><div style="font-size:9px;font-family:var(--display);letter-spacing:.1em;color:' + rub.color + ';margin-bottom:.3rem;">' + rub.label.toUpperCase() + '</div>'
+    + '<div style="font-family:var(--display);font-size:16px;color:#e0eeff;line-height:1.3;">' + escHtml(p.title) + '</div>'
+    + '<div style="font-size:10px;color:rgba(150,180,210,.5);margin-top:.3rem;">' + escHtml(p.author || 'Observateur') + ' · ' + d + '</div>'
+    + '</div>'
+    + '<button onclick="forumCloseReader()" style="background:none;border:none;color:rgba(200,220,240,.5);font-size:20px;cursor:pointer;flex-shrink:0;line-height:1;margin-left:1rem;">✕</button>'
+    + '</div>'
+    + '<hr style="border:none;border-top:1px solid rgba(0,212,255,.1);margin:.8rem 0;">'
+    + '<div style="font-size:13px;line-height:1.8;color:#cce0f0;">' + p.body + '</div>'
+    + (tags ? '<div style="margin-top:1rem;display:flex;gap:.4rem;flex-wrap:wrap;">' + tags + '</div>' : '')
+    + '<div style="display:flex;gap:1rem;margin-top:1.2rem;padding-top:.8rem;border-top:1px solid rgba(255,255,255,.06);font-size:11px;color:rgba(150,180,210,.5);">'
+    + '<span style="cursor:pointer;" onclick="forumLikeReader(&apos;' + p.id + '&apos;,this)">👍 ' + (p.likes||0) + ' j\'aime</span>'
+    + '<span style="margin-left:auto;cursor:pointer;color:#f87171;" onclick="forumDelete(&apos;' + p.id + '&apos;,&apos;' + p.rubrique + '&apos;);forumCloseReader()">🗑️ Supprimer</span>'
+    + '</div>'
+    + '</div>';
+
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) forumCloseReader(); });
+};
+
+window.forumCloseReader = function() {
+  const el = document.getElementById('forum-reader-overlay');
+  if (el) el.remove();
+};
+
+window.forumLikeReader = function(postId, el) {
+  const posts = forumGetPosts();
+  const p = posts.find(function(x) { return x.id === postId; });
+  if (p) { p.likes = (p.likes || 0) + 1; forumSavePosts(posts); el.textContent = '👍 ' + p.likes + ' j\'aime'; }
+};
+
 window.switchCommView = function(view) {
   document.querySelectorAll('.comm-nav-btn').forEach(function(b){ b.classList.remove('active'); });
-  const btn = document.getElementById('comm-btn-' + view);
-  if (btn) btn.classList.add('active');
+  const activeBtn = document.getElementById('comm-btn-' + view);
+  if (activeBtn) activeBtn.classList.add('active');
 
   const main = document.getElementById('comm-main');
   if (!main) return;
 
-  if (view === 'journal') renderJournalView(main);
-  else renderFilView(main);
+  const FORUM_VIEWS = ['conditions','captures','materiel','spots'];
+  if (view === 'journal') {
+    renderJournalView(main);
+  } else if (FORUM_VIEWS.indexOf(view) !== -1) {
+    forumRenderPosts(view, main);
+  } else {
+    renderFilView(main);
+  }
 };
 
 // ── Vue Journal ───────────────────────────────────
@@ -6161,7 +6604,7 @@ function renderJournalView(container) {
     return '<div class="comm-journal-card"><div class="comm-jcard-header"><span class="comm-jcard-spot">'+(e.spotName||'—')+'</span><span class="comm-jcard-date">'+(e.dateLabel||'—')+'</span><span class="comm-jcard-score" style="color:'+scColor+'">'+sc+'</span></div><div class="comm-jcard-conditions">'+cond+'</div>'+(e.comment?'<div class="comm-jcard-comment">'+e.comment+'</div>':'')+(metrics?'<div class="comm-jcard-metrics">'+metrics+'</div>':'')+'</div>';
   }).join('');
 
-  container.innerHTML = '<div style="font-family:var(--display);font-size:.75rem;letter-spacing:.1em;color:#f59e0b;margin-bottom:1rem;">MON JOURNAL D'OBSERVATION</div><div class="comm-journal-list">'+cards+'</div>';
+  container.innerHTML = '<div style="font-family:var(--display);font-size:.75rem;letter-spacing:.1em;color:#f59e0b;margin-bottom:1rem;">MON JOURNAL D\'OBSERVATION</div><div class="comm-journal-list">'+cards+'</div>';
 }
 
 // ── Vue Fil ───────────────────────────────────────
@@ -6197,8 +6640,23 @@ window.openJournalEntry = function(spotId, dayData, dateLabel) {
 };
 
 window.closeJournalModal = function(e) {
+  // Ferme si : appel direct (bouton ✕), ou clic sur l'overlay (pas sur la box)
   if (e && e.target !== document.getElementById('comm-journal-modal')) return;
   document.getElementById('comm-journal-modal').style.display = 'none';
+};
+window.closeJournalModalForce = function() {
+  document.getElementById('comm-journal-modal').style.display = 'none';
+};
+
+// ── HANDLER journal card (data-attributes) ──────────────────────────────
+window.handleJournalCardClick = function(el) {
+  const spotId    = el.getAttribute('data-spot-id');
+  const payload   = el.getAttribute('data-journal-payload');
+  const dateLabel = el.getAttribute('data-date-label');
+  let dayData = {};
+  try { dayData = JSON.parse(payload); } catch(e) {}
+  switchTab('communaute');
+  setTimeout(function() { openJournalEntry(spotId, dayData, dateLabel); }, 100);
 };
 
 window.submitJournalEntry = function() {
