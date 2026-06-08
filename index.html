@@ -2693,6 +2693,11 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
         color:var(--text3);border-radius:7px;cursor:pointer;transition:all .2s;
         display:flex;align-items:center;justify-content:center;gap:.4rem;
       ">✅ CHECKLIST <span id="cl-count-badge" style="background:rgba(0,212,255,.15);border-radius:4px;padding:.1rem .35rem;font-size:9px;">0%</span></button>
+      <button id="terrain-sub-profil" onclick="switchTerrainSub('profil')" style="
+        flex:1;padding:.45rem .5rem;font-family:var(--display);font-size:10px;letter-spacing:.08em;
+        background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
+        color:var(--text3);border-radius:7px;cursor:pointer;transition:all .2s;
+      ">📐 PROFIL</button>
     </div>
 
     <!-- ── VUE BOUSSOLE ── -->
@@ -2946,6 +2951,39 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
     </div>
   </div>
     </div>
+
+    <!-- ── VUE PROFIL TERRAIN ── -->
+    <div id="terrain-view-profil" style="display:none;padding:.25rem 0;">
+
+      <!-- Select spot -->
+      <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem;flex-wrap:wrap;">
+        <span style="font-family:var(--mono);font-size:11px;color:var(--text3);">Spot :</span>
+        <select id="profil-spot-select" onchange="loadTerrainProfil(this.value)" style="
+          flex:1;background:var(--bg-input);border:1px solid var(--border2);
+          color:var(--text);font-family:var(--mono);font-size:11px;
+          padding:.35rem .6rem;border-radius:6px;outline:none;
+        ">
+          <option value="">— Sélectionner un spot —</option>
+        </select>
+      </div>
+
+      <!-- Slider κ -->
+      <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.6rem;flex-wrap:wrap;">
+        <span style="font-family:var(--mono);font-size:11px;color:var(--cyan);">κ réfraction :</span>
+        <input id="profil-k-slider" type="range" min="0.05" max="0.45" step="0.001" value="0.17"
+          oninput="onProfilSlider(this.value)"
+          style="flex:1;accent-color:var(--cyan);">
+        <span id="profil-k-val" style="font-family:var(--mono);font-size:11px;color:var(--cyan);min-width:40px;">0.170</span>
+        <span id="profil-k-badge" style="font-family:var(--mono);font-size:9px;padding:.15rem .4rem;border-radius:4px;background:rgba(255,138,0,.15);color:var(--orange);border:1px solid rgba(255,138,0,.3);">Modèle</span>
+      </div>
+
+      <!-- SVG profil -->
+      <div id="profil-svg" style="width:100%;border-radius:10px;background:#020609;overflow:hidden;min-height:80px;"></div>
+
+      <!-- Stats -->
+      <div id="profil-stats" style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-top:.75rem;"></div>
+
+    </div>
   </div>
 </div>
 
@@ -3148,8 +3186,8 @@ function toggleCheck(label) {
 }
 
 function switchTerrainSub(sub) {
-  const views = { carte: 'terrain-view-carte', checklist: 'terrain-view-checklist' };
-  const btns  = { carte: 'terrain-sub-carte',  checklist: 'terrain-sub-checklist' };
+  const views = { carte: 'terrain-view-carte', checklist: 'terrain-view-checklist', profil: 'terrain-view-profil' };
+  const btns  = { carte: 'terrain-sub-carte',  checklist: 'terrain-sub-checklist',  profil: 'terrain-sub-profil' };
   Object.keys(views).forEach(k => {
     const v = document.getElementById(views[k]);
     const b = document.getElementById(btns[k]);
@@ -3160,6 +3198,187 @@ function switchTerrainSub(sub) {
     b.style.borderColor = active ? 'rgba(0,212,255,.35)' : 'rgba(255,255,255,.08)';
     b.style.color = active ? 'var(--cyan)' : 'var(--text3)';
   });
+  // Peupler le select profil à l'ouverture
+  if (sub === 'profil') populateProfilSelect();
+}
+
+let _profilSpot = null;
+let _profilPoints = null;
+let _profilK = 0.17;
+
+function populateProfilSelect() {
+  const sel = document.getElementById('profil-spot-select');
+  if (!sel || sel.options.length > 1) return;
+  if (typeof SPOTS === 'undefined') { setTimeout(populateProfilSelect, 300); return; }
+  SPOTS.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = s.name + ' → ' + s.target + ' (' + s.dist_km + ' km)';
+    sel.appendChild(opt);
+  });
+}
+
+function loadTerrainProfil(spotId) {
+  if (!spotId) return;
+  // Sync le select
+  const sel = document.getElementById('profil-spot-select');
+  if (sel) sel.value = spotId;
+  _profilSpot = SPOTS.find(s => s.id === spotId);
+  if (!_profilSpot) return;
+  highlightSpotLine(spotId);
+  _profilPoints = null;
+
+  // K depuis forecasts si dispo
+  const fc = (window.forecasts || {})[spotId];
+  const todayRaw = fc?.[0]?.raw;
+  _profilK = (todayRaw?.k_bislin != null) ? todayRaw.k_bislin : 0.17;
+  const kSource = todayRaw?.k_source || 'bislin';
+  const slider = document.getElementById('profil-k-slider');
+  const kVal = document.getElementById('profil-k-val');
+  const kBadge = document.getElementById('profil-k-badge');
+  if (slider) slider.value = _profilK;
+  if (kVal) kVal.textContent = _profilK.toFixed(3);
+  if (kBadge) {
+    kBadge.textContent = kSource === 'era5' ? 'ERA5 réel' : 'Modèle';
+    kBadge.style.background = kSource === 'era5' ? 'rgba(56,189,248,.2)' : 'rgba(255,138,0,.15)';
+    kBadge.style.color = kSource === 'era5' ? 'var(--cyan)' : 'var(--orange)';
+    kBadge.style.borderColor = kSource === 'era5' ? 'rgba(56,189,248,.4)' : 'rgba(255,138,0,.3)';
+  }
+  document.getElementById('profil-svg').innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text3);font-family:var(--mono);font-size:11px;">⏳ Chargement profil terrain…</div>';
+  document.getElementById('profil-stats').innerHTML = '';
+  fetchAndRenderProfilInline(_profilSpot, _profilK);
+}
+
+function onProfilSlider(val) {
+  _profilK = parseFloat(val);
+  document.getElementById('profil-k-val').textContent = _profilK.toFixed(3);
+  if (_profilPoints && _profilSpot) renderProfilInlineSVG(_profilSpot, _profilPoints, _profilK);
+}
+
+async function fetchAndRenderProfilInline(spot, k) {
+  const svgDiv = document.getElementById('profil-svg');
+  try {
+    const N = 50;
+    const pts = interpolatePoints(spot.obs.lat, spot.obs.lon, spot.tgt.lat, spot.tgt.lon, N);
+    const lats = pts.map(p => p.lat.toFixed(6)).join(',');
+    const lons = pts.map(p => p.lon.toFixed(6)).join(',');
+    const url = `https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lons}`;
+    const resp = await fetch(url, {signal: AbortSignal.timeout(12000)});
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    if (!data.elevation?.length) throw new Error('no_data');
+    const distM = spot.dist_km * 1000;
+    _profilPoints = pts.map((p, i) => ({ dist: p.f * distM, elev: data.elevation[i] }));
+    renderProfilInlineSVG(spot, _profilPoints, _profilK);
+  } catch(err) {
+    svgDiv.innerHTML = `<div style="padding:2.5rem;text-align:center;color:var(--text3);font-family:var(--mono);font-size:11px;">❌ Profil indisponible (${err.message})</div>`;
+  }
+}
+
+function renderProfilInlineSVG(spot, points, k) {
+  // Réutilise exactement renderMapProfileSVG mais dans les divs inline
+  const svgDiv = document.getElementById('profil-svg');
+  const statDiv = document.getElementById('profil-stats');
+  const obsAlt = spot.obs.alt || 0;
+  const tgtAlt = spot.tgt.alt || 0;
+  const totalDist = spot.dist_km * 1000;
+  const R = 6371000;
+  const Rp = R / (1 - k);
+
+  const losElev = d => obsAlt + (tgtAlt - obsAlt) * (d / totalDist);
+  const losRefr = d => losElev(d) + (d * (totalDist - d)) / (2 * Rp);
+
+  const elevations = points.map(p => p.elev);
+  const allY = [...elevations, obsAlt, tgtAlt, ...points.map(p => losRefr(p.dist))];
+  const minElev = Math.min(...allY) - 80;
+  const maxElev = Math.max(...allY) + 180;
+
+  const W = 860, H = 290, PAD = {t:28, r:22, b:44, l:58};
+  const iW = W - PAD.l - PAD.r, iH = H - PAD.t - PAD.b;
+  const sx = d => PAD.l + (d / totalDist) * iW;
+  const sy = e => PAD.t + iH - ((e - minElev) / (maxElev - minElev)) * iH;
+
+  const obstacles = points.filter((p, i) => i > 0 && i < points.length - 1 && p.elev > losRefr(p.dist));
+  const maxObs = obstacles.length ? obstacles.reduce((a, b) => (a.elev - losRefr(a.dist)) > (b.elev - losRefr(b.dist)) ? a : b) : null;
+
+  const terrainPts = points.map(p => `${sx(p.dist).toFixed(1)},${sy(p.elev).toFixed(1)}`).join(' ');
+  const terrainPoly = `${sx(0)},${sy(minElev)} ${terrainPts} ${sx(totalDist)},${sy(minElev)}`;
+  const losGeoLine = `${sx(0)},${sy(obsAlt)} ${sx(totalDist)},${sy(tgtAlt)}`;
+  const losRefrPts = points.map(p => `${sx(p.dist).toFixed(1)},${sy(losRefr(p.dist)).toFixed(1)}`).join(' ');
+
+  const topLine = points.map(p => `${sx(p.dist).toFixed(1)},${sy(losRefr(p.dist)).toFixed(1)}`).join(' ');
+  const botLine = points.map(p => `${sx(p.dist).toFixed(1)},${sy(Math.max(p.elev, minElev)).toFixed(1)}`).reverse().join(' ');
+  const clearZone = `<polygon points="${topLine} ${botLine}" fill="rgba(56,189,248,0.06)" stroke="none"/>`;
+
+  let obsZones = '';
+  obstacles.forEach(p => {
+    const x = sx(p.dist), top = sy(p.elev), bot = sy(losRefr(p.dist));
+    obsZones += `<line x1="${x}" y1="${top}" x2="${x}" y2="${bot}" stroke="#ef4444" stroke-width="2" opacity="0.75"/>`;
+  });
+
+  const elevRange = maxElev - minElev;
+  const elevStep = elevRange > 4000 ? 1000 : elevRange > 1500 ? 500 : elevRange > 600 ? 200 : 100;
+  let elevLabels = '';
+  for (let e = Math.ceil(minElev / elevStep) * elevStep; e <= maxElev; e += elevStep) {
+    const y = sy(e).toFixed(1);
+    elevLabels += `<text x="${PAD.l - 6}" y="${y}" fill="#3a5570" font-size="9" text-anchor="end" dominant-baseline="middle" font-family="monospace">${e}m</text>`;
+    elevLabels += `<line x1="${PAD.l}" y1="${y}" x2="${W - PAD.r}" y2="${y}" stroke="#111f2e" stroke-width="0.7"/>`;
+  }
+  const distLabels = [0, 0.25, 0.5, 0.75, 1].map(f => {
+    const d = f * totalDist, km = (d / 1000).toFixed(0);
+    return `<text x="${sx(d).toFixed(1)}" y="${H - 10}" fill="#3a5570" font-size="9" text-anchor="middle" font-family="monospace">${km}km</text>`;
+  }).join('');
+
+  const mA = `<circle cx="${sx(0)}" cy="${sy(obsAlt)}" r="5" fill="#38bdf8"/><text x="${sx(0) + 9}" y="${sy(obsAlt) - 7}" fill="#38bdf8" font-size="9" font-family="monospace">A ${obsAlt}m</text>`;
+  const mB = `<circle cx="${sx(totalDist)}" cy="${sy(tgtAlt)}" r="5" fill="#38bdf8"/><text x="${sx(totalDist) - 9}" y="${sy(tgtAlt) - 7}" fill="#38bdf8" font-size="9" font-family="monospace" text-anchor="end">B ${tgtAlt}m</text>`;
+
+  const lift_m = Math.round((totalDist * totalDist) / (2 * R) - (totalDist * totalDist) / (2 * Rp));
+  const liftX = sx(totalDist * 0.5), liftY = sy(losRefr(totalDist * 0.5));
+  const liftLabel = `<text x="${liftX}" y="${liftY - 10}" fill="#38bdf8" font-size="9" font-family="monospace" text-anchor="middle">+${lift_m}m lift κ=${k.toFixed(3)}</text>`;
+
+  const Lx = PAD.l, Ly = PAD.t + 4;
+  const legend = `
+    <rect x="${Lx}" y="${Ly - 3}" width="12" height="5" fill="#22c55e" opacity="0.5"/>
+    <text x="${Lx + 15}" y="${Ly + 2}" fill="#22c55e" font-size="8" font-family="monospace">Terrain</text>
+    <line x1="${Lx + 62}" y1="${Ly}" x2="${Lx + 74}" y2="${Ly}" stroke="rgba(255,255,255,0.25)" stroke-width="1" stroke-dasharray="3,2"/>
+    <text x="${Lx + 77}" y="${Ly + 2}" fill="#6688aa" font-size="8" font-family="monospace">LOS géom.</text>
+    <line x1="${Lx + 133}" y1="${Ly}" x2="${Lx + 145}" y2="${Ly}" stroke="#38bdf8" stroke-width="1.5"/>
+    <text x="${Lx + 148}" y="${Ly + 2}" fill="#38bdf8" font-size="8" font-family="monospace">LOS réfractée κ=${k.toFixed(3)}</text>
+    ${obstacles.length ? `<line x1="${Lx + 230}" y1="${Ly - 3}" x2="${Lx + 230}" y2="${Ly + 4}" stroke="#ef4444" stroke-width="2.5" opacity="0.8"/>
+    <text x="${Lx + 235}" y="${Ly + 2}" fill="#f87171" font-size="8" font-family="monospace">Obstacle</text>` : ''}
+  `;
+
+  svgDiv.innerHTML = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+    <rect width="${W}" height="${H}" fill="#020609"/>
+    ${elevLabels}${distLabels}
+    ${clearZone}
+    <polygon points="${terrainPoly}" fill="rgba(34,197,94,0.12)" stroke="none"/>
+    <polyline points="${terrainPts}" fill="none" stroke="#22c55e" stroke-width="1.8"/>
+    ${obsZones}
+    <polyline points="${losGeoLine}" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1" stroke-dasharray="5,3"/>
+    <polyline points="${losRefrPts}" fill="none" stroke="#38bdf8" stroke-width="2"/>
+    ${liftLabel}${mA}${mB}${legend}
+  </svg>`;
+
+  const d_H = Math.sqrt((Rp + obsAlt) ** 2 - Rp ** 2);
+  let verdictColor, verdictText;
+  if (d_H >= totalDist) {
+    verdictText = obstacles.length === 0 ? `✅ Visible` : `⚠️ Terrain obstacle`;
+    verdictColor = obstacles.length === 0 ? '#22c55e' : '#f59e0b';
+  } else {
+    const inner = totalDist - d_H;
+    const hh = Math.sqrt(inner * inner + Rp * Rp) - Rp;
+    const visible = Math.max(0, tgtAlt - hh);
+    verdictText = visible > 0 ? `✅ ${Math.round(visible)}m visible` : `❌ Caché · ${Math.round(hh - tgtAlt)}m sous horizon`;
+    verdictColor = visible > 0 ? '#22c55e' : '#f87171';
+    if (obstacles.length > 0) { verdictText += ' + terrain'; verdictColor = '#f87171'; }
+  }
+  const maxExcess = maxObs ? Math.round(maxObs.elev - losRefr(maxObs.dist)) : 0;
+  statDiv.innerHTML = `
+    <div class="mp-stat"><div class="mp-stat-label">VERDICT</div><div class="mp-stat-val" style="color:${verdictColor};font-size:12px">${verdictText}</div></div>
+    <div class="mp-stat"><div class="mp-stat-label">LIFT RÉFRACTION</div><div class="mp-stat-val" style="color:var(--cyan)">+${lift_m} m</div></div>
+    <div class="mp-stat"><div class="mp-stat-label">MAX OBSTACLE / LOS</div><div class="mp-stat-val" style="color:${maxObs ? '#f87171' : 'var(--green)'}">${maxObs ? '+' + maxExcess + 'm à ' + (maxObs.dist/1000).toFixed(0) + 'km' : '—'}</div></div>
+    <div class="mp-stat"><div class="mp-stat-label">SOURCE TERRAIN</div><div class="mp-stat-val" style="color:var(--text2);font-size:10px">Open-Meteo · ${points.length} pts</div></div>`;
 }
 
 function updateChecklistProgress() {
@@ -3221,6 +3440,7 @@ function populateCompassSpotSelect() {
 function updateCompassTarget() {
   const sel = document.getElementById('compass-spot-select');
   const spotId = sel?.value;
+  if (spotId) highlightSpotLine(spotId);
   const azRow = document.getElementById('compass-azimut-target');
   const deltaRow = document.getElementById('compass-delta-row');
   if (!spotId) {
@@ -5903,6 +6123,21 @@ async function fetchAndRenderTerrain(spot) {
 // ═══════════════════════════════════════════════════
 let _vldMap = null;
 let _mapLayers = [];
+let _spotLines = {}; // spot.id → {line, lineOutline, color}
+
+function highlightSpotLine(spotId) {
+  Object.entries(_spotLines).forEach(([id, {line, lineOutline, color}]) => {
+    if (id === spotId) {
+      line.setStyle({ color: '#ffffff', weight: 4, opacity: 1, dashArray: null });
+      lineOutline.setStyle({ color: '#00d4ff', weight: 9, opacity: 0.7 });
+      line.bringToFront();
+      lineOutline.bringToFront();
+    } else {
+      line.setStyle({ color: '#fff', weight: 2, opacity: 0.4 });
+      lineOutline.setStyle({ color, weight: 5, opacity: 0.2 });
+    }
+  });
+}
 
 function scoreColor(score) {
   if (score === null || score === undefined) return '#38bdf8';
@@ -5971,6 +6206,7 @@ function renderMapSpots() {
   // Supprimer anciens layers
   _mapLayers.forEach(l => _vldMap.removeLayer(l));
   _mapLayers = [];
+  _spotLines = {};
 
   const bounds = [];
   let hasSpots = false;
@@ -6003,11 +6239,13 @@ function renderMapSpots() {
       color: color, weight: 6, opacity: 0.45, dashArray: score === null ? '6,4' : null,
     }).addTo(_vldMap);
     _mapLayers.push(lineOutline);
+    _spotLines[spot.id] = { line, lineOutline, color };
 
-    // Clic sur la ligne → modal profil combiné
+    // Clic sur la ligne → sous-onglet Profil Terrain
     line.on('click', (e) => {
       L.DomEvent.stopPropagation(e);
-      openMapProfile(spot);
+      switchTerrainSub('profil');
+      loadTerrainProfil(spot.id);
     });
     line.getElement && line.on('mouseover', () => { line.setStyle({weight: 4, opacity: 1}); });
     line.on('mouseout', () => { line.setStyle({weight: 2.5, opacity: 0.85}); });
