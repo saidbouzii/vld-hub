@@ -7738,6 +7738,8 @@ window.submitJournalEntry = function() {
   </div>
 
   <div id="labo-controls" style="display:none;">
+    <!-- SECTION LUMIÈRE DE BASE -->
+    <div style="color:var(--cyan);font-size:9px;letter-spacing:.1em;font-family:var(--display);margin-bottom:.4rem;border-bottom:1px solid rgba(0,212,255,.12);padding-bottom:.3rem;">LUMIÈRE</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.8rem;">
       <div class="labo-slider-group"><div class="labo-slider-label">Exposition <span id="val-exposure">0</span></div><input type="range" class="labo-slider" id="sl-exposure" min="-100" max="100" value="0" oninput="laboRender()"></div>
       <div class="labo-slider-group"><div class="labo-slider-label">Contraste <span id="val-contrast">0</span></div><input type="range" class="labo-slider" id="sl-contrast" min="-100" max="100" value="0" oninput="laboRender()"></div>
@@ -7745,10 +7747,21 @@ window.submitJournalEntry = function() {
       <div class="labo-slider-group"><div class="labo-slider-label">Ombres <span id="val-shadows">0</span></div><input type="range" class="labo-slider" id="sl-shadows" min="-100" max="100" value="0" oninput="laboRender()"></div>
       <div class="labo-slider-group"><div class="labo-slider-label">Blancs <span id="val-whites">0</span></div><input type="range" class="labo-slider" id="sl-whites" min="-100" max="100" value="0" oninput="laboRender()"></div>
       <div class="labo-slider-group"><div class="labo-slider-label">Noirs <span id="val-blacks">0</span></div><input type="range" class="labo-slider" id="sl-blacks" min="-100" max="100" value="0" oninput="laboRender()"></div>
-      <div class="labo-slider-group"><div class="labo-slider-label">Netteté <span id="val-sharpness">0</span></div><input type="range" class="labo-slider" id="sl-sharpness" min="0" max="100" value="0" oninput="laboRender()"></div>
+    </div>
+    <!-- SECTION LONGUE DISTANCE (clé pour VLD) -->
+    <div style="color:var(--cyan);font-size:9px;letter-spacing:.1em;font-family:var(--display);margin-bottom:.4rem;border-bottom:1px solid rgba(0,212,255,.12);padding-bottom:.3rem;">🏔 RÉCUPÉRATION VLD</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.8rem;">
+      <div class="labo-slider-group"><div class="labo-slider-label" title="Supprime le voile atmosphérique — le plus efficace">🌫 Dehaze <span id="val-dehaze">0</span></div><input type="range" class="labo-slider" id="sl-dehaze" min="0" max="100" value="0" oninput="laboRender()" style="accent-color:#38bdf8;"></div>
+      <div class="labo-slider-group"><div class="labo-slider-label" title="Fait ressortir les crêtes et détails moyens">🗻 Texture <span id="val-texture">0</span></div><input type="range" class="labo-slider" id="sl-texture" min="-100" max="100" value="0" oninput="laboRender()" style="accent-color:#38bdf8;"></div>
+      <div class="labo-slider-group"><div class="labo-slider-label" title="Contraste local des reliefs à moyenne échelle">🔍 Clarté <span id="val-clarity">0</span></div><input type="range" class="labo-slider" id="sl-clarity" min="-100" max="100" value="0" oninput="laboRender()" style="accent-color:#38bdf8;"></div>
+      <div class="labo-slider-group"><div class="labo-slider-label" title="Renforce les détails fins — crêtes à 300+ km">⚡ Netteté <span id="val-sharpness">0</span></div><input type="range" class="labo-slider" id="sl-sharpness" min="0" max="100" value="0" oninput="laboRender()" style="accent-color:#38bdf8;"></div>
+    </div>
+    <!-- SECTION COULEUR -->
+    <div style="color:var(--cyan);font-size:9px;letter-spacing:.1em;font-family:var(--display);margin-bottom:.4rem;border-bottom:1px solid rgba(0,212,255,.12);padding-bottom:.3rem;">COULEUR</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.8rem;">
       <div class="labo-slider-group"><div class="labo-slider-label">Saturation <span id="val-saturation">0</span></div><input type="range" class="labo-slider" id="sl-saturation" min="-100" max="100" value="0" oninput="laboRender()"></div>
-      <div class="labo-slider-group"><div class="labo-slider-label">Température <span id="val-temp">0</span></div><input type="range" class="labo-slider" id="sl-temp" min="-100" max="100" value="0" oninput="laboRender()"></div>
       <div class="labo-slider-group"><div class="labo-slider-label">Vibrance <span id="val-vibrance">0</span></div><input type="range" class="labo-slider" id="sl-vibrance" min="-100" max="100" value="0" oninput="laboRender()"></div>
+      <div class="labo-slider-group"><div class="labo-slider-label">Température <span id="val-temp">0</span></div><input type="range" class="labo-slider" id="sl-temp" min="-100" max="100" value="0" oninput="laboRender()"></div>
     </div>
     <div style="margin-bottom:.8rem;">
       <div style="color:var(--text3);font-size:10px;margin-bottom:.4rem;">⚡ PRESETS RAPIDES</div>
@@ -8481,14 +8494,15 @@ function laboRender() {
   const ctx = c.getContext('2d');
   ctx.drawImage(_laboImg, 0, 0);
 
-  const g = id => parseInt(document.getElementById(id).value);
+  const g = id => parseInt(document.getElementById(id)?.value || 0);
   const exposure = g('sl-exposure'), contrast = g('sl-contrast'),
         highlights = g('sl-highlights'), shadows = g('sl-shadows'),
         whites = g('sl-whites'), blacks = g('sl-blacks'),
         sharpness = g('sl-sharpness'), saturation = g('sl-saturation'),
-        temp = g('sl-temp');
+        temp = g('sl-temp'), vibrance = g('sl-vibrance'),
+        dehaze = g('sl-dehaze'), texture = g('sl-texture'), clarity = g('sl-clarity');
 
-  ['exposure','contrast','highlights','shadows','whites','blacks','sharpness','saturation','temp','vibrance'].forEach(k => {
+  ['exposure','contrast','highlights','shadows','whites','blacks','sharpness','saturation','temp','vibrance','dehaze','texture','clarity'].forEach(k => {
     const el = document.getElementById('val-'+k);
     const sl = document.getElementById('sl-'+k);
     if (el && sl) el.textContent = sl.value;
@@ -8496,31 +8510,92 @@ function laboRender() {
 
   const id = ctx.getImageData(0, 0, c.width, c.height);
   const d = id.data;
+
   for (let i = 0; i < d.length; i += 4) {
     let r = d[i], g2 = d[i+1], b = d[i+2];
+
+    // Exposition
     const expF = Math.pow(2, exposure/50);
     r *= expF; g2 *= expF; b *= expF;
+
+    // Température
     r += temp*0.8; b -= temp*0.8;
+
     const lum = 0.299*r + 0.587*g2 + 0.114*b;
+
+    // Hautes lumières / Ombres
     if (lum > 180 && highlights < 0) { const f = 1 + highlights/200*((lum-180)/75); r*=f; g2*=f; b*=f; }
     else if (lum > 180 && highlights > 0) { const f = 1+highlights/300; r*=f; g2*=f; b*=f; }
     if (lum < 80 && shadows !== 0) { const f = 1+shadows/150*((80-lum)/80); r+=(r*f-r); g2+=(g2*f-g2); b+=(b*f-b); }
+
+    // Blancs / Noirs
     if (lum > 220) { r+=whites*0.5; g2+=whites*0.5; b+=whites*0.5; }
     if (lum < 30)  { r+=blacks*0.3; g2+=blacks*0.3; b+=blacks*0.3; }
+
+    // Contraste
     if (contrast !== 0) { const cf=1+contrast/100; r=(r-128)*cf+128; g2=(g2-128)*cf+128; b=(b-128)*cf+128; }
+
+    // DEHAZE — suppression voile atmosphérique
+    // Principe : amplifier les canaux en soustrayant une valeur de "brume" estimée
+    // Le voile est gris clair → les zones pâles sont des candidats voile
+    if (dehaze > 0) {
+      const df = dehaze / 100;
+      const hazeLvl = Math.max(0, lum - 100); // voile surtout dans les tons clairs-moyens
+      const hazeR = Math.min(r, g2, b) * df * 0.9; // estimation brume (canal min = dominante voile)
+      r = r - hazeR * df + (r - lum) * df * 0.4;
+      g2 = g2 - hazeR * df + (g2 - lum) * df * 0.4;
+      b = b - hazeR * df * 0.7 + (b - lum) * df * 0.5; // bleu: moins soustrait car ciel utile
+      // Boost contraste local léger sur zones voilées
+      const boost = 1 + df * (hazeLvl / 155) * 0.6;
+      r *= boost; g2 *= boost; b *= boost;
+    }
+
+    // CLARTÉ — contraste local moyen (milieux tons)
+    if (clarity !== 0) {
+      const cf2 = clarity / 100;
+      const midBoost = 1 - Math.pow((lum - 128) / 128, 2); // pic à lum=128
+      const delta = (lum - 128) * cf2 * midBoost * 0.7;
+      r += delta * (r / (lum+1));
+      g2 += delta * (g2 / (lum+1));
+      b += delta * (b / (lum+1));
+    }
+
+    // TEXTURE — micro-contraste (hautes fréquences simulées via boost de contraste local fin)
+    // Ici on booste légèrement les écarts à la moyenne locale (approx. via luminance)
+    if (texture !== 0) {
+      const tf = texture / 100;
+      const texBoost = 1 + tf * 0.35;
+      r = lum + (r - lum) * texBoost;
+      g2 = lum + (g2 - lum) * texBoost;
+      b = lum + (b - lum) * texBoost;
+    }
+
+    // Saturation / Vibrance
     if (saturation !== 0) { const gr=0.299*r+0.587*g2+0.114*b, sf=1+saturation/100; r=gr+(r-gr)*sf; g2=gr+(g2-gr)*sf; b=gr+(b-gr)*sf; }
+    if (vibrance !== 0) {
+      const gr=0.299*r+0.587*g2+0.114*b;
+      const sat = Math.max(r,g2,b) - Math.min(r,g2,b);
+      const vf = 1 + (vibrance/100) * (1 - sat/255);
+      r=gr+(r-gr)*vf; g2=gr+(g2-gr)*vf; b=gr+(b-gr)*vf;
+    }
+
     d[i]=Math.max(0,Math.min(255,r)); d[i+1]=Math.max(0,Math.min(255,g2)); d[i+2]=Math.max(0,Math.min(255,b));
   }
   ctx.putImageData(id, 0, 0);
-  c.style.filter = sharpness > 0 ? `contrast(${1+sharpness/200})` : '';
+
+  // Netteté via CSS unsharp-mask (plus efficace que pixel-by-pixel)
+  let filterStr = '';
+  if (sharpness > 0) filterStr += `contrast(${1 + sharpness/250}) `;
+  if (sharpness > 30) filterStr += `saturate(${1 + sharpness/400}) `;
+  c.style.filter = filterStr.trim() || '';
 }
 
 function laboPreset(name) {
   const P = {
-    vld:   {exposure:10,contrast:40,highlights:-60,shadows:70,whites:-20,blacks:10,sharpness:50,saturation:-20,temp:-15,vibrance:0},
-    haze:  {exposure:20,contrast:50,highlights:-80,shadows:80,whites:-40,blacks:0, sharpness:60,saturation:-40,temp:-25,vibrance:0},
-    night: {exposure:60,contrast:30,highlights:-40,shadows:90,whites:-30,blacks:20,sharpness:40,saturation:-10,temp:0,  vibrance:0},
-    reset: {exposure:0, contrast:0, highlights:0,  shadows:0, whites:0,  blacks:0, sharpness:0, saturation:0,  temp:0,  vibrance:0},
+    vld:   {exposure:5, contrast:35,highlights:-50,shadows:60, whites:-15,blacks:5, sharpness:55,saturation:-15,temp:-10,vibrance:0, dehaze:45,texture:25,clarity:30},
+    haze:  {exposure:15,contrast:45,highlights:-70,shadows:75, whites:-30,blacks:0, sharpness:65,saturation:-35,temp:-20,vibrance:0, dehaze:75,texture:35,clarity:45},
+    night: {exposure:55,contrast:25,highlights:-35,shadows:90, whites:-25,blacks:20,sharpness:40,saturation:-5, temp:5,  vibrance:0, dehaze:15,texture:10,clarity:20},
+    reset: {exposure:0, contrast:0, highlights:0,  shadows:0,  whites:0,  blacks:0, sharpness:0, saturation:0,  temp:0,  vibrance:0, dehaze:0, texture:0, clarity:0},
   };
   const p = P[name]; if (!p) return;
   Object.entries(p).forEach(([k,v]) => { const el=document.getElementById('sl-'+k); if(el) el.value=v; });
