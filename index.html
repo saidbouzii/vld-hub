@@ -2826,7 +2826,11 @@ function resetChecklist() {
 let _compassSelectInitialized = false;
 function populateCompassSpotSelect() {
   const sel = document.getElementById('compass-spot-select');
-  if (!sel || typeof SPOTS === 'undefined') return;
+  if (!sel) return;
+  if (typeof SPOTS === 'undefined' || !SPOTS.length) {
+    setTimeout(populateCompassSpotSelect, 300);
+    return;
+  }
   // Mémoriser la sélection courante avant de re-peupler
   const prevVal = sel.value;
   sel.innerHTML = '<option value="">— Aucun —</option>';
