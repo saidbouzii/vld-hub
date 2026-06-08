@@ -3020,7 +3020,10 @@ function startGPSOnly(status) {
 
 // Init quand on ouvre l'onglet outils
 function initOutilsTab() {
-  populateCompassSpotSelect();
+  // Délai court pour garantir que le DOM est rendu et SPOTS accessible
+  setTimeout(() => {
+    populateCompassSpotSelect();
+  }, 50);
   updateChecklistProgress();
   // Ouvrir le premier tuto par défaut
   const firstTuto = document.getElementById('tuto-telescope');
@@ -7234,7 +7237,7 @@ window.submitJournalEntry = function() {
           <!-- Sélection spot cible -->
           <div class="compass-target-row">
             <span style="color:var(--text3)">Spot cible :</span>
-            <select id="compass-spot-select" style="background:var(--bg-input);border:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:11px;padding:.3rem .6rem;border-radius:6px;outline:none;flex:1;" onfocus="if(this.options.length<=1)populateCompassSpotSelect();" onchange="updateCompassTarget()">
+            <select id="compass-spot-select" style="background:var(--bg-input);border:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:11px;padding:.3rem .6rem;border-radius:6px;outline:none;flex:1;" onfocus="populateCompassSpotSelect();" onchange="updateCompassTarget()">
               <option value="">— Aucun —</option>
             </select>
             <span id="compass-azimut-target" style="color:var(--orange);display:none">Az. cible : <b id="compass-az-val">—</b>°</span>
