@@ -1314,7 +1314,7 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
    MAP
 ═══════════════════════════════════════════════════ */
 #tab-carte{padding:.5rem 0;}
-#vld-map{height:calc(100vh - 160px);min-height:400px;border-radius:18px;border:1px solid rgba(0,212,255,.15);z-index:1;}
+#vld-map{height:45vh;min-height:280px;border-radius:18px;border:1px solid rgba(0,212,255,.15);z-index:1;}
 .leaflet-container{background:#080f1a !important;}
 .map-legend{display:flex;flex-wrap:wrap;gap:.4rem;padding:.5rem .25rem;font-size:10px;font-family:var(--mono);color:var(--text3);}
 .map-legend-item{display:flex;align-items:center;gap:4px;}
@@ -2038,10 +2038,9 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
 </button>
 <div id="hamburger-menu">
   <button class="tab-btn" onclick="switchTab('previsions');toggleHamburger(true)">📡 PRÉVISIONS SPOT</button>
-  <button class="tab-btn" onclick="switchTab('carte');toggleHamburger(true)">🗺️ CARTE</button>
+  <button class="tab-btn" onclick="switchTab('carte');toggleHamburger(true)">🗺️ TERRAIN</button>
   <button class="tab-btn" onclick="switchTab('creator');toggleHamburger(true)">🛠️ CRÉATEUR DE SPOT</button>
   <button class="tab-btn" onclick="switchTab('alertes');toggleHamburger(true)">📨 ALERTES</button>
-  <button class="tab-btn" onclick="switchTab('outils');toggleHamburger(true)">🧭 OUTILS TERRAIN</button>
   <button class="tab-btn" onclick="switchTab('labo');toggleHamburger(true)">🔬 LABO PHOTO</button>
   <button class="tab-btn" onclick="switchTab('communaute');toggleHamburger(true)">👥 COMMUNAUTÉ</button>
 </div>
@@ -2050,10 +2049,9 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
 <div class="tab-nav">
   <button class="tab-btn active" onclick="switchTab('accueil')" id="tab-btn-accueil">🏔️ ACCUEIL</button>
   <button class="tab-btn" onclick="switchTab('previsions')" id="tab-btn-previsions">📡 PRÉVISIONS SPOT</button>
-  <button class="tab-btn" onclick="switchTab('carte')" id="tab-btn-carte">🗺️ CARTE</button>
+  <button class="tab-btn" onclick="switchTab('carte')" id="tab-btn-carte">🗺️ TERRAIN</button>
   <button class="tab-btn" onclick="switchTab('creator')" id="tab-btn-creator">🛠️ CRÉATEUR DE SPOT</button>
   <button class="tab-btn" onclick="switchTab('alertes')" id="tab-btn-alertes">📨 ALERTES</button>
-  <button class="tab-btn" onclick="switchTab('outils')" id="tab-btn-outils">🧭 OUTILS TERRAIN</button>
   <button class="tab-btn" onclick="switchTab('labo')" id="tab-btn-labo">🔬 LABO PHOTO</button>
   <button class="tab-btn" onclick="switchTab('communaute')" id="tab-btn-communaute">👥 COMMUNAUTÉ</button>
 </div>
@@ -2281,7 +2279,7 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
       <div class="hl-card" onclick="switchTab('carte')" data-idx="0">
         <img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/file_000000000a2471f4b22be45f4ee04c2b.png" alt="Carte" loading="lazy" style="object-position: center 55%;">
         <div class="hl-card-overlay"></div>
-        <div class="hl-card-label">🗺️ Carte</div>
+        <div class="hl-card-label">🗺️ Terrain</div>
       </div>
 
       <div class="hl-card" onclick="switchTab('labo')" data-idx="1">
@@ -2600,6 +2598,355 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
 <div class="tab-content" id="tab-carte">
   <div id="vld-map"></div>
   <div class="map-legend" id="map-legend"></div>
+
+  <!-- ── BOUSSOLE + GPS (fusionné depuis Outils Terrain) ── -->
+  <div class="outils-wrap" style="margin-top:.75rem;">
+<!-- ── BOUSSOLE TERRAIN ── -->
+  <div class="outils-card open" id="card-boussole">
+    <div class="outils-card-header" onclick="toggleOutilsCard('boussole')">
+      <span style="font-size:18px">🧭</span>
+      <span class="outils-card-title">BOUSSOLE TERRAIN</span>
+      <span class="outils-card-chevron">▲</span>
+    </div>
+    <div class="outils-card-body">
+      <div class="compass-wrap">
+        <!-- SVG boussole -->
+        <div class="compass-ring">
+          <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+            <!-- Fond -->
+            <circle cx="100" cy="100" r="96" fill="#08111f" stroke="rgba(0,212,255,.25)" stroke-width="1.5"/>
+            <circle cx="100" cy="100" r="84" fill="none" stroke="rgba(0,212,255,.08)" stroke-width="1"/>
+            <!-- Graduations -->
+            <g id="compass-ticks" stroke="rgba(0,212,255,.3)" stroke-width="1"></g>
+            <!-- Points cardinaux -->
+            <text x="100" y="22" text-anchor="middle" fill="#00D4FF" font-family="monospace" font-size="13" font-weight="bold">N</text>
+            <text x="100" y="188" text-anchor="middle" fill="#3D6480" font-family="monospace" font-size="11">S</text>
+            <text x="183" y="104" text-anchor="middle" fill="#3D6480" font-family="monospace" font-size="11">E</text>
+            <text x="17" y="104" text-anchor="middle" fill="#3D6480" font-family="monospace" font-size="11">O</text>
+            <!-- Aiguille (groupe rotatif) -->
+            <g id="compass-needle" transform="rotate(0,100,100)">
+              <polygon points="100,28 95,100 100,115 105,100" fill="#00D4FF" opacity=".9"/>
+              <polygon points="100,115 95,100 100,172 105,100" fill="#EF4444" opacity=".7"/>
+              <circle cx="100" cy="100" r="5" fill="#0a1929" stroke="rgba(0,212,255,.6)" stroke-width="1.5"/>
+            </g>
+            <!-- Cible (aiguille orange, masquée par défaut) -->
+            <g id="compass-target-needle" transform="rotate(0,100,100)" opacity="0">
+              <line x1="100" y1="35" x2="100" y2="165" stroke="#FF8A00" stroke-width="1.5" stroke-dasharray="4,3"/>
+            </g>
+          </svg>
+        </div>
+
+        <!-- Stats -->
+        <div style="flex:1;width:100%">
+          <div class="compass-stats">
+            <div class="cstat">
+              <div class="cstat-label">Azimut / Cap</div>
+              <div class="cstat-val" id="cstat-azimut">—<span class="cstat-unit">°</span></div>
+            </div>
+            <div class="cstat">
+              <div class="cstat-label">Altitude GPS</div>
+              <div class="cstat-val" id="cstat-alt">—<span class="cstat-unit">m</span></div>
+            </div>
+            <div class="cstat">
+              <div class="cstat-label">Latitude</div>
+              <div class="cstat-val" style="font-size:14px" id="cstat-lat">—</div>
+            </div>
+            <div class="cstat">
+              <div class="cstat-label">Longitude</div>
+              <div class="cstat-val" style="font-size:14px" id="cstat-lon">—</div>
+            </div>
+          </div>
+
+          <!-- Sélection spot cible -->
+          <div class="compass-target-row">
+            <span style="color:var(--text3)">Spot cible :</span>
+            <select id="compass-spot-select" style="background:var(--bg-input);border:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:11px;padding:.3rem .6rem;border-radius:6px;outline:none;flex:1;" onfocus="populateCompassSpotSelect();" onchange="updateCompassTarget()">
+              <option value="">— Aucun —</option>
+            </select>
+            <span id="compass-azimut-target" style="color:var(--orange);display:none">Az. cible : <b id="compass-az-val">—</b>°</span>
+          </div>
+          <div id="compass-delta-row" style="display:none;margin-top:.6rem;font-family:var(--mono);font-size:11px;color:var(--text2);">
+            Écart : <span id="compass-delta" class="compass-delta">—</span>°
+            <span id="compass-delta-hint" style="margin-left:.5rem;color:var(--text3);font-size:10px;"></span>
+          </div>
+
+          <button class="compass-btn" onclick="startCompass()">📡 Activer la boussole</button>
+          <div class="compass-status" id="compass-status">Appuie sur Activer — nécessite un appareil avec capteur de direction (mobile/tablette)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+    <!-- ── SOUS-ONGLETS TERRAIN ── -->
+    <div id="terrain-subnav" style="
+      display:flex;gap:.4rem;margin:.75rem 0 .5rem;
+      border-bottom:1px solid rgba(0,212,255,.12);padding-bottom:.5rem;
+    ">
+      <button id="terrain-sub-carte" onclick="switchTerrainSub('carte')" style="
+        flex:1;padding:.45rem .5rem;font-family:var(--display);font-size:10px;letter-spacing:.08em;
+        background:rgba(0,212,255,.12);border:1px solid rgba(0,212,255,.35);
+        color:var(--cyan);border-radius:7px;cursor:pointer;transition:all .2s;
+      ">🧭 BOUSSOLE</button>
+      <button id="terrain-sub-checklist" onclick="switchTerrainSub('checklist')" style="
+        flex:1;padding:.45rem .5rem;font-family:var(--display);font-size:10px;letter-spacing:.08em;
+        background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
+        color:var(--text3);border-radius:7px;cursor:pointer;transition:all .2s;
+        display:flex;align-items:center;justify-content:center;gap:.4rem;
+      ">✅ CHECKLIST <span id="cl-count-badge" style="background:rgba(0,212,255,.15);border-radius:4px;padding:.1rem .35rem;font-size:9px;">0%</span></button>
+    </div>
+
+    <!-- ── VUE BOUSSOLE ── -->
+    <div id="terrain-view-carte">
+    </div>
+
+    <!-- ── VUE CHECKLIST ── -->
+    <div id="terrain-view-checklist" style="display:none;">
+<!-- ── CHECKLIST PRÉ-SESSION ── -->
+  <div class="outils-card open" id="card-checklist">
+    <div class="outils-card-header" onclick="toggleOutilsCard('checklist')">
+      <span style="font-size:18px">✅</span>
+      <span class="outils-card-title">CHECKLIST PRÉ-SESSION</span>
+      <span class="outils-card-chevron">▲</span>
+    </div>
+    <div class="outils-card-body">
+
+      <div class="checklist-section">
+        <div class="checklist-section-title">📦 Matériel optique</div>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Longue vue / télescope sorti et acclimaté (≥ 30 min avant)</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Trépied stable, vissé et nivelé</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Objectif / oculaire nettoyé (chiffon microfibre)</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Adaptateur T2 ou digiscoping fixé et serré</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Téléphone / appareil photo fixé sur l'adaptateur</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Cam Link + câble USB-C (si livestream)</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Batterie externe chargée</span>
+        </label>
+      </div>
+
+      <div class="checklist-section">
+        <div class="checklist-section-title">🌤️ Conditions météo vérifiées</div>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">VLD Hub — score ≥ 75 sur la fenêtre ciblée</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Windy SLP — anticyclone (H) centré ou proche du trajet</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Clearoutside — nuages bas < 10%, brouillard absent</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Vent surface < 25 km/h (pas de turbulences optiques)</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Humidité relative < 60% (vérif Meteociel ou open-meteo)</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Fenêtre horaire : 1h après lever soleil ou ±1h avant coucher</span>
+        </label>
+      </div>
+
+      <div class="checklist-section">
+        <div class="checklist-section-title">📡 Technique & cadrage</div>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Azimut de la cible noté et boussole vérifiée</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Point de mise au point fait sur un relief intermédiaire</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Exposition/ISO réglés (ne pas brûler le ciel)</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Mode rafale ou vidéo activé pour empilage (stacking)</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Stockage suffisant (photos RAW ou vidéo 4K)</span>
+        </label>
+      </div>
+
+      <div class="checklist-section">
+        <div class="checklist-section-title">📝 Post-session</div>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Photos/vidéos sauvegardées sur support externe</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Résultat noté : Vu / Partiel / Raté + heure + conditions</span>
+        </label>
+        <label class="cl-check-item" onclick="toggleCheck(this)">
+          <input type="checkbox"><div class="cl-check-box"></div>
+          <span class="cl-check-text">Traitement empilage lancé (Autostakkert / Registax / PIPP)</span>
+        </label>
+      </div>
+
+      <div class="cl-progress">
+        <span id="cl-progress-text">0 / 20 éléments cochés</span>
+        <div class="cl-progress-bar"><div class="cl-progress-fill" id="cl-progress-fill" style="width:0%"></div></div>
+      </div>
+
+      <div class="checklist-footer">
+        <button class="compass-btn" onclick="resetChecklist()">↺ Réinitialiser</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TUTORIELS ── -->
+  <div class="outils-card open" id="card-tutos">
+    <div class="outils-card-header" onclick="toggleOutilsCard('tutos')">
+      <span style="font-size:18px">📖</span>
+      <span class="outils-card-title">TUTORIELS OPTIQUE VLD</span>
+      <span class="outils-card-chevron">▲</span>
+    </div>
+    <div class="outils-card-body">
+
+      <!-- TUTO 1 — Télescope terrestre -->
+      <div class="tuto-section open" id="tuto-telescope">
+        <div class="tuto-section-title" onclick="toggleTuto('telescope')">
+          <span>🔭 Télescope terrestre pour VLD</span>
+          <span class="tchev">▲</span>
+        </div>
+        <div class="tuto-body">
+          <h4>Choix de l'instrument</h4>
+          <ul>
+            <li>Privilégie un télescope à fort tirage focal : f/10 à f/15 (ex. Maksutov 90mm, SCT 5"). Plus le rapport F/D est élevé, plus la cible est grossie à focale équivalente.</li>
+            <li>Évite les instruments à large champ (f/5 ou moins) — utiles en astro mais insuffisants pour isoler un sommet à 300 km.</li>
+            <li>Ouverture minimale recommandée : 70mm. L'ouverture détermine la résolution et la luminosité — critique par faible contraste atmosphérique.</li>
+            <li>Un Kowa TSN-88 ou Swarovski ATX95 couvrent l'essentiel des cas VLD en 80x–150x.</li>
+          </ul>
+          <div class="tuto-tip">💡 Pour les longues distances (> 200 km), un Maksutov 90mm à 1250mm de focale + oculaire 5mm donne 250x. La turbulence atmosphérique sera souvent le facteur limitant, pas l'instrument.</div>
+
+          <h4>Montage & stabilité</h4>
+          <ul>
+            <li>Trépied carbone ou aluminium lourd — les vibrations détruisent la mise au point à fort grossissement.</li>
+            <li>Acclimatation thermique obligatoire : sors l'instrument 30 à 45 min avant. Un tube chaud dans un air froid crée des turbulences internes visibles.</li>
+            <li>N'appuie jamais directement sur le trépied pendant une capture — utilise un déclencheur ou le retardateur.</li>
+          </ul>
+
+          <h4>Mise au point pour VLD</h4>
+          <ul>
+            <li>Ne fais pas la mise au point sur l'infini à l'aveugle — vise d'abord un relief intermédiaire bien contrasté (arête rocheuse, tour).</li>
+            <li>Utilise le foyer solaire ou une étoile la veille pour calibrer ta position de mise au point exacte et la marquer sur la crémaillère.</li>
+            <li>Par turbulence modérée, un filtre polarisant réduit l'éblouissement du ciel et améliore le contraste de la cible.</li>
+          </ul>
+          <div class="tuto-warn">⚠️ Ne regarde jamais directement vers le soleil, même avec un filtre — les filtres VLD ne sont pas des filtres solaires.</div>
+        </div>
+      </div>
+
+      <!-- TUTO 2 — Digiscoping -->
+      <div class="tuto-section" id="tuto-digiscoping">
+        <div class="tuto-section-title" onclick="toggleTuto('digiscoping')">
+          <span>📱 Digiscoping : téléphone + longue vue</span>
+          <span class="tchev">▼</span>
+        </div>
+        <div class="tuto-body">
+          <h4>Principe du digiscoping</h4>
+          <ul>
+            <li>Le digiscoping consiste à photographier ou filmer à travers l'oculaire d'une longue vue avec un téléphone ou un compact — technique accessible et redoutablement efficace.</li>
+            <li>La focale équivalente atteint facilement 2000–4000 mm, ce qui permet d'isoler un sommet à 400 km dans un ciel favorable.</li>
+          </ul>
+
+          <h4>Adaptateur et alignement</h4>
+          <ul>
+            <li>Utilise un adaptateur universel spécifique à ta longue vue (Kowa, Vortex, Swarovski en proposent). Évite les pinces génériques qui vibrent.</li>
+            <li>Centre l'objectif du téléphone exactement dans l'axe de l'oculaire — le moindre décalage crée un vignettage (bords noirs sur l'image).</li>
+            <li>Désactive la stabilisation optique du téléphone si l'image tremble anormalement — elle peut entrer en conflit avec la mise au point de la longue vue.</li>
+          </ul>
+
+          <h4>Réglages téléphone recommandés</h4>
+          <ul>
+            <li>Mode Pro ou Manuel obligatoire : règle l'ISO à la main (100–400 max), évite l'automatisme qui surexpose le ciel.</li>
+            <li>Vitesse d'obturation : 1/500s minimum pour geler la turbulence atmosphérique lors d'une capture vidéo.</li>
+            <li>Zoom numérique : évite-le — utilise le grossissement de la longue vue pour remplir le champ, pas le zoom digital qui dégrade la qualité.</li>
+            <li>Format vidéo : 4K 30fps ou 1080p 60fps pour l'empilage — plus d'images = plus de chances de trouver des frames nettes.</li>
+          </ul>
+          <div class="tuto-tip">💡 Technique du "lucky imaging" : filme 3–5 min en continu, puis extrais les 10% de frames les plus nettes avec PIPP, empile avec Autostakkert et affine avec Registax. Le résultat est souvent spectaculaire même dans des conditions médiocres.</div>
+
+          <h4>Erreurs classiques</h4>
+          <ul>
+            <li>Téléphone non centré → vignettage sévère</li>
+            <li>ISO trop haut → bruit numérique qui masque les détails fins</li>
+            <li>Mise au point faite sur l'interface téléphone au lieu de la bague de la longue vue → flou non corrigeable en post</li>
+            <li>Capture au soleil zénithal (midi) → turbulence thermique maximale, résultats décevants</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- TUTO 3 — Réglages appareil photo -->
+      <div class="tuto-section" id="tuto-photo">
+        <div class="tuto-section-title" onclick="toggleTuto('photo')">
+          <span>📷 Réglages appareil photo pour VLD</span>
+          <span class="tchev">▼</span>
+        </div>
+        <div class="tuto-body">
+          <h4>Matériel conseillé</h4>
+          <ul>
+            <li>Hybride ou reflex avec monture T2 (Sony E, Canon EF, Nikon F, Micro 4/3). Le capteur APS-C amplifie la focale (×1.5 ou ×1.6) — avantage pour le VLD.</li>
+            <li>Connexion directement au foyer du télescope via bague T2 : focale = celle du scope, grossissement = capteur seul sans oculaire intermédiaire.</li>
+            <li>Pour le livestream : Sony A6400 + Elgato Cam Link + câble USB-C → OBS. La Sony sort un signal HDMI propre sans timecode.</li>
+          </ul>
+
+          <h4>Réglages exposition</h4>
+          <ul>
+            <li>Mode Manuel (M) uniquement — l'automatisme expose le ciel clair et sous-expose la cible.</li>
+            <li>ISO : 100–400 en journée, jamais au-dessus de 800 (bruit numérique trop présent sur les détails fins).</li>
+            <li>Vitesse : 1/500s à 1/2000s selon la luminosité. Le but est de geler la turbulence pour l'empilage.</li>
+            <li>Ouverture : si tu utilises un objectif photo (non au foyer du scope), f/5.6 à f/8 offre le meilleur piqué.</li>
+          </ul>
+          <div class="tuto-tip">💡 Histogramme : vise un pic principal au tiers gauche. Si la montagne est surexposée (pic à droite), baisse la vitesse d'obturation. L'exposition au ciel est sacrifiée pour garder le détail sur la cible.</div>
+
+          <h4>Mise au point critique</h4>
+          <ul>
+            <li>Active le focus peaking ou le zoom live view ×10 pour vérifier la mise au point pixel par pixel.</li>
+            <li>Mise au point manuelle uniquement — l'autofocus ne trouve pas de contraste sur un lointain brumeux.</li>
+            <li>Marque la position de ta bague focus avec un trait de marqueur sur le scope après la mise au point — tu pourras retrouver le réglage rapidement.</li>
+          </ul>
+
+          <h4>Empilage et post-traitement</h4>
+          <ul>
+            <li>PIPP → trie et convertit les frames vidéo, exporte les meilleures</li>
+            <li>Autostakkert → empile les frames sélectionnées (lucky imaging)</li>
+            <li>Registax → wavelets pour affiner les détails et améliorer la netteté</li>
+            <li>En post (Lightroom / DarkTable) : clarté +20 à +40, désbrumer légèrement, ne pas pousser la saturation (artefacts colorés)</li>
+          </ul>
+          <div class="tuto-warn">⚠️ L'empilage ne crée pas de détails inexistants — si les frames de base sont floues, aucun traitement ne les sauvera. La qualité des conditions atmosphériques prime toujours sur le post-traitement.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+    </div>
+  </div>
 </div>
 
 <!-- ══════════════════════════════════════
@@ -2800,6 +3147,21 @@ function toggleCheck(label) {
   updateChecklistProgress();
 }
 
+function switchTerrainSub(sub) {
+  const views = { carte: 'terrain-view-carte', checklist: 'terrain-view-checklist' };
+  const btns  = { carte: 'terrain-sub-carte',  checklist: 'terrain-sub-checklist' };
+  Object.keys(views).forEach(k => {
+    const v = document.getElementById(views[k]);
+    const b = document.getElementById(btns[k]);
+    if (!v || !b) return;
+    const active = k === sub;
+    v.style.display = active ? 'block' : 'none';
+    b.style.background = active ? 'rgba(0,212,255,.12)' : 'rgba(255,255,255,.03)';
+    b.style.borderColor = active ? 'rgba(0,212,255,.35)' : 'rgba(255,255,255,.08)';
+    b.style.color = active ? 'var(--cyan)' : 'var(--text3)';
+  });
+}
+
 function updateChecklistProgress() {
   const all = document.querySelectorAll('#card-checklist .cl-check-item input[type=checkbox]');
   const checked = [...all].filter(c => c.checked).length;
@@ -2809,6 +3171,9 @@ function updateChecklistProgress() {
   const fill = document.getElementById('cl-progress-fill');
   if (txt) txt.textContent = checked + ' / ' + total + ' éléments cochés (' + pct + '%)';
   if (fill) fill.style.width = pct + '%';
+  // Mettre à jour le badge sur le bouton
+  const badge = document.getElementById('cl-count-badge');
+  if (badge) badge.textContent = pct + '%';
 }
 
 function resetChecklist() {
@@ -5091,8 +5456,7 @@ function switchTab(tabId) {
   document.getElementById('tab-' + tabId).classList.add('active');
   document.getElementById('tab-btn-' + tabId).classList.add('active');
   if (tabId === 'creator') { renderCustomSpotsList(); renderGererSpots(); }
-  if (tabId === 'carte') initVLDMap();
-  if (tabId === 'outils') initOutilsTab();
+  if (tabId === 'carte') { initVLDMap(); initOutilsTab(); }
   if (tabId === 'previsions') initRadarOnce();
   if (tabId === 'communaute') initCommunauteTab();
   if (tabId === 'labo') initLaboTab();
@@ -7172,335 +7536,7 @@ window.submitJournalEntry = function() {
   </div><!-- /z-index wrapper -->
 </div>
 
-<!-- ═══════════════════════════════════════════
-     ONGLET OUTILS TERRAIN
-═══════════════════════════════════════════ -->
-<div class="tab-content" id="tab-outils">
-<div class="outils-wrap">
 
-  <!-- ── BOUSSOLE TERRAIN ── -->
-  <div class="outils-card open" id="card-boussole">
-    <div class="outils-card-header" onclick="toggleOutilsCard('boussole')">
-      <span style="font-size:18px">🧭</span>
-      <span class="outils-card-title">BOUSSOLE TERRAIN</span>
-      <span class="outils-card-chevron">▲</span>
-    </div>
-    <div class="outils-card-body">
-      <div class="compass-wrap">
-        <!-- SVG boussole -->
-        <div class="compass-ring">
-          <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-            <!-- Fond -->
-            <circle cx="100" cy="100" r="96" fill="#08111f" stroke="rgba(0,212,255,.25)" stroke-width="1.5"/>
-            <circle cx="100" cy="100" r="84" fill="none" stroke="rgba(0,212,255,.08)" stroke-width="1"/>
-            <!-- Graduations -->
-            <g id="compass-ticks" stroke="rgba(0,212,255,.3)" stroke-width="1"></g>
-            <!-- Points cardinaux -->
-            <text x="100" y="22" text-anchor="middle" fill="#00D4FF" font-family="monospace" font-size="13" font-weight="bold">N</text>
-            <text x="100" y="188" text-anchor="middle" fill="#3D6480" font-family="monospace" font-size="11">S</text>
-            <text x="183" y="104" text-anchor="middle" fill="#3D6480" font-family="monospace" font-size="11">E</text>
-            <text x="17" y="104" text-anchor="middle" fill="#3D6480" font-family="monospace" font-size="11">O</text>
-            <!-- Aiguille (groupe rotatif) -->
-            <g id="compass-needle" transform="rotate(0,100,100)">
-              <polygon points="100,28 95,100 100,115 105,100" fill="#00D4FF" opacity=".9"/>
-              <polygon points="100,115 95,100 100,172 105,100" fill="#EF4444" opacity=".7"/>
-              <circle cx="100" cy="100" r="5" fill="#0a1929" stroke="rgba(0,212,255,.6)" stroke-width="1.5"/>
-            </g>
-            <!-- Cible (aiguille orange, masquée par défaut) -->
-            <g id="compass-target-needle" transform="rotate(0,100,100)" opacity="0">
-              <line x1="100" y1="35" x2="100" y2="165" stroke="#FF8A00" stroke-width="1.5" stroke-dasharray="4,3"/>
-            </g>
-          </svg>
-        </div>
-
-        <!-- Stats -->
-        <div style="flex:1;width:100%">
-          <div class="compass-stats">
-            <div class="cstat">
-              <div class="cstat-label">Azimut / Cap</div>
-              <div class="cstat-val" id="cstat-azimut">—<span class="cstat-unit">°</span></div>
-            </div>
-            <div class="cstat">
-              <div class="cstat-label">Altitude GPS</div>
-              <div class="cstat-val" id="cstat-alt">—<span class="cstat-unit">m</span></div>
-            </div>
-            <div class="cstat">
-              <div class="cstat-label">Latitude</div>
-              <div class="cstat-val" style="font-size:14px" id="cstat-lat">—</div>
-            </div>
-            <div class="cstat">
-              <div class="cstat-label">Longitude</div>
-              <div class="cstat-val" style="font-size:14px" id="cstat-lon">—</div>
-            </div>
-          </div>
-
-          <!-- Sélection spot cible -->
-          <div class="compass-target-row">
-            <span style="color:var(--text3)">Spot cible :</span>
-            <select id="compass-spot-select" style="background:var(--bg-input);border:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:11px;padding:.3rem .6rem;border-radius:6px;outline:none;flex:1;" onfocus="populateCompassSpotSelect();" onchange="updateCompassTarget()">
-              <option value="">— Aucun —</option>
-            </select>
-            <span id="compass-azimut-target" style="color:var(--orange);display:none">Az. cible : <b id="compass-az-val">—</b>°</span>
-          </div>
-          <div id="compass-delta-row" style="display:none;margin-top:.6rem;font-family:var(--mono);font-size:11px;color:var(--text2);">
-            Écart : <span id="compass-delta" class="compass-delta">—</span>°
-            <span id="compass-delta-hint" style="margin-left:.5rem;color:var(--text3);font-size:10px;"></span>
-          </div>
-
-          <button class="compass-btn" onclick="startCompass()">📡 Activer la boussole</button>
-          <div class="compass-status" id="compass-status">Appuie sur Activer — nécessite un appareil avec capteur de direction (mobile/tablette)</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── CHECKLIST PRÉ-SESSION ── -->
-  <div class="outils-card open" id="card-checklist">
-    <div class="outils-card-header" onclick="toggleOutilsCard('checklist')">
-      <span style="font-size:18px">✅</span>
-      <span class="outils-card-title">CHECKLIST PRÉ-SESSION</span>
-      <span class="outils-card-chevron">▲</span>
-    </div>
-    <div class="outils-card-body">
-
-      <div class="checklist-section">
-        <div class="checklist-section-title">📦 Matériel optique</div>
-        <label class="cl-check-item" onclick="toggleCheck(this)">
-          <input type="checkbox"><div class="cl-check-box"></div>
-          <span class="cl-check-text">Longue vue / télescope sorti et acclimaté (≥ 30 min avant)</span>
-        </label>
-        <label class="cl-check-item" onclick="toggleCheck(this)">
-          <input type="checkbox"><div class="cl-check-box"></div>
-          <span class="cl-check-text">Trépied stable, vissé et nivelé</span>
-        </label>
-        <label class="cl-check-item" onclick="toggleCheck(this)">
-          <input type="checkbox"><div class="cl-check-box"></div>
-          <span class="cl-check-text">Objectif / oculaire nettoyé (chiffon microfibre)</span>
-        </label>
-        <label class="cl-check-item" onclick="toggleCheck(this)">
-          <input type="checkbox"><div class="cl-check-box"></div>
-          <span class="cl-check-text">Adaptateur T2 ou digiscoping fixé et serré</span>
-        </label>
-        <label class="cl-check-item" onclick="toggleCheck(this)">
-          <input type="checkbox"><div class="cl-check-box"></div>
-          <span class="cl-check-text">Téléphone / appareil photo fixé sur l'adaptateur</span>
-        </label>
-        <label class="cl-check-item" onclick="toggleCheck(this)">
-          <input type="checkbox"><div class="cl-check-box"></div>
-          <span class="cl-check-text">Cam Link + câble USB-C (si livestream)</span>
-        </label>
-        <label class="cl-check-item" onclick="toggleCheck(this)">
-          <input type="checkbox"><div class="cl-check-box"></div>
-          <span class="cl-check-text">Batterie externe chargée</span>
-        </label>
-      </div>
-
-      <div class="checklist-section">
-        <div class="checklist-section-title">🌤️ Conditions météo vérifiées</div>
-        <label class="cl-check-item" onclick="toggleCheck(this)">
-          <input type="checkbox"><div class="cl-check-box"></div>
-          <span class="cl-check-text">VLD Hub — score ≥ 75 sur la fenêtre ciblée</span>
-        </label>
-        <label class="cl-check-item" onclick="toggleCheck(this)">
-          <input type="checkbox"><div class="cl-check-box"></div>
-          <span class="cl-check-text">Windy SLP — anticyclone (H) centré ou proche du trajet</span>
-        </label>
-        <label class="cl-check-item" onclick="toggleCheck(this)">
-          <input type="checkbox"><div class="cl-check-box"></div>
-          <span class="cl-check-text">Clearoutside — nuages bas < 10%, brouillard absent</span>
-        </label>
-        <label class="cl-check-item" onclick="toggleCheck(this)">
-          <input type="checkbox"><div class="cl-check-box"></div>
-          <span class="cl-check-text">Vent surface < 25 km/h (pas de turbulences optiques)</span>
-        </label>
-        <label class="cl-check-item" onclick="toggleCheck(this)">
-          <input type="checkbox"><div class="cl-check-box"></div>
-          <span class="cl-check-text">Humidité relative < 60% (vérif Meteociel ou open-meteo)</span>
-        </label>
-        <label class="cl-check-item" onclick="toggleCheck(this)">
-          <input type="checkbox"><div class="cl-check-box"></div>
-          <span class="cl-check-text">Fenêtre horaire : 1h après lever soleil ou ±1h avant coucher</span>
-        </label>
-      </div>
-
-      <div class="checklist-section">
-        <div class="checklist-section-title">📡 Technique & cadrage</div>
-        <label class="cl-check-item" onclick="toggleCheck(this)">
-          <input type="checkbox"><div class="cl-check-box"></div>
-          <span class="cl-check-text">Azimut de la cible noté et boussole vérifiée</span>
-        </label>
-        <label class="cl-check-item" onclick="toggleCheck(this)">
-          <input type="checkbox"><div class="cl-check-box"></div>
-          <span class="cl-check-text">Point de mise au point fait sur un relief intermédiaire</span>
-        </label>
-        <label class="cl-check-item" onclick="toggleCheck(this)">
-          <input type="checkbox"><div class="cl-check-box"></div>
-          <span class="cl-check-text">Exposition/ISO réglés (ne pas brûler le ciel)</span>
-        </label>
-        <label class="cl-check-item" onclick="toggleCheck(this)">
-          <input type="checkbox"><div class="cl-check-box"></div>
-          <span class="cl-check-text">Mode rafale ou vidéo activé pour empilage (stacking)</span>
-        </label>
-        <label class="cl-check-item" onclick="toggleCheck(this)">
-          <input type="checkbox"><div class="cl-check-box"></div>
-          <span class="cl-check-text">Stockage suffisant (photos RAW ou vidéo 4K)</span>
-        </label>
-      </div>
-
-      <div class="checklist-section">
-        <div class="checklist-section-title">📝 Post-session</div>
-        <label class="cl-check-item" onclick="toggleCheck(this)">
-          <input type="checkbox"><div class="cl-check-box"></div>
-          <span class="cl-check-text">Photos/vidéos sauvegardées sur support externe</span>
-        </label>
-        <label class="cl-check-item" onclick="toggleCheck(this)">
-          <input type="checkbox"><div class="cl-check-box"></div>
-          <span class="cl-check-text">Résultat noté : Vu / Partiel / Raté + heure + conditions</span>
-        </label>
-        <label class="cl-check-item" onclick="toggleCheck(this)">
-          <input type="checkbox"><div class="cl-check-box"></div>
-          <span class="cl-check-text">Traitement empilage lancé (Autostakkert / Registax / PIPP)</span>
-        </label>
-      </div>
-
-      <div class="cl-progress">
-        <span id="cl-progress-text">0 / 20 éléments cochés</span>
-        <div class="cl-progress-bar"><div class="cl-progress-fill" id="cl-progress-fill" style="width:0%"></div></div>
-      </div>
-
-      <div class="checklist-footer">
-        <button class="compass-btn" onclick="resetChecklist()">↺ Réinitialiser</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── TUTORIELS ── -->
-  <div class="outils-card open" id="card-tutos">
-    <div class="outils-card-header" onclick="toggleOutilsCard('tutos')">
-      <span style="font-size:18px">📖</span>
-      <span class="outils-card-title">TUTORIELS OPTIQUE VLD</span>
-      <span class="outils-card-chevron">▲</span>
-    </div>
-    <div class="outils-card-body">
-
-      <!-- TUTO 1 — Télescope terrestre -->
-      <div class="tuto-section open" id="tuto-telescope">
-        <div class="tuto-section-title" onclick="toggleTuto('telescope')">
-          <span>🔭 Télescope terrestre pour VLD</span>
-          <span class="tchev">▲</span>
-        </div>
-        <div class="tuto-body">
-          <h4>Choix de l'instrument</h4>
-          <ul>
-            <li>Privilégie un télescope à fort tirage focal : f/10 à f/15 (ex. Maksutov 90mm, SCT 5"). Plus le rapport F/D est élevé, plus la cible est grossie à focale équivalente.</li>
-            <li>Évite les instruments à large champ (f/5 ou moins) — utiles en astro mais insuffisants pour isoler un sommet à 300 km.</li>
-            <li>Ouverture minimale recommandée : 70mm. L'ouverture détermine la résolution et la luminosité — critique par faible contraste atmosphérique.</li>
-            <li>Un Kowa TSN-88 ou Swarovski ATX95 couvrent l'essentiel des cas VLD en 80x–150x.</li>
-          </ul>
-          <div class="tuto-tip">💡 Pour les longues distances (> 200 km), un Maksutov 90mm à 1250mm de focale + oculaire 5mm donne 250x. La turbulence atmosphérique sera souvent le facteur limitant, pas l'instrument.</div>
-
-          <h4>Montage & stabilité</h4>
-          <ul>
-            <li>Trépied carbone ou aluminium lourd — les vibrations détruisent la mise au point à fort grossissement.</li>
-            <li>Acclimatation thermique obligatoire : sors l'instrument 30 à 45 min avant. Un tube chaud dans un air froid crée des turbulences internes visibles.</li>
-            <li>N'appuie jamais directement sur le trépied pendant une capture — utilise un déclencheur ou le retardateur.</li>
-          </ul>
-
-          <h4>Mise au point pour VLD</h4>
-          <ul>
-            <li>Ne fais pas la mise au point sur l'infini à l'aveugle — vise d'abord un relief intermédiaire bien contrasté (arête rocheuse, tour).</li>
-            <li>Utilise le foyer solaire ou une étoile la veille pour calibrer ta position de mise au point exacte et la marquer sur la crémaillère.</li>
-            <li>Par turbulence modérée, un filtre polarisant réduit l'éblouissement du ciel et améliore le contraste de la cible.</li>
-          </ul>
-          <div class="tuto-warn">⚠️ Ne regarde jamais directement vers le soleil, même avec un filtre — les filtres VLD ne sont pas des filtres solaires.</div>
-        </div>
-      </div>
-
-      <!-- TUTO 2 — Digiscoping -->
-      <div class="tuto-section" id="tuto-digiscoping">
-        <div class="tuto-section-title" onclick="toggleTuto('digiscoping')">
-          <span>📱 Digiscoping : téléphone + longue vue</span>
-          <span class="tchev">▼</span>
-        </div>
-        <div class="tuto-body">
-          <h4>Principe du digiscoping</h4>
-          <ul>
-            <li>Le digiscoping consiste à photographier ou filmer à travers l'oculaire d'une longue vue avec un téléphone ou un compact — technique accessible et redoutablement efficace.</li>
-            <li>La focale équivalente atteint facilement 2000–4000 mm, ce qui permet d'isoler un sommet à 400 km dans un ciel favorable.</li>
-          </ul>
-
-          <h4>Adaptateur et alignement</h4>
-          <ul>
-            <li>Utilise un adaptateur universel spécifique à ta longue vue (Kowa, Vortex, Swarovski en proposent). Évite les pinces génériques qui vibrent.</li>
-            <li>Centre l'objectif du téléphone exactement dans l'axe de l'oculaire — le moindre décalage crée un vignettage (bords noirs sur l'image).</li>
-            <li>Désactive la stabilisation optique du téléphone si l'image tremble anormalement — elle peut entrer en conflit avec la mise au point de la longue vue.</li>
-          </ul>
-
-          <h4>Réglages téléphone recommandés</h4>
-          <ul>
-            <li>Mode Pro ou Manuel obligatoire : règle l'ISO à la main (100–400 max), évite l'automatisme qui surexpose le ciel.</li>
-            <li>Vitesse d'obturation : 1/500s minimum pour geler la turbulence atmosphérique lors d'une capture vidéo.</li>
-            <li>Zoom numérique : évite-le — utilise le grossissement de la longue vue pour remplir le champ, pas le zoom digital qui dégrade la qualité.</li>
-            <li>Format vidéo : 4K 30fps ou 1080p 60fps pour l'empilage — plus d'images = plus de chances de trouver des frames nettes.</li>
-          </ul>
-          <div class="tuto-tip">💡 Technique du "lucky imaging" : filme 3–5 min en continu, puis extrais les 10% de frames les plus nettes avec PIPP, empile avec Autostakkert et affine avec Registax. Le résultat est souvent spectaculaire même dans des conditions médiocres.</div>
-
-          <h4>Erreurs classiques</h4>
-          <ul>
-            <li>Téléphone non centré → vignettage sévère</li>
-            <li>ISO trop haut → bruit numérique qui masque les détails fins</li>
-            <li>Mise au point faite sur l'interface téléphone au lieu de la bague de la longue vue → flou non corrigeable en post</li>
-            <li>Capture au soleil zénithal (midi) → turbulence thermique maximale, résultats décevants</li>
-          </ul>
-        </div>
-      </div>
-
-      <!-- TUTO 3 — Réglages appareil photo -->
-      <div class="tuto-section" id="tuto-photo">
-        <div class="tuto-section-title" onclick="toggleTuto('photo')">
-          <span>📷 Réglages appareil photo pour VLD</span>
-          <span class="tchev">▼</span>
-        </div>
-        <div class="tuto-body">
-          <h4>Matériel conseillé</h4>
-          <ul>
-            <li>Hybride ou reflex avec monture T2 (Sony E, Canon EF, Nikon F, Micro 4/3). Le capteur APS-C amplifie la focale (×1.5 ou ×1.6) — avantage pour le VLD.</li>
-            <li>Connexion directement au foyer du télescope via bague T2 : focale = celle du scope, grossissement = capteur seul sans oculaire intermédiaire.</li>
-            <li>Pour le livestream : Sony A6400 + Elgato Cam Link + câble USB-C → OBS. La Sony sort un signal HDMI propre sans timecode.</li>
-          </ul>
-
-          <h4>Réglages exposition</h4>
-          <ul>
-            <li>Mode Manuel (M) uniquement — l'automatisme expose le ciel clair et sous-expose la cible.</li>
-            <li>ISO : 100–400 en journée, jamais au-dessus de 800 (bruit numérique trop présent sur les détails fins).</li>
-            <li>Vitesse : 1/500s à 1/2000s selon la luminosité. Le but est de geler la turbulence pour l'empilage.</li>
-            <li>Ouverture : si tu utilises un objectif photo (non au foyer du scope), f/5.6 à f/8 offre le meilleur piqué.</li>
-          </ul>
-          <div class="tuto-tip">💡 Histogramme : vise un pic principal au tiers gauche. Si la montagne est surexposée (pic à droite), baisse la vitesse d'obturation. L'exposition au ciel est sacrifiée pour garder le détail sur la cible.</div>
-
-          <h4>Mise au point critique</h4>
-          <ul>
-            <li>Active le focus peaking ou le zoom live view ×10 pour vérifier la mise au point pixel par pixel.</li>
-            <li>Mise au point manuelle uniquement — l'autofocus ne trouve pas de contraste sur un lointain brumeux.</li>
-            <li>Marque la position de ta bague focus avec un trait de marqueur sur le scope après la mise au point — tu pourras retrouver le réglage rapidement.</li>
-          </ul>
-
-          <h4>Empilage et post-traitement</h4>
-          <ul>
-            <li>PIPP → trie et convertit les frames vidéo, exporte les meilleures</li>
-            <li>Autostakkert → empile les frames sélectionnées (lucky imaging)</li>
-            <li>Registax → wavelets pour affiner les détails et améliorer la netteté</li>
-            <li>En post (Lightroom / DarkTable) : clarté +20 à +40, désbrumer légèrement, ne pas pousser la saturation (artefacts colorés)</li>
-          </ul>
-          <div class="tuto-warn">⚠️ L'empilage ne crée pas de détails inexistants — si les frames de base sont floues, aucun traitement ne les sauvera. La qualité des conditions atmosphériques prime toujours sur le post-traitement.</div>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-</div><!-- /outils-wrap -->
-</div><!-- /tab-outils -->
 
 </div><!-- /wrap -->
 
@@ -7537,7 +7573,7 @@ const I18N = {
     // Onglets
     'tab.accueil': '🏔️ ACCUEIL',
     'tab.previsions': '📡 PRÉVISIONS SPOT',
-    'tab.carte': '🗺️ CARTE',
+    'tab.carte': '🗺️ TERRAIN',
     'tab.creator': '🛠️ CRÉATEUR DE SPOT',
     'tab.alertes': '📨 ALERTES',
     'tab.communaute': '👥 COMMUNAUTÉ',
