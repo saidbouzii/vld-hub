@@ -6601,15 +6601,323 @@ function renderJournalView(container) {
     const sc = e.score != null ? e.score : '—';
     const scColor = sc >= 75 ? '#4ade80' : sc >= 50 ? '#facc15' : '#f87171';
     const metrics = (e.metrics || []).map(function(m){ return '<span class="comm-metric-chip">'+m+'</span>'; }).join('');
-    return '<div class="comm-journal-card"><div class="comm-jcard-header"><span class="comm-jcard-spot">'+(e.spotName||'—')+'</span><span class="comm-jcard-date">'+(e.dateLabel||'—')+'</span><span class="comm-jcard-score" style="color:'+scColor+'">'+sc+'</span></div><div class="comm-jcard-conditions">'+cond+'</div>'+(e.comment?'<div class="comm-jcard-comment">'+e.comment+'</div>':'')+(metrics?'<div class="comm-jcard-metrics">'+metrics+'</div>':'')+'</div>';
+    const posted = e.postedToForum ? '<span style="font-size:9px;background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.25);color:#00d8ff;border-radius:10px;padding:2px 7px;font-family:var(--mono);">✓ Publié</span>' : '';
+    const thumb = e.photo ? '<div style="float:right;width:52px;height:40px;border-radius:6px;overflow:hidden;margin-left:.6rem;flex-shrink:0;"><img src="' + e.photo + '" style="width:100%;height:100%;object-fit:cover;"></div>' : '';
+    return '<div class="comm-journal-card" style="cursor:pointer;" onclick="journalOpenEntry(\'' + e.id + '\')">'
+      + '<div class="comm-jcard-header">'
+      + '<span class="comm-jcard-spot">' + (e.spotName||'—') + '</span>'
+      + '<span style="display:flex;align-items:center;gap:.4rem;">' + posted + '<span class="comm-jcard-date">' + (e.dateLabel||'—') + '</span></span>'
+      + '<span class="comm-jcard-score" style="color:'+scColor+'">'+sc+'</span>'
+      + '</div>'
+      + '<div style="display:flex;align-items:flex-start;gap:.4rem;">'
+      + '<div style="flex:1;">'
+      + '<div class="comm-jcard-conditions">'+cond+'</div>'
+      + (e.comment ? '<div class="comm-jcard-comment" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;">'+escHtml(e.comment.substring(0,80))+(e.comment.length>80?'…':'')+'</div>' : '')
+      + (metrics ? '<div class="comm-jcard-metrics">'+metrics+'</div>' : '')
+      + '</div>'
+      + thumb
+      + '</div>'
+      + '</div>';
   }).join('');
 
-  container.innerHTML = '<div style="font-family:var(--display);font-size:.75rem;letter-spacing:.1em;color:#f59e0b;margin-bottom:1rem;">MON JOURNAL D\'OBSERVATION</div><div class="comm-journal-list">'+cards+'</div>';
+  container.innerHTML = '<div style="font-family:var(--display);font-size:.75rem;letter-spacing:.1em;color:#f59e0b;margin-bottom:1rem;">MON JOURNAL D\'OBSERVATION</div>'
+    + '<div class="comm-journal-list">'+cards+'</div>';
 }
+
+// ── Lecteur / éditeur d'une entrée journal ──────────────────────────────────
+window.journalOpenEntry = function(entryId) {
+  const entries = journalGetLocal();
+  const e = entries.find(function(x){ return x.id === entryId; });
+  if (!e) return;
+
+  const cond = e.conditions === 'excellentes' ? '🟢 Excellentes'
+             : e.conditions === 'faibles' ? '🔴 Faibles'
+             : '🟡 Moyennes';
+  const sc = e.score != null ? e.score : '—';
+  const scColor = sc >= 75 ? '#4ade80' : sc >= 50 ? '#facc15' : '#f87171';
+  const metrics = (e.metrics || []).map(function(m){ return '<span class="comm-metric-chip">'+m+'</span>'; }).join('');
+
+  // Remove any existing reader
+  var old = document.getElementById('journal-reader-overlay');
+  if (old) old.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'journal-reader-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9000;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:2rem 1rem;backdrop-filter:blur(6px);';
+
+  overlay.innerHTML = '<div style="background:#0d1628;border:1px solid rgba(245,158,11,.25);border-radius:16px;width:100%;max-width:560px;padding:1.5rem;margin:auto;">'
+
+    // Header
+    + '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.2rem;gap:1rem;">'
+    + '<div>'
+    + '<div style="font-family:var(--display);font-size:10px;letter-spacing:.12em;color:#f59e0b;margin-bottom:.3rem;">📓 RAPPORT D\'OBSERVATION</div>'
+    + '<div style="font-family:var(--display);font-size:16px;color:#e0eeff;line-height:1.3;">' + escHtml(e.spotName||'—') + '</div>'
+    + '<div style="font-size:10px;color:rgba(150,180,210,.5);margin-top:.2rem;font-family:var(--mono);">' + escHtml(e.dateLabel||'—') + '</div>'
+    + '</div>'
+    + '<div style="display:flex;align-items:center;gap:.5rem;flex-shrink:0;">'
+    + '<span style="font-family:var(--display);font-size:28px;color:'+scColor+'">'+sc+'</span>'
+    + '<button onclick="document.getElementById(\'journal-reader-overlay\').remove()" style="background:none;border:none;color:rgba(200,220,240,.4);font-size:20px;cursor:pointer;line-height:1;padding:.2rem;">✕</button>'
+    + '</div>'
+    + '</div>'
+
+    // Conditions + metrics
+    + '<div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem;padding-bottom:1rem;border-bottom:1px solid rgba(0,212,255,.1);">'
+    + '<span style="font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:.25rem .6rem;color:var(--text2);">' + cond + '</span>'
+    + metrics
+    + (e.postedToForum ? '<span style="font-size:10px;background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.25);color:#00d8ff;border-radius:8px;padding:.25rem .6rem;font-family:var(--mono);">✓ Publié dans le fil</span>' : '')
+    + '</div>'
+
+    // Photo si présente
+    + (e.photo ? '<div style="margin-bottom:1rem;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,.08);"><img src="' + e.photo + '" style="width:100%;display:block;max-height:280px;object-fit:cover;"></div>' : '')
+    // Commentaire
+    + '<div style="font-size:13px;line-height:1.8;color:#cce0f0;min-height:60px;margin-bottom:1.2rem;white-space:pre-wrap;">' + escHtml(e.comment||'(aucun commentaire)') + '</div>'
+
+    // Actions
+    + '<div style="display:flex;gap:.5rem;flex-wrap:wrap;padding-top:.9rem;border-top:1px solid rgba(255,255,255,.06);">'
+    + '<button onclick="journalEditEntry(\'' + e.id + '\')" style="flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#cce0f0;border-radius:8px;padding:.5rem .8rem;font-size:11px;cursor:pointer;font-family:var(--display);letter-spacing:.05em;">✏️ Modifier</button>'
+    + (!e.postedToForum
+        ? '<button onclick="journalPostToForum(\'' + e.id + '\')" style="flex:1;background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.3);color:#00d8ff;border-radius:8px;padding:.5rem .8rem;font-size:11px;cursor:pointer;font-family:var(--display);letter-spacing:.05em;">🌐 Publier dans le fil</button>'
+        : '<span style="flex:1;text-align:center;font-size:10px;color:rgba(0,212,255,.5);font-family:var(--mono);padding:.5rem;">✓ Déjà publié dans le fil</span>')
+    + '<button onclick="journalDeleteEntry(\'' + e.id + '\')" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:#f87171;border-radius:8px;padding:.5rem .7rem;font-size:11px;cursor:pointer;">🗑️</button>'
+    + '</div>'
+    + '</div>';
+
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', function(ev){ if (ev.target === overlay) overlay.remove(); });
+};
+
+// ── Éditeur modification d'une entrée ──────────────────────────────────────
+window.journalEditEntry = function(entryId) {
+  const entries = journalGetLocal();
+  const e = entries.find(function(x){ return x.id === entryId; });
+  if (!e) return;
+
+  // Remove reader, show modal pre-filled
+  var reader = document.getElementById('journal-reader-overlay');
+  if (reader) reader.remove();
+
+  var old = document.getElementById('journal-edit-overlay');
+  if (old) old.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'journal-edit-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9001;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:2rem 1rem;backdrop-filter:blur(6px);';
+
+  var condExc = e.conditions === 'excellentes' ? ' checked' : '';
+  var condMoy = e.conditions === 'moyennes' || !e.conditions ? ' checked' : '';
+  var condFai = e.conditions === 'faibles' ? ' checked' : '';
+
+  overlay.innerHTML = '<div style="background:#0d1628;border:1px solid rgba(245,158,11,.25);border-radius:16px;width:100%;max-width:520px;padding:1.5rem;margin:auto;">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.2rem;">'
+    + '<div style="font-family:var(--display);font-size:12px;letter-spacing:.1em;color:#f59e0b;">✏️ MODIFIER LE RAPPORT — ' + escHtml(e.spotName||'') + '</div>'
+    + '<button onclick="document.getElementById(\'journal-edit-overlay\').remove()" style="background:none;border:none;color:rgba(200,220,240,.4);font-size:18px;cursor:pointer;line-height:1;">✕</button>'
+    + '</div>'
+    + '<div style="font-family:var(--mono);font-size:10px;color:rgba(150,180,210,.5);margin-bottom:1rem;">' + escHtml(e.dateLabel||'') + ' · Score ' + (e.score!=null?e.score:'—') + '</div>'
+    // Conditions
+    + '<div style="font-family:var(--display);font-size:9px;letter-spacing:.08em;color:rgba(150,180,210,.6);text-transform:uppercase;margin-bottom:.4rem;">Conditions observées</div>'
+    + '<div style="display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:1rem;">'
+    + '<label style="font-family:var(--mono);font-size:11px;color:var(--text2);cursor:pointer;display:flex;align-items:center;gap:.3rem;"><input type="radio" name="jedit-cond" value="excellentes"'+condExc+'> 🟢 Excellentes</label>'
+    + '<label style="font-family:var(--mono);font-size:11px;color:var(--text2);cursor:pointer;display:flex;align-items:center;gap:.3rem;"><input type="radio" name="jedit-cond" value="moyennes"'+condMoy+'> 🟡 Moyennes</label>'
+    + '<label style="font-family:var(--mono);font-size:11px;color:var(--text2);cursor:pointer;display:flex;align-items:center;gap:.3rem;"><input type="radio" name="jedit-cond" value="faibles"'+condFai+'> 🔴 Faibles</label>'
+    + '</div>'
+    // Commentaire
+    + '<div style="font-family:var(--display);font-size:9px;letter-spacing:.08em;color:rgba(150,180,210,.6);text-transform:uppercase;margin-bottom:.4rem;">Commentaire</div>'
+    + '<textarea id="jedit-comment" rows="5" style="width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(245,158,11,.2);border-radius:8px;color:#e0eeff;font-size:12px;font-family:var(--mono);padding:.6rem .8rem;resize:vertical;outline:none;box-sizing:border-box;line-height:1.6;">' + escHtml(e.comment||'') + '</textarea>'
+    // Actions
+    // Photo actuelle + changer
+    + '<div style="font-family:var(--display);font-size:9px;letter-spacing:.08em;color:rgba(150,180,210,.6);text-transform:uppercase;margin-bottom:.4rem;margin-top:.8rem;">Photo (optionnel)</div>'
+    + (e.photo ? '<div style="margin-bottom:.5rem;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.08);max-height:160px;"><img src="' + e.photo + '" style="width:100%;display:block;max-height:160px;object-fit:cover;"></div>' : '')
+    + '<input type="file" accept="image/*" id="jedit-photo" style="width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(245,158,11,.15);border-radius:8px;color:var(--text2);font-size:11px;padding:.4rem .6rem;box-sizing:border-box;margin-bottom:.2rem;">'
+    + (e.photo ? '<div style="font-family:var(--mono);font-size:9px;color:rgba(150,180,210,.4);margin-bottom:.6rem;">Laisser vide pour conserver la photo actuelle</div>' : '')
+    + '<div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem;">'
+    + '<button onclick="document.getElementById(\'journal-edit-overlay\').remove()" style="background:none;border:1px solid rgba(255,255,255,.1);color:rgba(200,220,240,.4);border-radius:8px;padding:.45rem .9rem;font-size:11px;cursor:pointer;">Annuler</button>'
+    + '<button onclick="journalSaveEdit(\'' + entryId + '\')" style="background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.35);color:#f59e0b;border-radius:8px;padding:.45rem 1.1rem;font-size:11px;cursor:pointer;font-family:var(--display);letter-spacing:.06em;">💾 Sauvegarder</button>'
+    + '</div>'
+    + '</div>';
+
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', function(ev){ if (ev.target === overlay) overlay.remove(); });
+};
+
+window.journalSaveEdit = function(entryId) {
+  var entries = journalGetLocal();
+  var e = entries.find(function(x){ return x.id === entryId; });
+  if (!e) return;
+  var condEl = document.querySelector('input[name="jedit-cond"]:checked');
+  e.conditions = condEl ? condEl.value : e.conditions;
+  e.comment = document.getElementById('jedit-comment').value.trim();
+  e.editedAt = Date.now();
+
+  var photoInput = document.getElementById('jedit-photo');
+  var newPhoto = photoInput && photoInput.files && photoInput.files[0];
+
+  function _finishSave(newPhotoData) {
+    function _applyAndSave(resolvedPhoto) {
+      if (resolvedPhoto) e.photo = resolvedPhoto;
+      journalSaveLocal(entries);
+      // Mettre à jour Firestore si connecté
+      if (window.currentUser && window.db) {
+        import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js').then(function(fs) {
+          fs.setDoc(fs.doc(window.db, 'users', window.currentUser.uid, 'journal', e.id), e)
+            .catch(function(err){ console.warn('Firestore update failed', err); });
+        });
+      }
+      var overlay = document.getElementById('journal-edit-overlay');
+      if (overlay) overlay.remove();
+      var main = document.getElementById('comm-main');
+      if (main) renderJournalView(main);
+      journalOpenEntry(entryId);
+    }
+
+    if (newPhotoData) {
+      var storagePath = 'journal/' + e.id + '_photo';
+      uploadPhotoToStorage(newPhotoData, storagePath).then(_applyAndSave);
+    } else {
+      _applyAndSave(newPhotoData);
+    }
+  }
+
+  if (newPhoto) {
+    var reader = new FileReader();
+    reader.onload = function(ev) { _finishSave(ev.target.result); };
+    reader.onerror = function() { _finishSave(null); };
+    reader.readAsDataURL(newPhoto);
+  } else {
+    _finishSave(null);
+  }
+};
+
+// ── Supprimer une entrée ───────────────────────────────────────────────────
+window.journalDeleteEntry = function(entryId) {
+  if (!confirm('Supprimer ce rapport ?')) return;
+  var entries = journalGetLocal().filter(function(x){ return x.id !== entryId; });
+  journalSaveLocal(entries);
+  var overlay = document.getElementById('journal-reader-overlay');
+  if (overlay) overlay.remove();
+  var main = document.getElementById('comm-main');
+  if (main) renderJournalView(main);
+  updateBetaPanel();
+};
+
+// ── Publier dans le fil communautaire ─────────────────────────────────────
+window.journalPostToForum = function(entryId) {
+  var entries = journalGetLocal();
+  var e = entries.find(function(x){ return x.id === entryId; });
+  if (!e) return;
+
+  // Build a forum post from the journal entry
+  var rubriques = ['conditions','captures','materiel','spots'];
+  // Show rubrique picker overlay
+  var old2 = document.getElementById('journal-post-picker');
+  if (old2) old2.remove();
+
+  var picker = document.createElement('div');
+  picker.id = 'journal-post-picker';
+  picker.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9002;display:flex;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(4px);';
+
+  picker.innerHTML = '<div style="background:#0d1628;border:1px solid rgba(0,212,255,.25);border-radius:14px;width:100%;max-width:400px;padding:1.3rem;">'
+    + '<div style="font-family:var(--display);font-size:12px;letter-spacing:.1em;color:#00d8ff;margin-bottom:.3rem;">🌐 PUBLIER DANS LE FIL</div>'
+    + '<div style="font-family:var(--mono);font-size:10px;color:rgba(150,180,210,.5);margin-bottom:1rem;">' + escHtml(e.spotName||'') + ' · ' + escHtml(e.dateLabel||'') + '</div>'
+    + '<div style="font-family:var(--display);font-size:9px;letter-spacing:.08em;color:rgba(150,180,210,.6);text-transform:uppercase;margin-bottom:.5rem;">Choisir la rubrique</div>'
+    + '<div style="display:flex;flex-direction:column;gap:.35rem;margin-bottom:1rem;">'
+    + '<label style="display:flex;align-items:center;gap:.5rem;font-family:var(--mono);font-size:11px;color:var(--text2);cursor:pointer;"><input type="radio" name="jpost-rub" value="conditions" checked> 🌤️ Conditions du jour</label>'
+    + '<label style="display:flex;align-items:center;gap:.5rem;font-family:var(--mono);font-size:11px;color:var(--text2);cursor:pointer;"><input type="radio" name="jpost-rub" value="captures"> 📸 Captures extrêmes</label>'
+    + '<label style="display:flex;align-items:center;gap:.5rem;font-family:var(--mono);font-size:11px;color:var(--text2);cursor:pointer;"><input type="radio" name="jpost-rub" value="materiel"> 🔭 Matériel & Technique</label>'
+    + '<label style="display:flex;align-items:center;gap:.5rem;font-family:var(--mono);font-size:11px;color:var(--text2);cursor:pointer;"><input type="radio" name="jpost-rub" value="spots"> 📍 Spots & Reconnaissances</label>'
+    + '</div>'
+    + '<div style="font-family:var(--display);font-size:9px;letter-spacing:.08em;color:rgba(150,180,210,.6);text-transform:uppercase;margin-bottom:.4rem;">Pseudo (auteur)</div>'
+    + '<input id="jpost-author" type="text" placeholder="Ton pseudo…" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(0,212,255,.15);border-radius:8px;color:#e0eeff;font-size:12px;padding:.45rem .7rem;box-sizing:border-box;margin-bottom:1rem;">'
+    + '<div style="display:flex;gap:.5rem;justify-content:flex-end;">'
+    + '<button onclick="document.getElementById(\'journal-post-picker\').remove()" style="background:none;border:1px solid rgba(255,255,255,.1);color:rgba(200,220,240,.4);border-radius:8px;padding:.4rem .9rem;font-size:11px;cursor:pointer;">Annuler</button>'
+    + '<button onclick="journalConfirmPost(\'' + entryId + '\')" style="background:rgba(0,212,255,.15);border:1px solid rgba(0,212,255,.35);color:#00d8ff;border-radius:8px;padding:.4rem 1rem;font-size:11px;cursor:pointer;font-family:var(--display);letter-spacing:.06em;">🌐 Publier</button>'
+    + '</div>'
+    + '</div>';
+
+  document.body.appendChild(picker);
+  picker.addEventListener('click', function(ev){ if (ev.target === picker) picker.remove(); });
+};
+
+window.journalConfirmPost = function(entryId) {
+  var entries = journalGetLocal();
+  var e = entries.find(function(x){ return x.id === entryId; });
+  if (!e) return;
+
+  var rubEl = document.querySelector('input[name="jpost-rub"]:checked');
+  var rubrique = rubEl ? rubEl.value : 'conditions';
+  var author = (document.getElementById('jpost-author').value.trim()) || 'Observateur';
+
+  var cond = e.conditions === 'excellentes' ? '🟢 Excellentes' : e.conditions === 'faibles' ? '🔴 Faibles' : '🟡 Moyennes';
+  var metrics = (e.metrics || []).join(' · ');
+  var photoHtml = e.photo ? '<br><br><img src="' + e.photo + '" style="max-width:100%;border-radius:8px;margin-top:.5rem;">' : '';
+  var body = '<strong>Score VLD : ' + (e.score!=null?e.score:'—') + '/100</strong><br>'
+    + 'Conditions : ' + cond + '<br>'
+    + (metrics ? 'Données : ' + escHtml(metrics) + '<br>' : '')
+    + '<br>'
+    + escHtml(e.comment||'')
+    + photoHtml;
+
+  var posts = forumGetPosts();
+  posts.unshift({
+    id: 'j_' + Date.now(),
+    rubrique: rubrique,
+    author: author,
+    title: escHtml(e.spotName||'Observation') + ' — ' + escHtml(e.dateLabel||''),
+    body: body,
+    tags: ['Journal','VLD', e.spotName||''],
+    likes: 0,
+    replies: 0,
+    timestamp: Date.now(),
+    fromJournal: entryId,
+  });
+  forumSavePosts(posts);
+
+  // Mark entry as posted
+  e.postedToForum = true;
+  journalSaveLocal(entries);
+
+  // Close pickers and reader
+  ['journal-post-picker','journal-reader-overlay'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.remove();
+  });
+
+  // Refresh journal view
+  var main = document.getElementById('comm-main');
+  if (main) renderJournalView(main);
+  updateBetaPanel();
+
+  // Feedback
+  setTimeout(function(){
+    alert('✅ Rapport publié dans "' + rubrique + '" !');
+  }, 100);
+};
 
 // ── Vue Fil ───────────────────────────────────────
 function renderFilView(container) {
-  container.innerHTML = '<div class="comm-empty-state"><div class="comm-empty-icon">🌐</div><div style="font-size:13px;color:var(--text2);">Fil communautaire</div><div>Les observations de la communauté SKY-RANGE apparaîtront ici — bientôt disponible.</div></div>';
+  var posts = forumGetPosts();
+  if (posts.length === 0) {
+    container.innerHTML = '<div class="comm-empty-state"><div class="comm-empty-icon">🌐</div><div style="font-size:13px;color:var(--text2);">Fil communautaire</div><div>Les observations de la communauté SKY-RANGE apparaîtront ici — publie ton premier rapport depuis ton journal !</div></div>';
+    return;
+  }
+  // Show all posts across all rubriques in reverse chrono order
+  var sorted = posts.slice().sort(function(a,b){ return b.timestamp - a.timestamp; });
+  var html = '<div style="font-family:var(--display);font-size:.75rem;letter-spacing:.1em;color:#00d8ff;margin-bottom:1rem;">FIL COMMUNAUTAIRE</div>';
+  sorted.forEach(function(p) {
+    var rub = FORUM_RUBRIQUES[p.rubrique] || { label: p.rubrique, icon: '📝', color: '#00d8ff' };
+    var d = new Date(p.timestamp).toLocaleDateString('fr-FR', { day:'2-digit', month:'short', year:'numeric' });
+    var preview = p.body.replace(/<[^>]*>/g,'').substring(0,120) + (p.body.length > 120 ? '…' : '');
+    html += '<div class="forum-card" onclick="forumOpenReader(\'' + p.id + '\')">'
+      + '<div class="forum-card-header">'
+      + '<div class="forum-card-avatar">' + rub.icon + '</div>'
+      + '<span class="forum-card-author">' + escHtml(p.author||'Observateur') + '</span>'
+      + '<span style="font-size:9px;color:' + rub.color + ';font-family:var(--display);letter-spacing:.06em;margin-left:.3rem;">' + rub.label + '</span>'
+      + '<span class="forum-card-date">' + d + '</span>'
+      + '</div>'
+      + '<div class="forum-card-title">' + escHtml(p.title) + '</div>'
+      + '<div class="forum-card-body">' + escHtml(preview) + '</div>'
+      + '</div>';
+  });
+  container.innerHTML = html;
 }
 
 // ── Ouvrir formulaire depuis une card jour ────────
@@ -6659,6 +6967,47 @@ window.handleJournalCardClick = function(el) {
   setTimeout(function() { openJournalEntry(spotId, dayData, dateLabel); }, 100);
 };
 
+// ── Cloudinary — upload photo ─────────────────────────────────────────────
+// Retourne une Promise<string|null> : URL publique Cloudinary ou fallback base64
+var CLOUDINARY_CLOUD = 'dz16nc9qy';
+var CLOUDINARY_PRESET = 'Vld-hub';
+
+function uploadPhotoToStorage(dataUrl, path) {
+  if (!dataUrl) return Promise.resolve(null);
+
+  // Convertir dataUrl en Blob
+  var byteStr = atob(dataUrl.split(',')[1]);
+  var mime = dataUrl.split(',')[0].split(':')[1].split(';')[0];
+  var ab = new ArrayBuffer(byteStr.length);
+  var ia = new Uint8Array(ab);
+  for (var i = 0; i < byteStr.length; i++) ia[i] = byteStr.charCodeAt(i);
+  var blob = new Blob([ab], { type: mime });
+
+  var fd = new FormData();
+  fd.append('file', blob);
+  fd.append('upload_preset', CLOUDINARY_PRESET);
+  // Nommer le fichier d'après le path pour l'organisation
+  fd.append('public_id', path.replace(/\//g, '_'));
+
+  return fetch('https://api.cloudinary.com/v1_1/' + CLOUDINARY_CLOUD + '/image/upload', {
+    method: 'POST',
+    body: fd
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.secure_url) {
+      // Optimisation auto : qualité auto + format webp
+      return data.secure_url.replace('/upload/', '/upload/q_auto,f_auto,w_1200/');
+    }
+    console.warn('Cloudinary upload error:', data);
+    return dataUrl; // fallback base64
+  })
+  .catch(function(e) {
+    console.warn('Cloudinary upload failed, keeping base64:', e);
+    return dataUrl; // fallback base64
+  });
+}
+
 window.submitJournalEntry = function() {
   const modal = document.getElementById('comm-journal-modal');
   const pending = modal._pendingData || {};
@@ -6682,30 +7031,59 @@ window.submitJournalEntry = function() {
     timestamp: Date.now(),
   };
 
-  const entries = journalGetLocal();
-  entries.unshift(entry);
-  journalSaveLocal(entries);
+  // ── Lecture photo puis sauvegarde ──
+  var photoInput = document.getElementById('cm-photo');
+  var photoFile = photoInput && photoInput.files && photoInput.files[0];
 
-  // Tenter Firestore si connecté
-  if (window.currentUser && window.db) {
-    import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js').then(function(fs) {
-      fs.setDoc(fs.doc(window.db, 'users', window.currentUser.uid, 'journal', entry.id), entry)
-        .catch(function(e){ console.warn('Firestore journal save failed', e); });
-    });
+  function _doSave(photoData) {
+    // Si connecté + photo : upload vers Firebase Storage d'abord
+    if (photoData) {
+      var storagePath = 'journal/' + entry.id + '_photo';
+      uploadPhotoToStorage(photoData, storagePath).then(function(photoUrl) {
+        entry.photo = photoUrl; // URL publique Storage (ou base64 si fallback)
+        _persistEntry();
+      });
+    } else {
+      if (photoData) entry.photo = photoData; // base64 local si pas connecté
+      _persistEntry();
+    }
   }
 
-  modal.style.display = 'none';
-  updateBetaPanel();
+  function _persistEntry() {
+    const entries = journalGetLocal();
+    entries.unshift(entry);
+    journalSaveLocal(entries);
 
-  const btn = document.querySelector('.comm-submit-btn');
-  if (btn) {
-    btn.textContent = '✅ Rapport sauvegardé !';
-    setTimeout(function(){ btn.textContent = '💾 Sauvegarder le rapport'; }, 2500);
+    // Firestore : stocker avec l'URL photo (légère)
+    if (window.currentUser && window.db) {
+      import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js').then(function(fs) {
+        fs.setDoc(fs.doc(window.db, 'users', window.currentUser.uid, 'journal', entry.id), entry)
+          .catch(function(e){ console.warn('Firestore journal save failed', e); });
+      });
+    }
+
+    modal.style.display = 'none';
+    updateBetaPanel();
+
+    const btn = document.querySelector('.comm-submit-btn');
+    if (btn) {
+      btn.textContent = '✅ Rapport sauvegardé !';
+      setTimeout(function(){ btn.textContent = '💾 Sauvegarder le rapport'; }, 2500);
+    }
+
+    if (document.getElementById('comm-btn-journal') && document.getElementById('comm-btn-journal').classList.contains('active')) {
+      const main = document.getElementById('comm-main');
+      if (main) renderJournalView(main);
+    }
   }
 
-  if (document.getElementById('comm-btn-journal') && document.getElementById('comm-btn-journal').classList.contains('active')) {
-    const main = document.getElementById('comm-main');
-    if (main) renderJournalView(main);
+  if (photoFile) {
+    var reader = new FileReader();
+    reader.onload = function(ev) { _doSave(ev.target.result); };
+    reader.onerror = function() { _doSave(null); };
+    reader.readAsDataURL(photoFile);
+  } else {
+    _doSave(null);
   }
 };
 </script>
