@@ -2903,7 +2903,7 @@ function updateCompassDelta() {
   if (!el) return;
   el.textContent = (delta >= 0 ? '+' : '') + Math.round(delta);
   el.className = 'compass-delta ' + (absDelta <= 5 ? 'ok' : absDelta <= 15 ? 'warn' : 'bad');
-  if (hint) hint.textContent = absDelta <= 5 ? '✓ Dans l'axe' : (delta > 0 ? 'Tourne vers la droite' : 'Tourne vers la gauche');
+  if (hint) hint.textContent = absDelta <= 5 ? "✓ Dans l'axe" : (delta > 0 ? 'Tourne vers la droite' : 'Tourne vers la gauche');
 }
 
 function startCompass() {
