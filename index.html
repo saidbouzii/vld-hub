@@ -5088,6 +5088,7 @@ function switchTab(tabId) {
   if (tabId === 'outils') initOutilsTab();
   if (tabId === 'previsions') initRadarOnce();
   if (tabId === 'communaute') initCommunauteTab();
+  if (tabId === 'labo') initLaboTab();
 
   // Sur Accueil : masquer tab-nav, montrer hamburger
   // Sur les autres : montrer tab-nav, cacher hamburger
@@ -7105,8 +7106,11 @@ window.submitJournalEntry = function() {
     <div style="color:var(--text3);font-size:11px;margin-top:.25rem">JPG, PNG, WEBP</div>
   </div>
   <input type="file" id="labo-input" accept="image/*" style="display:none" onchange="laboLoad(this)">
+  <div id="labo-reload-btn" style="display:none;margin-bottom:.6rem;">
+    <button class="labo-preset" style="width:100%;background:rgba(0,212,255,.08);border-color:rgba(0,212,255,.2);" onclick="document.getElementById('labo-input').click()">📷 Charger une autre photo</button>
+  </div>
 
-  <div id="labo-viewport" style="position:relative;margin-bottom:.5rem;border-radius:12px;overflow:hidden;background:#000;min-height:120px;max-height:55vw;display:flex;align-items:center;justify-content:center;touch-action:none;cursor:grab;">
+  <div id="labo-viewport" style="display:none;position:relative;margin-bottom:.5rem;border-radius:12px;overflow:hidden;background:#000;min-height:220px;align-items:center;justify-content:center;touch-action:none;cursor:grab;">
     <canvas id="labo-canvas" style="display:block;transform-origin:0 0;position:absolute;top:0;left:0;"></canvas>
     <div id="labo-placeholder" style="color:var(--text3);font-size:12px;padding:2rem;position:relative;z-index:2;">Charge une photo pour commencer</div>
   </div>
@@ -8166,11 +8170,15 @@ function laboLoadFile(file) {
     c.width = img.naturalWidth || img.width;
     c.height = img.naturalHeight || img.height;
     document.getElementById('labo-placeholder').style.display = 'none';
+    document.getElementById('labo-drop').style.display = 'none';
+    document.getElementById('labo-reload-btn').style.display = 'block';
+    document.getElementById('labo-viewport').style.display = 'flex';
     document.getElementById('labo-controls').style.display = 'block';
     document.getElementById('labo-zoom-bar').style.display = 'flex';
     _laboZoom = 1; _laboPanX = 0; _laboPanY = 0;
     laboRender();
-    laboApplyTransform();
+    // rAF pour laisser le DOM se redimensionner avant le calcul du transform
+    requestAnimationFrame(() => requestAnimationFrame(() => laboApplyTransform()));
   };
   img.onerror = () => {
     document.getElementById('labo-placeholder').textContent = '❌ Erreur — réessaie';
@@ -8324,6 +8332,22 @@ async function laboLoadFromDB(id) {
   } catch(e) {}
 }
 
+// ── INIT LABO TAB ── appelé à chaque switchTab('labo')
+function initLaboTab() {
+  const hasImg = !!_laboImg;
+  // Ne toucher que les éléments conditionnels, pas labo-drop (toujours visible si pas d'image)
+  document.getElementById('labo-reload-btn').style.display = hasImg ? 'block' : 'none';
+  document.getElementById('labo-viewport').style.display  = hasImg ? 'flex'  : 'none';
+  document.getElementById('labo-controls').style.display  = hasImg ? 'block' : 'none';
+  document.getElementById('labo-zoom-bar').style.display  = hasImg ? 'flex'  : 'none';
+  // labo-drop : visible si pas d'image
+  const drop = document.getElementById('labo-drop');
+  if (drop) drop.style.display = hasImg ? 'none' : 'block';
+  if (hasImg) requestAnimationFrame(() => requestAnimationFrame(() => laboApplyTransform()));
+  // Historique en différé pour ne pas perturber l'affichage initial
+  setTimeout(laboRenderHistory, 200);
+}
+
 // ── ZOOM / PAN ──
 let _laboZoom = 1, _laboPanX = 0, _laboPanY = 0;
 let _laboDrag = false, _laboDragSX = 0, _laboDragSY = 0, _laboDragPX = 0, _laboDragPY = 0;
@@ -8333,8 +8357,13 @@ function laboApplyTransform() {
   const c = document.getElementById('labo-canvas');
   const vp = document.getElementById('labo-viewport');
   if (!c || !_laboImg) return;
-  // Adapter la taille du canvas au viewport
-  const vpW = vp.clientWidth, vpH = vp.clientHeight || vpW * 0.55;
+  const vpW = vp.clientWidth || window.innerWidth - 32;
+  // Calcul de la hauteur idéale selon ratio image, bornée entre 220px et 75vw
+  const imgRatio = _laboImg.height / _laboImg.width;
+  const idealH = Math.round(vpW * imgRatio);
+  const minH = 220, maxH = Math.round(window.innerWidth * 0.75);
+  const vpH = Math.max(minH, Math.min(maxH, idealH));
+  vp.style.height = vpH + 'px';
   const scaleBase = Math.min(vpW / _laboImg.width, vpH / _laboImg.height);
   const s = scaleBase * _laboZoom;
   const maxPanX = Math.max(0, (_laboImg.width * s - vpW) / 2);
@@ -8345,7 +8374,6 @@ function laboApplyTransform() {
   const ty = (vpH - _laboImg.height * s) / 2 + _laboPanY;
   c.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
   c.style.transformOrigin = '0 0';
-  vp.style.height = vpH + 'px';
   document.getElementById('sl-zoom').value = _laboZoom;
   vp.style.cursor = _laboZoom > 1 ? 'grab' : 'default';
 }
