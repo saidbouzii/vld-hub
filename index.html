@@ -432,12 +432,12 @@ body::after {
 .ir-filter-badge { font-size: 10px; font-family: var(--mono); margin-top: 3px; opacity: .9; }
 .ir-score-arrow { font-size: 18px; color: var(--text3); margin-left: 2px; }
 /* Modal IR params */
-.ir-modal-param { display:flex; gap:10px; align-items:flex-start; padding:.5rem 0; border-bottom:1px solid rgba(255,255,255,.05); }
-.ir-param-icon { font-size:18px; min-width:24px; text-align:center; margin-top:2px; }
+.ir-modal-param { display:flex; gap:14px; align-items:flex-start; padding:.75rem 0; border-bottom:1px solid rgba(255,255,255,.07); }
+.ir-param-icon { font-size:26px; min-width:32px; text-align:center; margin-top:2px; }
 .ir-param-body { flex:1; }
-.ir-param-name { font-size:10px; color:var(--text3); font-family:var(--mono); }
-.ir-param-val { font-size:13px; font-weight:700; font-family:var(--display); }
-.ir-param-verdict { font-size:9px; color:var(--text3); margin-top:1px; }
+.ir-param-name { font-size:13px; color:var(--text3); font-family:'Inter','Helvetica Neue',sans-serif; letter-spacing:.03em; }
+.ir-param-val { font-size:20px; font-weight:700; font-family:'Inter','Helvetica Neue',sans-serif; margin-top:2px; }
+.ir-param-verdict { font-size:12px; color:var(--text3); margin-top:3px; font-style:italic; }
 
 /* ── Modal explication score ── */
 .score-modal-overlay {
@@ -451,7 +451,7 @@ body::after {
   border-radius: 18px; padding: 1.3rem 1.4rem; width: 99vw; max-width: 900px;
   max-height: 95vh; overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0,0,0,.9), 0 0 0 1px rgba(160,80,255,.1);
-  font-family: var(--mono); font-size: 11.5px; line-height: 1.75;
+  font-family: 'Inter','Helvetica Neue',sans-serif; font-size: 14px; line-height: 1.75;
   position: relative;
 }
 .score-modal-close {
@@ -461,20 +461,21 @@ body::after {
 }
 .score-modal-close:hover { color: var(--text); }
 .score-modal-title {
-  color: rgba(160,80,255,.9); font-size: 10px; letter-spacing: .07em;
+  color: rgba(160,80,255,.9); font-size: 14px; letter-spacing: .07em;
+  font-family:'Inter','Helvetica Neue',sans-serif; font-weight:700;
   margin-bottom: .75rem; padding-bottom: .5rem;
   border-bottom: 1px solid rgba(160,80,255,.15);
 }
 .score-modal-score {
-  font-family: var(--display); font-size: 28px; color: #fff;
-  letter-spacing: .05em; margin-bottom: .1rem;
+  font-family: 'Inter','Helvetica Neue',sans-serif; font-size: 52px; color: #fff;
+  letter-spacing: .05em; margin-bottom: .1rem; font-weight:800;
 }
-.sep-section { margin-top: .75rem; margin-bottom: .3rem; font-size: 10px; font-weight: 700; letter-spacing: .04em; }
+.sep-section { margin-top: 1rem; margin-bottom: .5rem; font-size: 14px; font-weight: 700; letter-spacing: .04em; font-family:'Inter','Helvetica Neue',sans-serif; }
 .sep-good { color: #4ade80; }
 .sep-bad  { color: #fb923c; }
-.sep-item { color: var(--text2); padding-left: .5rem; display: flex; gap: .4rem; align-items: baseline; flex-wrap: wrap; }
-.sep-item span { color: var(--text3); font-size: 10px; }
-.sep-solar { color: var(--text3); font-size: 10px; margin-top: .5rem; padding-top: .5rem; border-top: 1px solid rgba(255,255,255,.05); }
+.sep-item { color: var(--text2); padding-left: .5rem; font-size:13px; display: flex; gap: .4rem; align-items: baseline; flex-wrap: wrap; font-family:'Inter','Helvetica Neue',sans-serif; line-height:1.6; }
+.sep-item span { color: var(--text3); font-size: 12px; }
+.sep-solar { color: var(--text3); font-size: 13px; margin-top: .5rem; padding-top: .5rem; border-top: 1px solid rgba(255,255,255,.05); }
 
 .refr-badge {
   font-size:9px; display:block; line-height:1; margin-top:1px;
@@ -5108,8 +5109,8 @@ function openIRModal(dataB64) {
     />
     <div class="score-modal-score" style="color:${scColor}">${score}<span style="font-size:14px;color:var(--text3)">/100</span></div>
     <div style="text-align:center;margin-bottom:1rem">
-      <span style="font-size:11px;letter-spacing:.1em;color:${scColor};font-weight:700">${label}</span>
-      <span style="margin-left:12px;font-size:11px;color:${filterColor}">⬛ Filtre conseillé : <strong>${filterReco}</strong></span>
+      <span style="font-size:18px;letter-spacing:.1em;color:${scColor};font-weight:700">${label}</span>
+      <span style="margin-left:16px;font-size:15px;color:${filterColor}">⬛ Filtre conseillé : <strong>${filterReco}</strong></span>
     </div>
     <div class="sep-section sep-good">📊 Paramètres atmosphériques IR</div>
     ${fmtParam('💧', 'Vapeur eau colonne (PWV)', pwv, ' mm', pwvPts, 40, pwvVerdict)}
@@ -5117,9 +5118,9 @@ function openIRModal(dataB64) {
     ${fmtParam('👁️', 'Visibilité obs.', vis, ' km', visPts, 20, visVerdict)}
     ${fmtParam('☁️', 'Nébulosité basse', cl, '%', cloudPts, 15, cloudVerdict)}
     <div class="sep-section sep-bad">💡 Conseil terrain</div>
-    <div class="sep-item" style="color:var(--text2);line-height:1.5">${conseil}</div>
-    <div style="margin-top:.75rem;padding:.6rem;background:rgba(0,212,255,.05);border-radius:8px;border:1px solid rgba(0,212,255,.1)">
-      <div style="font-size:9px;color:var(--text3);font-family:var(--mono)">
+    <div class="sep-item" style="color:var(--text2);line-height:1.6;font-size:14px;font-family:'Inter','Helvetica Neue',sans-serif">${conseil}</div>
+    <div style="margin-top:.75rem;padding:.75rem;background:rgba(0,212,255,.05);border-radius:8px;border:1px solid rgba(0,212,255,.1)">
+      <div style="font-size:11px;color:var(--text3);font-family:'Inter','Helvetica Neue',sans-serif;line-height:1.6">
         ℹ️ Score basé sur : PWV colonne (40pts) · Spread T-Td (25pts) · Visibilité (20pts) · Nuages bas (15pts)<br>
         Diffusion Rayleigh ~5× inférieure à 850nm vs 550nm — l'IR traverse la brume légère mieux que le visible.
       </div>
