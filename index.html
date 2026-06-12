@@ -1124,7 +1124,7 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
 
 /* ── COLONNE GAUCHE : grille météo — style widgets image 2 ── */
 .drow-left {
-  flex:1; min-width:0;
+  flex:0 0 60%;min-width:0;
   padding:.9rem .9rem .9rem 1.1rem;
   display:grid; grid-template-columns:repeat(3,1fr);
   gap:.55rem; align-content:start;
@@ -1171,7 +1171,7 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
 .mb-sub{font-size:7.5px;color:rgba(160,200,230,.5);position:relative;z-index:1;font-family:var(--mono);text-align:center;}
 
 /* ── COLONNE DROITE ── */
-.drow-right{width:260px;flex-shrink:0;border-left:1px solid rgba(255,255,255,.04);display:flex;flex-direction:column;gap:0;overflow:hidden;}
+.drow-right{flex:0 0 40%;width:40%;border-left:1px solid rgba(255,255,255,.04);display:flex;flex-direction:column;gap:0;overflow:hidden;}
 .dr-k-block{padding:.65rem .85rem;display:flex;flex-direction:column;gap:.25rem;border-top:1px solid rgba(255,255,255,.05);}
 .dr-k-main{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;}
 .dr-k-eq{font-family:var(--display);font-size:16px;letter-spacing:.04em;}
@@ -1564,7 +1564,7 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
 @media(max-width:600px){
   .tab-btn{font-size:11px;padding:.55rem .85rem;}
   .drow-left{grid-template-columns:repeat(2,1fr);}
-  .drow-right{width:200px;}
+  .drow-right{flex:0 0 40%;width:40%;}
   .logo-features{display:none;}
 }
 
@@ -5321,17 +5321,37 @@ function getMbIcon(name) {
 }
 
 function renderMeteoButtons(items) {
-  const normal = items.filter(it => it.max > 0 && !it.regime).map(it => {
-    const state = it.elim ? 'elim' : it.color==='amber' ? 'warn' : 'ok';
-    const icon = getMbIcon(it.name);
-    const badge = it.elim ? '<span class="mb-badge">ÉLIM</span>' : '';
-    return `<div class="mb ${state}">
+  // Noms à cacher de l'affichage (calcul conservé en coulisse)
+  const HIDDEN = ['Vis. obs.', 'Obs. vis.', 'الرؤية', 'Vis. mi-trajet', 'Vis. maritime'];
+
+  // Ordre souhaité : Nuages bas en 1er, puis mid/hauts, pression, humidité, dust, solaire, précip + vent en dernier
+  const ORDER = [
+    'Nuages bas','Nuages moy.','Nuages hauts',
+    'Pression SLP','Humidité','ΔT rosée','Dust',
+    'Précipitations','Vent'
+  ];
+
+  const normal = items
+    .filter(it => it.max > 0 && !it.regime && !HIDDEN.includes(it.name))
+    .sort((a, b) => {
+      const ia = ORDER.indexOf(a.name);
+      const ib = ORDER.indexOf(b.name);
+      if (ia === -1 && ib === -1) return 0;
+      if (ia === -1) return 1;
+      if (ib === -1) return -1;
+      return ia - ib;
+    })
+    .map(it => {
+      const state = it.elim ? 'elim' : it.color==='amber' ? 'warn' : 'ok';
+      const icon = getMbIcon(it.name);
+      const badge = it.elim ? '<span class="mb-badge">ÉLIM</span>' : '';
+      return `<div class="mb ${state}">
       ${badge}
       <div class="mb-icon">${icon}</div>
       <div class="mb-lbl">${it.name}</div>
       <div class="mb-val">${it.val}${it.unit}</div>
     </div>`;
-  }).join('');
+    }).join('');
 
   // Bouton géométrie solaire
   const solar = items.find(it => it.name && it.name.includes('Géométrie solaire'));
