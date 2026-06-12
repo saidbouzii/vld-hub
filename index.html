@@ -393,15 +393,12 @@ body::after {
 }
 /* ── Bouton "Comprendre ce score" dans grille météo ── */
 .mb.explain-btn {
-  background: linear-gradient(160deg, #1a0a2e 0%, #0d0518 100%);
-  border-color: rgba(160,80,255,.45);
-  box-shadow: 0 6px 20px rgba(0,0,0,.7),
-              0 4px 0 rgba(80,20,160,.8),
-              inset 0 1px 0 rgba(180,100,255,.15),
-              inset 0 -1px 0 rgba(0,0,0,.5);
+  background: none;
+  border-color: transparent;
+  box-shadow: none;
   cursor: pointer;
   transform: translateY(0);
-  transition: transform .12s, box-shadow .12s;
+  transition: transform .12s;
 }
 .mb.explain-btn:active {
   transform: translateY(3px);
@@ -461,13 +458,13 @@ body::after {
 }
 .score-modal-close:hover { color: var(--text); }
 .score-modal-title {
-  color: rgba(160,80,255,.9); font-size: 14px; letter-spacing: .07em;
+  color: rgba(160,80,255,.9); font-size: 17px; letter-spacing: .07em;
   font-family:'Inter','Helvetica Neue',sans-serif; font-weight:700;
   margin-bottom: .75rem; padding-bottom: .5rem;
   border-bottom: 1px solid rgba(160,80,255,.15);
 }
 .score-modal-score {
-  font-family: 'Inter','Helvetica Neue',sans-serif; font-size: 52px; color: #fff;
+  font-family: 'Inter','Helvetica Neue',sans-serif; font-size: 64px; color: #fff;
   letter-spacing: .05em; margin-bottom: .1rem; font-weight:800;
 }
 .sep-section { margin-top: 1rem; margin-bottom: .5rem; font-size: 14px; font-weight: 700; letter-spacing: .04em; font-family:'Inter','Helvetica Neue',sans-serif; }
@@ -5042,8 +5039,13 @@ function openScoreModal(dataB64) {
 
   document.getElementById('score-modal-body').innerHTML = `
     <div class="score-modal-title">🔭 ANALYSE DU SCORE — ${spotName} · ${dateLabel}</div>
-    <div style="margin-bottom:.5rem;font-size:11px;color:var(--text3)">${creneauBadge || ''}</div>
-    <div class="score-modal-score" style="color:${scColor}">${score}<span style="font-size:14px;color:var(--text3)">/100</span></div>
+    <img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/refs/heads/main/Gemini_Generated_Image_frshvkfrshvkfrsh.png"
+      alt="Comprendre le score VLD"
+      style="width:100%;border-radius:10px;margin:.5rem 0 1rem;display:block;object-fit:cover;"
+      loading="lazy"
+    />
+    <div style="margin-bottom:.5rem;font-size:13px;color:var(--text3)">${creneauBadge || ''}</div>
+    <div class="score-modal-score" style="color:${scColor}">${score}<span style="font-size:18px;color:var(--text3)">/100</span></div>
     ${solarHtml}${aodHtml}${mirageHtml}
     <div class="sep-section sep-good">✅ Bonnes conditions</div>
     ${goodHtml}
@@ -5101,15 +5103,15 @@ function buildIRCard(fc, di, spot, dateLabel) {
     score, pwvPts, spreadPts, visPts, cloudPts, pwv, spread, vis, cl, filterReco,
     spotName: spot.name, dateLabel
   }))));
-  return `<div class="mb ir-score-card" onclick="openIRModal('${payload}')">
-    <div class="ir-score-icon">🔴</div>
-    <div class="ir-score-content">
-      <div class="ir-score-title">Infrarouge NIR</div>
-      <div class="ir-score-val" style="color:${color}">${score}<span style="font-size:13px;color:var(--text3)">/100</span></div>
-      <div class="ir-score-label" style="color:${color}">${label}</div>
-      <div class="ir-filter-badge" style="color:${filterColor}">⬛ ${filterReco}</div>
+  return `<div onclick="openIRModal('${payload}')" style="grid-column:span 2;cursor:pointer;background:none;border:none;box-shadow:none;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;align-items:stretch;">
+    <img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/refs/heads/main/1000032087.png"
+      alt="Score IR"
+      style="width:100%;display:block;object-fit:contain;background:transparent;"
+      loading="lazy"
+    />
+    <div style="text-align:center;padding:.2rem 0 .1rem;font-family:'Inter','Helvetica Neue',sans-serif;font-size:22px;font-weight:900;letter-spacing:.03em;line-height:1;color:${color}">
+      📷🎞️ IR <span style="font-size:28px">${score}</span><span style="font-size:14px;color:rgba(255,255,255,.4)">/100</span>
     </div>
-    <div class="ir-score-arrow">›</div>
   </div>`;
 }
 
@@ -5151,7 +5153,7 @@ function openIRModal(dataB64) {
       style="width:100%;border-radius:10px;margin:.5rem 0 1rem;display:block;object-fit:cover;max-height:630px;"
       loading="lazy"
     />
-    <div class="score-modal-score" style="color:${scColor}">${score}<span style="font-size:14px;color:var(--text3)">/100</span></div>
+    <div class="score-modal-score" style="color:${scColor}">${score}<span style="font-size:18px;color:var(--text3)">/100</span></div>
     <div style="text-align:center;margin-bottom:1rem">
       <span style="font-size:18px;letter-spacing:.1em;color:${scColor};font-weight:700">${label}</span>
       <span style="margin-left:16px;font-size:15px;color:${filterColor}">⬛ Filtre conseillé : <strong>${filterReco}</strong></span>
