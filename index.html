@@ -4238,8 +4238,99 @@ function scoreDay(spot, h) {
     } catch(e) { console.warn('solarGeometryAdvanced error:', e.message, e.stack); items.push({ name: '☀️ Géométrie solaire', val: 'err', unit: '', pts: 0, max: 0, color: 'red', verdict: '⚠️ Calcul impossible: ' + e.message, elim: false }); }
   })();
 
+  // ── 11b. HAUTEUR COUCHE LIMITE PBL (modificateur multiplicatif) ──────────
+  // Champ : blh (boundary_layer_height en mètres, Open-Meteo forecast)
+  // Application : multiplicateur sur le score brut courant, avant normalisation et plafonnement à 95
+  const blh = h.blh ?? null;
+  let pblFactor = 1.0; // neutre par défaut si donnée absente (fallback propre)
+  if (blh !== null) {
+    let pblColor, pblVerdict;
+    if (blh > 1500) {
+      pblFactor  = 1.10;
+      pblColor   = 'green';
+      pblVerdict = `⭐ PBL ${Math.round(blh)} m — aérosols bien dilués (+10%)`;
+    } else if (blh >= 800) {
+      pblFactor  = 1.00;
+      pblColor   = 'green';
+      pblVerdict = `✅ PBL ${Math.round(blh)} m — couche limite neutre`;
+    } else if (blh >= 300) {
+      pblFactor  = 0.90;
+      pblColor   = 'amber';
+      pblVerdict = `⚠️ PBL ${Math.round(blh)} m — confinement modéré (-10%)`;
+    } else {
+      pblFactor  = 0.75;
+      pblColor   = 'red';
+      pblVerdict = `❌ PBL ${Math.round(blh)} m — confinement fort, clarté catastrophique (-25%)`;
+    }
+    items.push({ name: '🌁 Couche limite PBL', val: Math.round(blh), unit: 'm',
+      pts: 0, max: 0, color: pblColor, verdict: pblVerdict, elim: false });
+  }
+
+  // ── 11c. GRADIENT VERTICAL RH (modificateur additif) ──────────────────
+  // ΔRH = RH_sol − RH_850hPa (mi-trajet)
+  // ΔRH élevé = air humide en basse couche, sec en altitude = brume de fond piégée
+  // ΔRH négatif = air bien mélangé, sec en bas = favorable
+  const rh_sol = h.rh ?? null;
+  const rh_850 = h.rh_850 ?? null;
+  let deltaRHBonus = 0;
+  if (rh_sol !== null && rh_850 !== null) {
+    const deltaRH = rh_sol - rh_850; // en %
+    let drhColor, drhVerdict;
+    if (deltaRH > 30) {
+      deltaRHBonus = -10;
+      drhColor   = 'red';
+      drhVerdict = `❌ ΔRH +${Math.round(deltaRH)}% — brume de fond piégée en basse couche`;
+    } else if (deltaRH > 15) {
+      deltaRHBonus = -5;
+      drhColor   = 'amber';
+      drhVerdict = `⚠️ ΔRH +${Math.round(deltaRH)}% — léger risque brume basse`;
+    } else if (deltaRH > 0) {
+      deltaRHBonus = 0;
+      drhColor   = 'green';
+      drhVerdict = `✅ ΔRH +${Math.round(deltaRH)}% — gradient neutre`;
+    } else {
+      deltaRHBonus = 5;
+      drhColor   = 'green';
+      drhVerdict = `⭐ ΔRH ${Math.round(deltaRH)}% — air bien mélangé, sec en bas`;
+    }
+    items.push({ name: '💧 Gradient RH vertical', val: Math.round(deltaRH), unit: '%',
+      pts: deltaRHBonus, max: 5, color: drhColor, verdict: drhVerdict, elim: false });
+  }
+
+  // ── 11d. AOD BASSE COUCHE 0–3 km (critère de base, 15 pts) ────────────
+  // Champ : aod_bc (CAMS aod550_bc) — fallback sur aod total si indisponible
+  // Distinct du modulateur AOD géométrique existant (qui reste inchangé)
+  const aodBc = h.aod_bc ?? h.aod ?? null;
+  let aodBcPts = 0;
+  if (aodBc !== null) {
+    let aodBcColor, aodBcVerdict;
+    if (aodBc < 0.10) {
+      aodBcPts     = 15;
+      aodBcColor   = 'green';
+      aodBcVerdict = `⭐ AOD bc ${aodBc.toFixed(3)} — excellent, bonus clarté`;
+    } else if (aodBc < 0.30) {
+      aodBcPts     = 10;
+      aodBcColor   = 'green';
+      aodBcVerdict = `✅ AOD bc ${aodBc.toFixed(3)} — correct`;
+    } else if (aodBc < 0.60) {
+      aodBcPts     = 4;
+      aodBcColor   = 'amber';
+      aodBcVerdict = `⚠️ AOD bc ${aodBc.toFixed(3)} — médiocre`;
+    } else {
+      aodBcPts     = 0;
+      aodBcColor   = 'red';
+      aodBcVerdict = `❌ AOD bc ${aodBc.toFixed(3)} — extinction critique 0–3 km`;
+    }
+    // Critère de base : ajouté directement au score brut (et maxScore)
+    score    += aodBcPts;
+    maxScore += 15;
+    items.push({ name: '🌫️ AOD basse couche', val: aodBc.toFixed(3), unit: '',
+      pts: aodBcPts, max: 15, color: aodBcColor, verdict: aodBcVerdict, elim: false });
+  }
+
   // ── SCORE FINAL ──────────────────────────────────
-  const rawPct = maxScore > 0 ? Math.min(95, Math.round((score / maxScore) * 100)) : 0;
+  // Pipeline : score_brut × pblFactor → normalisation sur 95 → +ΔRH → +régime → final
+  const rawPct = maxScore > 0 ? Math.min(95, Math.round((score * pblFactor / maxScore) * 100) + deltaRHBonus) : 0;
 
   // ── RÉGIMES FAVORABLES (bonus vers 100) ──────────
   const regimes = [];
@@ -4346,7 +4437,8 @@ async function fetchSpot(spot, pastDays = 0) {
  const params = [
   'visibility','wind_speed_10m','wind_direction_10m','cloud_cover_low','cloud_cover_mid','cloud_cover_high',
   'relative_humidity_2m','dew_point_2m','temperature_2m','surface_pressure',
-  'precipitation_probability','total_column_integrated_water_vapour'
+  'precipitation_probability','total_column_integrated_water_vapour',
+  'boundary_layer_height'  // PBL height — critère couche limite
 ].join(',');
 
   // ── Fallback fetch : essaie open-meteo, puis le mirror européen ──
@@ -4400,13 +4492,15 @@ async function fetchSpot(spot, pastDays = 0) {
   try {
    const base = `https://api.open-meteo.com/v1/forecast?forecast_days=7${pastDays > 0 ? `&past_days=${pastDays}` : ''}&daily=sunrise,sunset&timezone=auto`;
   const urlObs = `${base}&latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=${params}`;
-  const urlMid = `${base}&latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=visibility,cloud_cover_low,relative_humidity_2m,cape,wind_speed_80m,wind_speed_120m`;
+  const urlMid = `${base}&latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=visibility,cloud_cover_low,relative_humidity_2m,dew_point_2m,cape,wind_speed_80m,wind_speed_120m,relative_humidity_850hPa`;
  // AOD — 3 points : obs, mid, tgt (worst-case)
   const _aqBase = 'https://air-quality-api.open-meteo.com/v1/air-quality';
   const _aqPast = pastDays > 0 ? `&past_days=${pastDays}` : '';
-  const urlDustObs = `${_aqBase}?latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=dust,pm10&timezone=auto${_aqPast}`;
-  const urlDust    = `${_aqBase}?latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=dust,pm10&timezone=auto${_aqPast}`;
-  const urlDustTgt = `${_aqBase}?latitude=${spot.tgt.lat}&longitude=${spot.tgt.lon}&hourly=dust,pm10&timezone=auto${_aqPast}`;
+  // aod550nm = AOD total colonne à 550 nm (meilleur proxy dispo via Open-Meteo air-quality)
+  // aod550nm_bc (basse couche 0-3km) n'est pas exposé séparément — on utilise aod550nm comme proxy
+  const urlDustObs = `${_aqBase}?latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=dust,pm10,aod550nm&timezone=auto${_aqPast}`;
+  const urlDust    = `${_aqBase}?latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=dust,pm10,aod550nm&timezone=auto${_aqPast}`;
+  const urlDustTgt = `${_aqBase}?latitude=${spot.tgt.lat}&longitude=${spot.tgt.lon}&hourly=dust,pm10,aod550nm&timezone=auto${_aqPast}`;
   // U2 — ERA5 pressure levels pour calcul κ ITU-R P.453
   const urlPres = `https://api.open-meteo.com/v1/forecast?latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=temperature_1000hPa,temperature_925hPa,temperature_850hPa,temperature_700hPa,temperature_600hPa,temperature_500hPa,temperature_400hPa,temperature_300hPa,relative_humidity_1000hPa,relative_humidity_925hPa,relative_humidity_850hPa,relative_humidity_700hPa,relative_humidity_600hPa,relative_humidity_500hPa,relative_humidity_400hPa,relative_humidity_300hPa,geopotential_height_1000hPa,geopotential_height_925hPa,geopotential_height_850hPa,geopotential_height_700hPa,geopotential_height_600hPa,geopotential_height_500hPa,geopotential_height_400hPa,geopotential_height_300hPa&forecast_days=7${pastDays > 0 ? `&past_days=${pastDays}` : ''}&timezone=auto`;
   const [r1,r2,r3,r3b,r3c,r4] = await Promise.all([
@@ -4522,6 +4616,12 @@ wind: avg(d1.hourly?.wind_speed_10m),
       precip: avg(d1.hourly?.precipitation_probability),
       vis_mid: (avg(d2.hourly?.visibility)??0)/1000,
       temp, dTdh, k_bislin, lift_m, k_source,
+      // ── Nouveaux champs v4 ──
+      blh:    avg(d1.hourly?.boundary_layer_height),        // PBL height (m)
+      rh_850: avg(d2?.hourly?.relative_humidity_850hPa),    // RH à 850 hPa au mi-trajet
+      // aod_bc : AOD 550 nm worst-case sur les 3 points (obs, mid, tgt) — proxy basse couche
+      // Open-Meteo air-quality fournit aod550nm (colonne totale) ; aod550nm_bc n'est pas exposé séparément
+      aod_bc: (()=>{ const v=[avg(d3b?.hourly?.aod550nm),avg(d3?.hourly?.aod550nm),avg(d3c?.hourly?.aod550nm)].filter(x=>x!==null&&x!==undefined); return v.length?Math.max(...v):null; })(),
       _day: day,
     };
     const dt=new Date(); dt.setDate(dt.getDate()+day);
@@ -4553,6 +4653,7 @@ wind: avg(d1.hourly?.wind_speed_10m),
         spread: (tH!=null && dH!=null) ? tH-dH : h.spread,
         dust: h.dust, pm10: h.pm10, rh_mid: h.rh_mid, spread_mid: h.spread_mid, cape: h.cape,
         aod: h.aod ?? null,
+        blh: h.blh, rh_850: h.rh_850, aod_bc: h.aod_bc,
         wind_dir: d1.hourly?.wind_direction_10m?.[hourIdx] ?? h.wind_dir ?? null,
         _day: h._day, _obsDate: obsDate.toISOString(),
       };
@@ -4582,6 +4683,7 @@ wind: avg(d1.hourly?.wind_speed_10m),
         spread: (tH!=null && dH!=null) ? tH-dH : h.spread,
         dust: h.dust, pm10: h.pm10, rh_mid: h.rh_mid, spread_mid: h.spread_mid, cape: h.cape,
         aod: h.aod ?? null,
+        blh: h.blh, rh_850: h.rh_850, aod_bc: h.aod_bc,
         wind_dir: d1.hourly?.wind_direction_10m?.[hourIdx] ?? h.wind_dir ?? null,
         _day: h._day, _obsDate: obsDate.toISOString(),
       };
@@ -4612,6 +4714,7 @@ wind: avg(d1.hourly?.wind_speed_10m),
         spread: (tH!=null && dH!=null) ? tH-dH : h.spread,
         dust: h.dust, pm10: h.pm10, rh_mid: h.rh_mid, spread_mid: h.spread_mid, cape: h.cape,
         aod: h.aod ?? null,
+        blh: h.blh, rh_850: h.rh_850, aod_bc: h.aod_bc,
         wind_dir: d1.hourly?.wind_direction_10m?.[hourIdx] ?? h.wind_dir ?? null,
         _day: h._day, _obsDate: obsDate.toISOString(),
       };
@@ -5333,8 +5436,11 @@ function renderMeteoButtons(items) {
     'Précipitations','Vent'
   ];
 
+  // Items modificateurs (PBL, ΔRH) affichés avec rendu spécial sans barre de pts
+  const MODIFIER_ITEMS = ['🌁 Couche limite PBL', '💧 Gradient RH vertical'];
+
   const normal = items
-    .filter(it => it.max > 0 && !it.regime && !HIDDEN.includes(it.name))
+    .filter(it => (it.max > 0 || MODIFIER_ITEMS.includes(it.name)) && !it.regime && !HIDDEN.includes(it.name))
     .sort((a, b) => {
       const ia = ORDER.indexOf(a.name);
       const ib = ORDER.indexOf(b.name);
@@ -5347,6 +5453,30 @@ function renderMeteoButtons(items) {
       const state = it.elim ? 'elim' : it.color==='amber' ? 'warn' : 'ok';
       const icon = getMbIcon(it.name);
       const badge = it.elim ? '<span class="mb-badge">ÉLIM</span>' : '';
+
+      // PBL : affiche le facteur multiplicatif (ex : x1.10) a la place des pts
+      if (it.name === '🌁 Couche limite PBL') {
+        const blhVal = it.val;
+        const factor = blhVal > 1500 ? 'x1.10' : blhVal >= 800 ? 'x1.00' : blhVal >= 300 ? 'x0.90' : 'x0.75';
+        return `<div class="mb ${state}" title="${it.verdict || ''}">
+          ${badge}
+          <div class="mb-icon">🌁</div>
+          <div class="mb-lbl">PBL</div>
+          <div class="mb-val">${factor}</div>
+        </div>`;
+      }
+
+      // ΔRH : affiche le bonus/malus avec signe
+      if (it.name === '💧 Gradient RH vertical') {
+        const sign = it.pts > 0 ? '+' : '';
+        return `<div class="mb ${state}" title="${it.verdict || ''}">
+          ${badge}
+          <div class="mb-icon">💧</div>
+          <div class="mb-lbl">ΔRH</div>
+          <div class="mb-val">${sign}${it.pts}pt</div>
+        </div>`;
+      }
+
       return `<div class="mb ${state}">
       ${badge}
       <div class="mb-icon">${icon}</div>
