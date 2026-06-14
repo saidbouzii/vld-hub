@@ -3038,38 +3038,55 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
       </div>
 
       <!-- Bouton pleine largeur -->
-      <button id="panorama-launch-btn" onclick="launchPanorama()" style="
-        display:block;width:100%;padding:.75rem 1rem;
-        font-family:var(--display);font-size:14px;letter-spacing:.1em;
-        background:linear-gradient(135deg,rgba(0,212,255,.15),rgba(0,100,160,.1));
-        border:1px solid rgba(0,212,255,.35);border-radius:10px;
-        color:var(--cyan);cursor:pointer;transition:all .2s;
-        box-shadow:0 4px 16px rgba(0,212,255,.1);
-        margin-bottom:.75rem;
-      ">🗻 AFFICHER LE PANORAMA</button>
+      <!-- Boutons panorama -->
+      <div style="display:flex;gap:.5rem;margin-bottom:.75rem;flex-wrap:wrap;">
+        <button id="panorama-launch-btn" onclick="launchPanorama()" style="
+          flex:1;padding:.75rem 1rem;
+          font-family:var(--display);font-size:13px;letter-spacing:.08em;
+          background:linear-gradient(135deg,rgba(0,212,255,.15),rgba(0,100,160,.1));
+          border:1px solid rgba(0,212,255,.35);border-radius:10px;
+          color:var(--cyan);cursor:pointer;transition:all .2s;
+          box-shadow:0 4px 16px rgba(0,212,255,.1);
+        ">🗻 PANORAMA INTÉGRÉ</button>
+        <button id="panorama-open-btn" onclick="openPanoramaExternal()" disabled style="
+          flex:1;padding:.75rem 1rem;
+          font-family:var(--display);font-size:13px;letter-spacing:.08em;
+          background:linear-gradient(135deg,rgba(0,255,150,.1),rgba(0,120,60,.08));
+          border:1px solid rgba(0,255,150,.3);border-radius:10px;
+          color:#00ff96;cursor:pointer;transition:all .2s;
+          box-shadow:0 4px 16px rgba(0,255,150,.08);
+          opacity:0.45;
+        ">↗ OUVRIR DANS LE NAVIGATEUR</button>
+      </div>
 
-      <!-- Fenêtre iframe intégrée -->
-      <div id="panorama-frame-wrap" style="
-        display:none;
-        width:100%;border-radius:10px;overflow:hidden;
-        border:1px solid rgba(0,212,255,.2);
-        background:#111;position:relative;
+      <!-- Modal fullscreen iframe -->
+      <div id="panorama-modal" style="
+        display:none;position:fixed;inset:0;z-index:9999;
+        background:rgba(0,0,0,.97);
+        flex-direction:column;
       ">
         <div style="
           display:flex;align-items:center;justify-content:space-between;
-          padding:.4rem .75rem;background:rgba(0,20,40,.9);
-          border-bottom:1px solid rgba(0,212,255,.15);
+          padding:.5rem .75rem;background:rgba(0,20,40,.98);
+          border-bottom:1px solid rgba(0,212,255,.2);flex-shrink:0;
         ">
-          <span id="panorama-frame-label" style="font-family:var(--mono);font-size:10px;color:var(--cyan);">udeuschle.de — Panorama topographique</span>
-          <button onclick="closePanoramaFrame()" style="
-            background:none;border:none;color:var(--text3);
-            font-size:16px;cursor:pointer;line-height:1;padding:0 .2rem;
-          ">✕</button>
+          <span id="panorama-frame-label" style="font-family:var(--mono);font-size:10px;color:var(--cyan);">udeuschle.de — Panorama</span>
+          <div style="display:flex;gap:.5rem;align-items:center;">
+            <button onclick="openPanoramaExternal()" style="
+              background:rgba(0,255,150,.1);border:1px solid rgba(0,255,150,.3);
+              color:#00ff96;font-size:11px;padding:.25rem .6rem;
+              border-radius:6px;cursor:pointer;font-family:var(--mono);
+            ">↗ Ouvrir</button>
+            <button onclick="closePanoramaFrame()" style="
+              background:none;border:none;color:var(--text3);
+              font-size:20px;cursor:pointer;line-height:1;padding:0 .3rem;
+            ">✕</button>
+          </div>
         </div>
         <iframe id="panorama-iframe"
           src=""
-          style="width:100%;height:500px;border:none;display:block;"
-          sandbox="allow-scripts allow-same-origin allow-forms"
+          style="flex:1;width:100%;border:none;display:block;"
+          allow="fullscreen"
           loading="lazy">
         </iframe>
       </div>
@@ -3334,48 +3351,59 @@ function populatePanoramaSelect() {
 
 function onPanoramaSpotChange(spotId) {
   _panoramaSpot = spotId ? SPOTS.find(s => s.id === spotId) : null;
-  const msg = document.getElementById('panorama-no-spot-msg');
-  const btn = document.getElementById('panorama-launch-btn');
-  const wrap = document.getElementById('panorama-frame-wrap');
+  const msg     = document.getElementById('panorama-no-spot-msg');
+  const btnLaunch = document.getElementById('panorama-launch-btn');
+  const btnOpen   = document.getElementById('panorama-open-btn');
+  const modal   = document.getElementById('panorama-modal');
   if (msg) msg.style.display = _panoramaSpot ? 'none' : 'block';
-  if (btn) btn.disabled = !_panoramaSpot;
-  if (btn) btn.style.opacity = _panoramaSpot ? '1' : '0.45';
-  // Fermer l'iframe si on change de spot
-  if (wrap) wrap.style.display = 'none';
+  if (btnLaunch) { btnLaunch.disabled = !_panoramaSpot; btnLaunch.style.opacity = _panoramaSpot ? '1' : '0.45'; }
+  if (btnOpen)   { btnOpen.disabled   = !_panoramaSpot; btnOpen.style.opacity   = _panoramaSpot ? '1' : '0.45'; }
+  // Fermer le modal si on change de spot
+  if (modal) { modal.style.display = 'none'; }
+  const iframe = document.getElementById('panorama-iframe');
+  if (iframe) iframe.src = '';
+}
+
+function _buildPanoramaUrl(spot) {
+  const lat   = spot.obs.lat.toFixed(6);
+  const lng   = spot.obs.lon.toFixed(6);
+  const alt   = spot.obs.alt ? Math.round(spot.obs.alt) : '';
+  const az    = typeof spot.azimuth !== 'undefined' ? Math.round(spot.azimuth) : '';
+  const range = spot.dist_km ? Math.min(Math.round(spot.dist_km) + 50, 500) : 300;
+  // Fenêtre angulaire : 30° centrée sur l'azimut cible
+  const hext  = 30;
+  const left  = az !== '' ? ((az - hext + 360) % 360) : 0;
+  const right = az !== '' ? ((az + hext) % 360) : 360;
+
+  return `https://www.udeuschle.de/panoramas/makepanoramas_en.htm` +
+    `?lat=${lat}&lng=${lng}` +
+    (alt ? `&alt=${alt}` : '') +
+    (az !== '' ? `&dir=${az}&left=${left}&right=${right}` : '') +
+    `&range=${range}&zoom=1&resolution=20&elexagg=1.2`;
 }
 
 function launchPanorama() {
   if (!_panoramaSpot) return;
-  const spot = _panoramaSpot;
-  const lat = spot.obs.lat.toFixed(6);
-  const lng = spot.obs.lon.toFixed(6);
-  const alt = spot.obs.alt || 'auto';
-  // Azimut vers la cible
-  const az = typeof spot.azimuth !== 'undefined' ? spot.azimuth : '';
-  // Portée en km (distance du spot)
-  const range = spot.dist_km ? Math.min(spot.dist_km + 50, 500) : 300;
-
-  const url = `https://www.udeuschle.de/panoramas/makepanoramas_en.htm` +
-    `?lat=${lat}&lng=${lng}&alt=${alt}` +
-    (az !== '' ? `&dir=${az}` : '') +
-    `&range=${range}&zoom=1&hext=60&resolution=20&elexagg=1.0`;
-
+  const spot  = _panoramaSpot;
+  const url   = _buildPanoramaUrl(spot);
   const iframe = document.getElementById('panorama-iframe');
-  const wrap   = document.getElementById('panorama-frame-wrap');
+  const modal  = document.getElementById('panorama-modal');
   const label  = document.getElementById('panorama-frame-label');
 
   if (iframe) iframe.src = url;
-  if (label)  label.textContent = `udeuschle.de — ${spot.name} (${lat}, ${lng})`;
-  if (wrap)   wrap.style.display = 'block';
+  if (label)  label.textContent = `udeuschle.de — ${spot.name} (${spot.obs.lat.toFixed(4)}, ${spot.obs.lon.toFixed(4)})`;
+  if (modal)  { modal.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
+}
 
-  // Scroll vers l'iframe
-  setTimeout(() => wrap && wrap.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+function openPanoramaExternal() {
+  if (!_panoramaSpot) return;
+  window.open(_buildPanoramaUrl(_panoramaSpot), '_blank');
 }
 
 function closePanoramaFrame() {
-  const wrap   = document.getElementById('panorama-frame-wrap');
+  const modal  = document.getElementById('panorama-modal');
   const iframe = document.getElementById('panorama-iframe');
-  if (wrap)   wrap.style.display = 'none';
+  if (modal)  { modal.style.display = 'none'; document.body.style.overflow = ''; }
   if (iframe) iframe.src = '';
 }
 // ────────────────────────────────────────────────────────────
