@@ -3916,14 +3916,6 @@ function scoreDay(spot, h) {
   const wLow  = rayBlocksLow  ? 1.0 : 0.15;
   const wMid  = rayBlocksMid  ? 1.0 : 0.20;
 
-  // ── 1. VISIBILITÉ AU POINT D'OBSERVATION (25 pts) ──
-  // Critère roi : si on voit pas loin depuis le spot, c'est mort
-  const vis = h.vis ?? 0;
-  // Seuils recalibrés sur le plafond réel open-meteo (~40 km max)
-  const visPts = vis > 40 ? 25 : vis > 30 ? 20 : vis > 20 ? 13 : vis > 10 ? 6 : 0;
-  const visColor = vis > 30 ? 'green' : vis > 15 ? 'amber' : 'red';
-  const visVerdict = vis > 40 ? '⭐ Cristalline' : vis > 30 ? t('cv.ok') : vis > 15 ? t('cv.reduite') : `❌ Brume/brouillard`;
-  add(t('crit.vis_obs'), vis, 'km', visPts, 25, visColor, visVerdict);
 
   // ── 2. TRANSPARENCE AXE MI-TRAJET (20 pts) ──
   // Indice calculé — indépendant du plafonnage API visibilité
