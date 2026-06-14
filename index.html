@@ -1031,9 +1031,13 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
   box-shadow:0 0 16px rgba(34,197,94,.18), inset 0 1px 0 rgba(255,255,255,.05);
 }
 .dcell.good {
-  background:rgba(0,212,255,.10); color:var(--cyan);
-  border:1px solid rgba(0,212,255,.25);
-  box-shadow:0 0 12px rgba(0,212,255,.1);
+  background:rgba(245,158,11,.12); color:#fbbf24;
+  border:1px solid rgba(245,158,11,.30);
+  box-shadow:0 0 12px rgba(245,158,11,.10);
+}
+.dcell.mediocre {
+  background:rgba(249,115,22,.10); color:#fb923c;
+  border:1px solid rgba(249,115,22,.25);
 }
 .dcell.poor {
   background:rgba(239,68,68,.10); color:#f87171;
@@ -1113,9 +1117,10 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
   cursor:pointer; transition:background .15s;
 }
 .drow-hdr:hover{background:rgba(255,255,255,.025);}
-.drow-hdr.great{border-left:3px solid var(--green);}
-.drow-hdr.good {border-left:3px solid var(--cyan);}
-.drow-hdr.poor {border-left:3px solid var(--red);}
+.drow-hdr.great   {border-left:3px solid var(--green);}
+.drow-hdr.good    {border-left:3px solid #fbbf24;}
+.drow-hdr.mediocre{border-left:3px solid #fb923c;}
+.drow-hdr.poor    {border-left:3px solid var(--red);}
 
 .drow-date{font-family:var(--display);font-size:15px;letter-spacing:.06em;flex:1;color:var(--text);}
 .drow-verdict{font-size:10px;color:var(--text2);font-family:var(--mono);}
@@ -4865,7 +4870,7 @@ function setDayOffset(offset) {
   }
 }
 function fullLabel(d){ return d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'}); }
-function cellClass(sc){ return sc>=65?'great':sc>=40?'good':'poor'; }
+function cellClass(sc){ return sc>=75?'great':sc>=55?'good':sc>=35?'mediocre':'poor'; }
 function verdict(sc){
   if(sc>=80) return '🟢 '+t('verdict.favorable');
   if(sc>=65) return t('verdict.favorable');
@@ -4873,7 +4878,7 @@ function verdict(sc){
   if(sc>=25) return t('verdict.mediocre');
   return t('verdict.mauvais');
 }
-function scoreColor(sc){ return sc>=65?'var(--green)':sc>=40?'var(--amber)':'var(--red)'; }
+function scoreColor(sc){ return sc>=75?'var(--green)':sc>=55?'var(--amber)':sc>=35?'var(--orange)':'var(--red)'; }
 
 function getScore(fc, di) {
   if (_timePeriod === 'soir') {
@@ -5132,7 +5137,7 @@ function openScoreModal(dataB64) {
     </div>`;
   })() : '';
 
-  const scColor = score >= 80 ? '#4ade80' : score >= 65 ? 'var(--cyan)' : score >= 45 ? 'var(--amber)' : 'var(--red)';
+  const scColor = score >= 75 ? '#4ade80' : score >= 55 ? 'var(--amber)' : score >= 35 ? '#f97316' : 'var(--red)';
 
   document.getElementById('score-modal-body').innerHTML = `
     <div class="score-modal-title">🔭 ANALYSE DU SCORE — ${spotName} · ${dateLabel}</div>
@@ -6490,9 +6495,10 @@ function highlightSpotLine(spotId) {
 
 function scoreColor(score) {
   if (score === null || score === undefined) return '#38bdf8';
-  if (score >= 60) return '#22c55e';
-  if (score >= 35) return '#f59e0b';
-  return '#ef4444';
+  if (score >= 75) return '#22c55e';   // Très bon / Exceptionnel
+  if (score >= 55) return '#f59e0b';   // Correct (orange)
+  if (score >= 35) return '#f97316';   // Médiocre (orange foncé)
+  return '#ef4444';                    // Mauvais / Bloqué
 }
 
 function initVLDMap() {
