@@ -5231,7 +5231,7 @@ function openIRModal(dataB64) {
       <span class="ir-param-icon">${icon}</span>
       <div class="ir-param-body">
         <div class="ir-param-name">${name}</div>
-        <div class="ir-param-val" style="color:${c}">${val !== null ? Math.round(val*10)/10 : '?'}${unit} — ${pts}/${max} pts</div>
+        <div class="ir-param-val" style="color:${c}">${val !== null && val !== '' ? Math.round(val*10)/10 + unit : ''}${val !== null && val !== '' ? ' — ' : ''}${pts}/${max} pts</div>
         <div class="ir-param-verdict">${verdict}</div>
       </div>
     </div>`;
@@ -5263,7 +5263,7 @@ function openIRModal(dataB64) {
     <div class="sep-section sep-good">📊 Paramètres atmosphériques IR</div>
     ${fmtParam('💧', 'Vapeur eau colonne (PWV)', pwv, ' mm', pwvPts, 40, pwvVerdict)}
     ${fmtParam('🌡️', 'Sécheresse T-Td (spread)', spread, '°C', spreadPts, 25, spreadVerdict)}
-    ${fmtParam('👁️', 'Visibilité obs.', vis, ' km', visPts, 20, visVerdict)}
+    ${fmtParam('👁️', 'Visibilité obs.', vis > 0 ? '' : '', '', visPts, 20, visVerdict)}
     ${fmtParam('☁️', 'Nébulosité basse', cl, '%', cloudPts, 15, cloudVerdict)}
     <div class="sep-section sep-bad">💡 Conseil terrain</div>
     <div class="sep-item" style="color:var(--text2);line-height:1.6;font-size:14px;font-family:'Inter','Helvetica Neue',sans-serif">${conseil}</div>
