@@ -2730,6 +2730,11 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
         background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
         color:var(--text3);border-radius:7px;cursor:pointer;transition:all .2s;
       ">📐 PROFIL</button>
+      <button id="terrain-sub-panorama" onclick="switchTerrainSub('panorama')" style="
+        flex:1;padding:.45rem .5rem;font-family:var(--display);font-size:10px;letter-spacing:.08em;
+        background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
+        color:var(--text3);border-radius:7px;cursor:pointer;transition:all .2s;
+      ">🗻 PANORAMA</button>
     </div>
 
     <!-- ── VUE BOUSSOLE ── -->
@@ -3016,6 +3021,66 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
       <div id="profil-stats" style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-top:.75rem;"></div>
 
     </div>
+
+    <!-- ── VUE PANORAMA ── -->
+    <div id="terrain-view-panorama" style="display:none;padding:.25rem 0;">
+
+      <!-- Select spot -->
+      <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem;flex-wrap:wrap;">
+        <span style="font-family:var(--mono);font-size:11px;color:var(--text3);">Spot :</span>
+        <select id="panorama-spot-select" onchange="onPanoramaSpotChange(this.value)" style="
+          flex:1;background:var(--bg-input);border:1px solid var(--border2);
+          color:var(--text);font-family:var(--mono);font-size:11px;
+          padding:.35rem .6rem;border-radius:6px;outline:none;
+        ">
+          <option value="">— Sélectionner un spot —</option>
+        </select>
+      </div>
+
+      <!-- Bouton pleine largeur -->
+      <button id="panorama-launch-btn" onclick="launchPanorama()" style="
+        display:block;width:100%;padding:.75rem 1rem;
+        font-family:var(--display);font-size:14px;letter-spacing:.1em;
+        background:linear-gradient(135deg,rgba(0,212,255,.15),rgba(0,100,160,.1));
+        border:1px solid rgba(0,212,255,.35);border-radius:10px;
+        color:var(--cyan);cursor:pointer;transition:all .2s;
+        box-shadow:0 4px 16px rgba(0,212,255,.1);
+        margin-bottom:.75rem;
+      ">🗻 AFFICHER LE PANORAMA</button>
+
+      <!-- Fenêtre iframe intégrée -->
+      <div id="panorama-frame-wrap" style="
+        display:none;
+        width:100%;border-radius:10px;overflow:hidden;
+        border:1px solid rgba(0,212,255,.2);
+        background:#111;position:relative;
+      ">
+        <div style="
+          display:flex;align-items:center;justify-content:space-between;
+          padding:.4rem .75rem;background:rgba(0,20,40,.9);
+          border-bottom:1px solid rgba(0,212,255,.15);
+        ">
+          <span id="panorama-frame-label" style="font-family:var(--mono);font-size:10px;color:var(--cyan);">udeuschle.de — Panorama topographique</span>
+          <button onclick="closePanoramaFrame()" style="
+            background:none;border:none;color:var(--text3);
+            font-size:16px;cursor:pointer;line-height:1;padding:0 .2rem;
+          ">✕</button>
+        </div>
+        <iframe id="panorama-iframe"
+          src=""
+          style="width:100%;height:500px;border:none;display:block;"
+          sandbox="allow-scripts allow-same-origin allow-forms"
+          loading="lazy">
+        </iframe>
+      </div>
+
+      <!-- Info si aucun spot -->
+      <div id="panorama-no-spot-msg" style="
+        text-align:center;padding:2rem 1rem;
+        font-family:var(--mono);font-size:11px;color:var(--text3);
+      ">Sélectionne un spot pour générer le panorama depuis le point d'observation.</div>
+
+    </div>
   </div>
 </div>
 
@@ -3218,8 +3283,8 @@ function toggleCheck(label) {
 }
 
 function switchTerrainSub(sub) {
-  const views = { carte: 'terrain-view-carte', checklist: 'terrain-view-checklist', profil: 'terrain-view-profil' };
-  const btns  = { carte: 'terrain-sub-carte',  checklist: 'terrain-sub-checklist',  profil: 'terrain-sub-profil' };
+  const views = { carte: 'terrain-view-carte', checklist: 'terrain-view-checklist', profil: 'terrain-view-profil', panorama: 'terrain-view-panorama' };
+  const btns  = { carte: 'terrain-sub-carte',  checklist: 'terrain-sub-checklist',  profil: 'terrain-sub-profil', panorama: 'terrain-sub-panorama' };
   Object.keys(views).forEach(k => {
     const v = document.getElementById(views[k]);
     const b = document.getElementById(btns[k]);
@@ -3232,6 +3297,8 @@ function switchTerrainSub(sub) {
   });
   // Peupler le select profil à l'ouverture
   if (sub === 'profil') populateProfilSelect();
+  // Peupler le select panorama à l'ouverture
+  if (sub === 'panorama') populatePanoramaSelect();
 }
 
 let _profilSpot = null;
@@ -3249,6 +3316,69 @@ function populateProfilSelect() {
     sel.appendChild(opt);
   });
 }
+
+// ── PANORAMA UDEUSCHLE ──────────────────────────────────────
+let _panoramaSpot = null;
+
+function populatePanoramaSelect() {
+  const sel = document.getElementById('panorama-spot-select');
+  if (!sel || sel.options.length > 1) return;
+  if (typeof SPOTS === 'undefined') { setTimeout(populatePanoramaSelect, 300); return; }
+  SPOTS.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = s.name + ' → ' + s.target + ' (' + s.dist_km + ' km)';
+    sel.appendChild(opt);
+  });
+}
+
+function onPanoramaSpotChange(spotId) {
+  _panoramaSpot = spotId ? SPOTS.find(s => s.id === spotId) : null;
+  const msg = document.getElementById('panorama-no-spot-msg');
+  const btn = document.getElementById('panorama-launch-btn');
+  const wrap = document.getElementById('panorama-frame-wrap');
+  if (msg) msg.style.display = _panoramaSpot ? 'none' : 'block';
+  if (btn) btn.disabled = !_panoramaSpot;
+  if (btn) btn.style.opacity = _panoramaSpot ? '1' : '0.45';
+  // Fermer l'iframe si on change de spot
+  if (wrap) wrap.style.display = 'none';
+}
+
+function launchPanorama() {
+  if (!_panoramaSpot) return;
+  const spot = _panoramaSpot;
+  const lat = spot.obs.lat.toFixed(6);
+  const lng = spot.obs.lon.toFixed(6);
+  const alt = spot.obs.alt || 'auto';
+  // Azimut vers la cible
+  const az = typeof spot.azimuth !== 'undefined' ? spot.azimuth : '';
+  // Portée en km (distance du spot)
+  const range = spot.dist_km ? Math.min(spot.dist_km + 50, 500) : 300;
+
+  const url = `https://www.udeuschle.de/panoramas/makepanoramas_en.htm` +
+    `?lat=${lat}&lng=${lng}&alt=${alt}` +
+    (az !== '' ? `&dir=${az}` : '') +
+    `&range=${range}&zoom=1&hext=60&resolution=20&elexagg=1.0`;
+
+  const iframe = document.getElementById('panorama-iframe');
+  const wrap   = document.getElementById('panorama-frame-wrap');
+  const label  = document.getElementById('panorama-frame-label');
+
+  if (iframe) iframe.src = url;
+  if (label)  label.textContent = `udeuschle.de — ${spot.name} (${lat}, ${lng})`;
+  if (wrap)   wrap.style.display = 'block';
+
+  // Scroll vers l'iframe
+  setTimeout(() => wrap && wrap.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+}
+
+function closePanoramaFrame() {
+  const wrap   = document.getElementById('panorama-frame-wrap');
+  const iframe = document.getElementById('panorama-iframe');
+  if (wrap)   wrap.style.display = 'none';
+  if (iframe) iframe.src = '';
+}
+// ────────────────────────────────────────────────────────────
 
 function loadTerrainProfil(spotId) {
   if (!spotId) return;
