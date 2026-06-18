@@ -1047,6 +1047,8 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
 .dcell.empty{background:transparent;color:var(--text3);border:1px dashed rgba(255,255,255,.07);}
 .dcell.best-day::after{content:'★';position:absolute;top:-5px;right:-5px;font-size:7px;color:var(--green);}
 @keyframes blink{0%,100%{opacity:.3}50%{opacity:1}}
+.ir-dot{position:absolute;top:-4px;left:-4px;width:8px;height:8px;border-radius:50%;background:#00ffcc;box-shadow:0 0 6px #00ffcc,0 0 12px rgba(0,255,204,.5);animation:ir-pulse 1.6s ease-in-out infinite;}
+@keyframes ir-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
 
 /* ═══════════════════════════════════════════════════
    SPOT CARDS — Glassmorphism premium
@@ -5187,7 +5189,9 @@ function renderMatrix(loading) {
         if(loading) return `<td><div class="dcell loading">…</div></td>`;
         if(!fc) return `<td><div class="dcell empty">—</div></td>`;
         const sc=getScore(fc,di), isBest=di===bestDay;
-        return `<td><div class="dcell ${cellClass(sc)} ${isBest?'best-day':''}">${sc}</div></td>`;
+        const irSc=getIRScoreVal(fc,di);
+        const irDot=(sc<75 && irSc>=75)?'<span class="ir-dot"></span>':'';
+        return `<td><div class="dcell ${cellClass(sc)} ${isBest?'best-day':''}">${irDot}${sc}</div></td>`;
       }).join('')}
     </tr>`;
   }).join('');
