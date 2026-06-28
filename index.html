@@ -921,12 +921,13 @@ body::after {
 ═══════════════════════════════════════════════════ */
 .radar-scene {
   position:relative;
-  width:100%; height:320px;
+  width:100%; height:200px;
   margin:1.25rem 0 .5rem;
   border-radius:18px;
   overflow:hidden;
   border:1px solid rgba(0,212,255,.25);
   box-shadow:0 0 60px rgba(0,212,255,.15), inset 0 1px 0 rgba(255,255,255,.03);
+  background:#050b12;
 }
 #radar-map {
   position:absolute; top:0; left:0;
@@ -1884,8 +1885,8 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
   <!-- Image de fond assombrie -->
   <div id="hero-img" style="
     position:absolute; inset:0;
-    background: url('https://raw.githubusercontent.com/saidbouzii/vld-hub/main/bd080150-ce9f-4169-85ac-f77dde01f6cb.png') center center / cover no-repeat;
-    opacity: 0.18;
+    background: url('https://raw.githubusercontent.com/saidbouzii/vld-hub/main/ChatGPT%20Image%206%20juin%202026%2C%2017_58_40.png') center top / cover no-repeat;
+    opacity: 0.28;
     filter: brightness(0.7) saturate(0.85);
   "></div>
   <!-- Dégradé de fondu haut (pour que le header reste lisible) -->
@@ -1901,116 +1902,7 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
       rgba(2,6,8,0.90) 100%
     );
   "></div>
-  <!-- Canvas particules nuages -->
-  <canvas id="cloud-canvas" style="position:absolute;inset:0;width:100%;height:100%;"></canvas>
 </div>
-
-<script>
-// ══════════════════════════════════════════════
-// PARTICULES ATMOSPHÉRIQUES — calées sur l'image
-// Zones d'après analyse de l'image :
-//   • Couche haute (nuages dorés)  : 28%–42% de hauteur écran
-//   • Lit principal (brume épaisse): 42%–65%
-//   • Volutes basses (brouillard)  : 62%–72%
-// ══════════════════════════════════════════════
-(function initCloudParticles() {
-  const canvas = document.getElementById('cloud-canvas');
-  const ctx    = canvas.getContext('2d');
-
-  function resize() {
-    canvas.width  = window.innerWidth;
-    canvas.height = window.innerHeight;
-  }
-  resize();
-  window.addEventListener('resize', () => { resize(); initParticles(); });
-
-  // ── Définition des couches ──
-  const LAYERS = [
-    // { yMin, yMax, color_warm, alpha_max, size_min, size_max, speed, count }
-    // Couche 0 — nuages dorés hauts (teinte chaude du soleil)
-    { yMin:0.27, yMax:0.41, r:220, g:165, b:80,  alphaMax:0.045, sMin:60,  sMax:130, speed:0.12, count:14 },
-    // Couche 1 — lit de brume principal (blanc/gris-bleu)
-    { yMin:0.40, yMax:0.57, r:200, g:190, b:180, alphaMax:0.055, sMin:90,  sMax:200, speed:0.09, count:22 },
-    // Couche 2 — brume épaisse centrale (plus dense, légèrement orangée)
-    { yMin:0.46, yMax:0.63, r:210, g:175, b:130, alphaMax:0.060, sMin:110, sMax:220, speed:0.07, count:18 },
-    // Couche 3 — volutes basses/brouillard de fond
-    { yMin:0.60, yMax:0.70, r:180, g:175, b:170, alphaMax:0.040, sMin:70,  sMax:150, speed:0.11, count:12 },
-  ];
-
-  let particles = [];
-
-  class CloudPuff {
-    constructor(layer, init) {
-      this.layer = layer;
-      this.reset(init);
-    }
-
-    reset(init = false) {
-      const W = canvas.width, H = canvas.height;
-      const l = this.layer;
-      const bandH = (l.yMax - l.yMin) * H;
-
-      this.y     = l.yMin * H + Math.random() * bandH;
-      this.baseY = this.y;
-      this.x     = init ? Math.random() * W : -l.sMax * 2;
-      this.r     = l.sMin + Math.random() * (l.sMax - l.sMin);
-      this.vx    = l.speed * (0.6 + Math.random() * 0.8);
-      this.alpha = 0;
-      this.targetAlpha = l.alphaMax * (0.5 + Math.random() * 0.5);
-      this.fadeIn = true;
-      this.oscFreq = 0.00025 + Math.random() * 0.0003;
-      this.oscAmp  = 3  + Math.random() * 6;
-      this.oscOff  = Math.random() * Math.PI * 2;
-      // Couleur légèrement variée par particule
-      this.r_col = Math.round(l.r + (Math.random() - 0.5) * 20);
-      this.g_col = Math.round(l.g + (Math.random() - 0.5) * 20);
-      this.b_col = Math.round(l.b + (Math.random() - 0.5) * 20);
-    }
-
-    update(t) {
-      this.x += this.vx;
-      this.y = this.baseY + Math.sin(t * this.oscFreq + this.oscOff) * this.oscAmp;
-
-      if (this.fadeIn) {
-        this.alpha = Math.min(this.alpha + 0.00025, this.targetAlpha);
-        if (this.alpha >= this.targetAlpha * 0.95) this.fadeIn = false;
-      }
-      if (this.x - this.r > canvas.width + 60) this.reset(false);
-    }
-
-    draw() {
-      const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.r);
-      grad.addColorStop(0,   `rgba(${this.r_col},${this.g_col},${this.b_col},${this.alpha})`);
-      grad.addColorStop(0.45,`rgba(${this.r_col},${this.g_col},${this.b_col},${this.alpha * 0.5})`);
-      grad.addColorStop(1,   `rgba(${this.r_col},${this.g_col},${this.b_col},0)`);
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  function initParticles() {
-    particles = [];
-    LAYERS.forEach(l => {
-      for (let i = 0; i < l.count; i++) {
-        particles.push(new CloudPuff(l, true));
-      }
-    });
-  }
-
-  initParticles();
-
-  let lastT = 0;
-  function loop(t) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    // Dessiner par couche (0 = plus loin = premier)
-    particles.forEach(p => { p.update(t); p.draw(); });
-    requestAnimationFrame(loop);
-  }
-  requestAnimationFrame(loop);
-})();
-</script>
 
 <div class="wrap">
 
@@ -2461,13 +2353,13 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
   <!-- RADAR SCENE -->
   <div class="radar-scene" id="radar-scene">
     <div id="radar-map"></div>
-    <canvas id="radar-canvas"></canvas>
 
     <img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/ChatGPT%20Image%206%20juin%202026%2C%2017_58_40.png" style="
       position: absolute;
       top: 0; left: 0;
       width: 100%; height: 100%;
-      object-fit: cover;
+      object-fit: contain;
+      object-position: center center;
       pointer-events: none;
       z-index: 0;
       opacity: 1;
@@ -9356,7 +9248,6 @@ function initRadarOnce() {
   }
   _radarInited = true;
 
-  // Carte plus large, centrée Europe/Méditerranée
   const map = L.map('radar-map', {
     center: [44, 8], zoom: 4,
     zoomControl: false, attributionControl: false,
@@ -9365,32 +9256,16 @@ function initRadarOnce() {
   });
   window._radarMap = map;
 
-  // Tuile CartoDB Voyager — plus détaillée et plus lumineuse
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png', {
     maxZoom: 6, opacity: 1,
     subdomains: 'abcd'
   }).addTo(map);
 
-  // Attendre que la carte soit prête avant de placer les markers
   map.whenReady(() => {
-
-    // Antenne radar centrale — Méditerranée
-    const RADAR_ANCHOR = { lat: 36.5, lon: 12.0 };
-    const radarEl = document.createElement('div');
-    radarEl.style.cssText = 'font-size:20px;line-height:1;filter:drop-shadow(0 0 8px rgba(0,216,255,.9));';
-    radarEl.textContent = '📡';
-    L.marker([RADAR_ANCHOR.lat, RADAR_ANCHOR.lon], {
-      icon: L.divIcon({ html: radarEl, className:'', iconAnchor:[10,10] }),
-      interactive: false
-    }).addTo(map);
-
-    // Points rouges clignotants sur les SPOTS — dédoublonnés (tolérance 0.15°)
     if (typeof SPOTS !== 'undefined') {
-      const placed = []; // liste des {lat,lon} déjà placés
-
+      const placed = [];
       SPOTS.forEach(s => {
         const lat = s.obs.lat, lon = s.obs.lon;
-        // Vérifier si un point proche existe déjà (tolérance 0.15°)
         const tooClose = placed.some(p =>
           Math.abs(p.lat - lat) < 0.15 && Math.abs(p.lon - lon) < 0.15
         );
@@ -9404,7 +9279,6 @@ function initRadarOnce() {
           'border-radius:50%',
           'background:rgba(255,40,40,1)',
           'box-shadow:0 0 6px 2px rgba(255,40,40,0.7)',
-          'animation:radarDotBlink 1.4s ease-in-out infinite',
           'cursor:default',
           'position:relative',
         ].join(';');
@@ -9415,194 +9289,7 @@ function initRadarOnce() {
         }).addTo(map);
       });
     }
-
-    // Canvas overlay
-    const canvas = document.getElementById('radar-canvas');
-    const ctx = canvas.getContext('2d');
-    let W, H;
-
-    function resize() {
-      const rect = canvas.parentElement.getBoundingClientRect();
-      canvas.width  = Math.round(rect.width  * devicePixelRatio);
-      canvas.height = Math.round(rect.height * devicePixelRatio);
-      W = rect.width; H = rect.height;
-      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-    }
-    resize();
-    window.addEventListener('resize', () => { resize(); map.invalidateSize(); });
-
-    function ll2px(lat, lon) {
-      const pt = map.latLngToContainerPoint([lat, lon]);
-      return { x: pt.x, y: pt.y };
-    }
-
-    // ── Sweep (faisceau tournant) ──────────────────────
-    let sweepAngle = 0;          // angle courant en radians
-    const SWEEP_SPEED = 0.0014;  // rad/ms — ~une rotation toutes les 4.5s
-
-    // ── Rings (ondes concentriques) ────────────────────
-    const rings = [];
-    let lastRingTs = 0;
-    let lastTs = 0;
-
-    // ── Échos lumineux (blips) ─────────────────────────
-    const blips = [];
-    function spawnBlips(cx, cy) {
-      // Quelques petits points au hasard dans le balayage
-      for (let i = 0; i < 4; i++) {
-        const angle = sweepAngle - Math.random() * 0.35;
-        const dist  = 30 + Math.random() * Math.min(W, H) * 0.38;
-        blips.push({
-          x: cx + Math.cos(angle) * dist,
-          y: cy + Math.sin(angle) * dist,
-          alpha: 0.7 + Math.random() * 0.3,
-          life: 1.0,
-        });
-      }
-    }
-    // Garder max 40 blips
-    function pruneBlips() { if (blips.length > 40) blips.splice(0, blips.length - 40); }
-
-    function spawnRing(cx, cy) {
-      rings.push({ x: cx, y: cy, r: 6, maxR: Math.max(W, H) * 0.6, alpha: 0.6 });
-    }
-
-    function draw(ts) {
-      const dt = Math.min(ts - lastTs, 50);
-      lastTs = ts;
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-
-      // Centre du radar = position antenne sur le canvas
-      const anchor = ll2px(RADAR_ANCHOR.lat, RADAR_ANCHOR.lon);
-      const cx = anchor.x, cy = anchor.y;
-      const maxR = Math.max(W, H) * 0.62;
-
-      // Vignette cyan sombre
-      const vig = ctx.createRadialGradient(W/2, H/2, H*0.1, W/2, H/2, H*0.95);
-      vig.addColorStop(0, 'rgba(0,0,0,0)');
-      vig.addColorStop(1, 'rgba(0,8,18,0.72)');
-      ctx.fillStyle = vig;
-      ctx.fillRect(0, 0, W, H);
-
-      // Teinte cyan très légère
-      ctx.fillStyle = 'rgba(0,20,40,0.12)';
-      ctx.fillRect(0, 0, W, H);
-
-      // ── Sweep ──
-      sweepAngle += SWEEP_SPEED * dt;
-
-      // Traînée lumineuse derrière le faisceau (dégradé angulaire)
-      const TRAIL = Math.PI * 0.38; // ~68° de traînée
-      const grad = ctx.createConicalGradient
-        ? ctx.createConicalGradient(cx, cy, sweepAngle - TRAIL, sweepAngle)
-        : null;
-
-      if (grad) {
-        grad.addColorStop(0, 'rgba(0,216,255,0)');
-        grad.addColorStop(1, 'rgba(0,216,255,0.12)');
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.arc(cx, cy, maxR, sweepAngle - TRAIL, sweepAngle);
-        ctx.closePath();
-        ctx.fillStyle = grad;
-        ctx.fill();
-        ctx.restore();
-      } else {
-        // Fallback : traînée approximée avec plusieurs secteurs
-        const steps = 14;
-        for (let s = 0; s < steps; s++) {
-          const a0 = sweepAngle - TRAIL + (TRAIL / steps) * s;
-          const a1 = sweepAngle - TRAIL + (TRAIL / steps) * (s + 1);
-          const alpha = (s / steps) * 0.14;
-          ctx.save();
-          ctx.beginPath();
-          ctx.moveTo(cx, cy);
-          ctx.arc(cx, cy, maxR, a0, a1);
-          ctx.closePath();
-          ctx.fillStyle = `rgba(0,216,255,${alpha.toFixed(3)})`;
-          ctx.fill();
-          ctx.restore();
-        }
-      }
-
-      // Ligne du faisceau
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.lineTo(
-        cx + Math.cos(sweepAngle) * maxR,
-        cy + Math.sin(sweepAngle) * maxR
-      );
-      const lineGrad = ctx.createLinearGradient(
-        cx, cy,
-        cx + Math.cos(sweepAngle) * maxR,
-        cy + Math.sin(sweepAngle) * maxR
-      );
-      lineGrad.addColorStop(0, 'rgba(0,216,255,0.9)');
-      lineGrad.addColorStop(0.6, 'rgba(0,216,255,0.4)');
-      lineGrad.addColorStop(1, 'rgba(0,216,255,0)');
-      ctx.strokeStyle = lineGrad;
-      ctx.lineWidth = 2.2;
-      ctx.shadowColor = '#00d8ff';
-      ctx.shadowBlur = 10;
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-      ctx.restore();
-
-      // ── Anneaux concentriques ──
-      for (let i = rings.length - 1; i >= 0; i--) {
-        const ring = rings[i];
-        ring.r += dt * 0.022;
-        ring.alpha = 0.58 * Math.pow(1 - ring.r / ring.maxR, 1.3);
-        if (ring.alpha <= 0.004) { rings.splice(i, 1); continue; }
-
-        for (let k = 0; k < 3; k++) {
-          const kr = ring.r - k * 14;
-          if (kr < 0) continue;
-          const ka = ring.alpha * (1 - k * 0.28);
-          ctx.save();
-          ctx.shadowColor = '#00d8ff';
-          ctx.shadowBlur = k === 0 ? 8 : 3;
-          ctx.beginPath();
-          ctx.arc(ring.x, ring.y, kr, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(0,216,255,${ka.toFixed(3)})`;
-          ctx.lineWidth = k === 0 ? 1.8 : 0.9;
-          ctx.stroke();
-          ctx.restore();
-        }
-      }
-
-      // ── Échos / blips ──
-      for (let i = blips.length - 1; i >= 0; i--) {
-        const b = blips[i];
-        b.life -= dt * 0.0012;
-        if (b.life <= 0) { blips.splice(i, 1); continue; }
-        const ba = b.alpha * Math.min(b.life, 1);
-        ctx.save();
-        ctx.shadowColor = '#00d8ff';
-        ctx.shadowBlur = 6;
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, 2.5, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(0,216,255,${(ba * 0.9).toFixed(3)})`;
-        ctx.fill();
-        ctx.restore();
-      }
-
-      // Spawn anneau toutes les 2s
-      if (ts - lastRingTs > 2000) {
-        lastRingTs = ts;
-        spawnRing(cx, cy);
-        spawnBlips(cx, cy);
-        pruneBlips();
-      }
-
-      requestAnimationFrame(draw);
-    }
-
-    setTimeout(() => { resize(); requestAnimationFrame(draw); }, 400);
+    window.addEventListener('resize', () => { map.invalidateSize(); });
   });
 }
 </script>
