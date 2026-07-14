@@ -1901,7 +1901,8 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
       rgba(2,6,8,0.90) 100%
     );
   "></div>
-  <!-- Canvas particules supprimé -->
+  <!-- Canvas particules nuages -->
+  <canvas id="cloud-canvas" style="position:absolute;inset:0;width:100%;height:100%;"></canvas>
 </div>
 
 <script>
@@ -1998,7 +1999,16 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
     });
   }
 
-  // Animation particules désactivée
+  initParticles();
+
+  let lastT = 0;
+  function loop(t) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Dessiner par couche (0 = plus loin = premier)
+    particles.forEach(p => { p.update(t); p.draw(); });
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
 })();
 </script>
 
@@ -2407,7 +2417,7 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
     <span class="time-slicer-label">🌅 FENÊTRE HORAIRE</span>
     <select id="time-window" onchange="setTimePeriod('matin'); if(Object.keys(forecasts).length>0){renderMatrix(false);renderCards(false);renderBanner();}">
       <option value="now" id="tw-now">⚡ Maintenant (aujourd'hui)</option>
-      <option value="avg">Moyenne matin (5h-11h)</option>
+      <option value="avg">⭐ (Meilleure clarté)</option>
       <option value="0">🌅 Lever soleil exact</option>
       <option value="0.5">🌅 +30 min</option>
       <option value="1" selected>🌅 +1h ⭐ (Meilleure clarté)</option>
@@ -2451,16 +2461,17 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
   <!-- RADAR SCENE -->
   <div class="radar-scene" id="radar-scene">
     <div id="radar-map"></div>
+    <canvas id="radar-canvas"></canvas>
+
     <img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/ChatGPT%20Image%206%20juin%202026%2C%2017_58_40.png" style="
       position: absolute;
       top: 0; left: 0;
       width: 100%; height: 100%;
       object-fit: cover;
-      object-position: center 20%;
       pointer-events: none;
-      z-index: 2;
+      z-index: 0;
       opacity: 1;
-    " alt="SKY-RANGE banner">
+    " alt="world map">
   </div>
 
   <!-- SECTION MATRIX -->
@@ -5111,7 +5122,7 @@ function refractionBadge(elev) {
 function renderMatrix(loading) {
   const days=getDays();
   const tw = document.getElementById('time-window')?.value || '1';
-  const twLabels = {'avg':'5-11h','0':'Lever','0.5':'+30m','1':'+1h','1.5':'+1h30','2':'+2h','3':'+3h','4':'+4h','5':'+5h'};
+  const twLabels = {'avg':'⭐','0':'Lever','0.5':'+30m','1':'+1h','1.5':'+1h30','2':'+2h','3':'+3h','4':'+4h','5':'+5h'};
   const eveLabels = {'eve-5':'-5h','eve-4':'-4h','eve-3':'-3h','eve-2':'-2h','eve-1':'-1h'};
   let twLbl;
   if (_timePeriod === 'soir') {
@@ -8338,7 +8349,7 @@ const I18N = {
     'ts.label': '🌅 FENÊTRE HORAIRE',
     'ts.sunrise.pending': '⏳ Charger prévisions',
     'tw.now': '⚡ Maintenant',
-    'tw.avg': 'Moyenne matin (5h-11h)',
+    'tw.avg': '⭐ Meilleure clarté',
     'tw.0': '🌅 Lever soleil exact',
     'tw.0.5': '🌅 +30 min',
     'tw.1': '🌅 +1h ⭐ (Meilleure clarté)',
@@ -8483,7 +8494,7 @@ const I18N = {
     'ts.label': '🌅 TIME WINDOW',
     'ts.sunrise.pending': '⏳ Load forecast',
     'tw.now': '⚡ Now',
-    'tw.avg': 'Morning average (5h-11h)',
+    'tw.avg': '⭐ Best clarity',
     'tw.0': '🌅 Exact sunrise',
     'tw.0.5': '🌅 +30 min',
     'tw.1': '🌅 +1h ⭐ (Mirage peak)',
@@ -8614,7 +8625,7 @@ const I18N = {
     'ts.label': '🌅 VENTANA HORARIA',
     'ts.sunrise.pending': '⏳ Cargar previsión',
     'tw.now': '⚡ Ahora',
-    'tw.avg': 'Media mañana (5h-11h)',
+    'tw.avg': '⭐ Mejor claridad',
     'tw.0': '🌅 Amanecer exacto',
     'tw.0.5': '🌅 +30 min',
     'tw.1': '🌅 +1h ⭐ (Pico espejismo)',
@@ -9345,6 +9356,7 @@ function initRadarOnce() {
   }
   _radarInited = true;
 
+  // Carte plus large, centrée Europe/Méditerranée
   const map = L.map('radar-map', {
     center: [44, 8], zoom: 4,
     zoomControl: false, attributionControl: false,
@@ -9353,23 +9365,244 @@ function initRadarOnce() {
   });
   window._radarMap = map;
 
+  // Tuile CartoDB Voyager — plus détaillée et plus lumineuse
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png', {
-    maxZoom: 6, opacity: 0.35, subdomains: 'abcd'
+    maxZoom: 6, opacity: 1,
+    subdomains: 'abcd'
   }).addTo(map);
 
+  // Attendre que la carte soit prête avant de placer les markers
   map.whenReady(() => {
+
+    // Antenne radar centrale — Méditerranée
+    const RADAR_ANCHOR = { lat: 36.5, lon: 12.0 };
+    const radarEl = document.createElement('div');
+    radarEl.style.cssText = 'font-size:20px;line-height:1;filter:drop-shadow(0 0 8px rgba(0,216,255,.9));';
+    radarEl.textContent = '📡';
+    L.marker([RADAR_ANCHOR.lat, RADAR_ANCHOR.lon], {
+      icon: L.divIcon({ html: radarEl, className:'', iconAnchor:[10,10] }),
+      interactive: false
+    }).addTo(map);
+
+    // Points rouges clignotants sur les SPOTS — dédoublonnés (tolérance 0.15°)
     if (typeof SPOTS !== 'undefined') {
-      const placed = [];
+      const placed = []; // liste des {lat,lon} déjà placés
+
       SPOTS.forEach(s => {
         const lat = s.obs.lat, lon = s.obs.lon;
-        if (placed.some(p => Math.abs(p.lat-lat)<0.15 && Math.abs(p.lon-lon)<0.15)) return;
-        placed.push({lat, lon});
+        // Vérifier si un point proche existe déjà (tolérance 0.15°)
+        const tooClose = placed.some(p =>
+          Math.abs(p.lat - lat) < 0.15 && Math.abs(p.lon - lon) < 0.15
+        );
+        if (tooClose) return;
+        placed.push({ lat, lon });
+
         const el = document.createElement('div');
-        el.style.cssText = 'width:8px;height:8px;border-radius:50%;background:rgba(255,40,40,1);box-shadow:0 0 6px 2px rgba(255,40,40,0.7);';
-        L.marker([lat, lon], { icon: L.divIcon({html:el,className:'',iconAnchor:[4,4]}), interactive:false }).addTo(map);
+        el.style.cssText = [
+          'width:8px',
+          'height:8px',
+          'border-radius:50%',
+          'background:rgba(255,40,40,1)',
+          'box-shadow:0 0 6px 2px rgba(255,40,40,0.7)',
+          'animation:radarDotBlink 1.4s ease-in-out infinite',
+          'cursor:default',
+          'position:relative',
+        ].join(';');
+
+        L.marker([lat, lon], {
+          icon: L.divIcon({ html: el, className:'', iconAnchor:[4,4] }),
+          interactive: false
+        }).addTo(map);
       });
     }
-    window.addEventListener('resize', () => { map.invalidateSize(); });
+
+    // Canvas overlay
+    const canvas = document.getElementById('radar-canvas');
+    const ctx = canvas.getContext('2d');
+    let W, H;
+
+    function resize() {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width  = Math.round(rect.width  * devicePixelRatio);
+      canvas.height = Math.round(rect.height * devicePixelRatio);
+      W = rect.width; H = rect.height;
+      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    }
+    resize();
+    window.addEventListener('resize', () => { resize(); map.invalidateSize(); });
+
+    function ll2px(lat, lon) {
+      const pt = map.latLngToContainerPoint([lat, lon]);
+      return { x: pt.x, y: pt.y };
+    }
+
+    // ── Sweep (faisceau tournant) ──────────────────────
+    let sweepAngle = 0;          // angle courant en radians
+    const SWEEP_SPEED = 0.0014;  // rad/ms — ~une rotation toutes les 4.5s
+
+    // ── Rings (ondes concentriques) ────────────────────
+    const rings = [];
+    let lastRingTs = 0;
+    let lastTs = 0;
+
+    // ── Échos lumineux (blips) ─────────────────────────
+    const blips = [];
+    function spawnBlips(cx, cy) {
+      // Quelques petits points au hasard dans le balayage
+      for (let i = 0; i < 4; i++) {
+        const angle = sweepAngle - Math.random() * 0.35;
+        const dist  = 30 + Math.random() * Math.min(W, H) * 0.38;
+        blips.push({
+          x: cx + Math.cos(angle) * dist,
+          y: cy + Math.sin(angle) * dist,
+          alpha: 0.7 + Math.random() * 0.3,
+          life: 1.0,
+        });
+      }
+    }
+    // Garder max 40 blips
+    function pruneBlips() { if (blips.length > 40) blips.splice(0, blips.length - 40); }
+
+    function spawnRing(cx, cy) {
+      rings.push({ x: cx, y: cy, r: 6, maxR: Math.max(W, H) * 0.6, alpha: 0.6 });
+    }
+
+    function draw(ts) {
+      const dt = Math.min(ts - lastTs, 50);
+      lastTs = ts;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+
+      // Centre du radar = position antenne sur le canvas
+      const anchor = ll2px(RADAR_ANCHOR.lat, RADAR_ANCHOR.lon);
+      const cx = anchor.x, cy = anchor.y;
+      const maxR = Math.max(W, H) * 0.62;
+
+      // Vignette cyan sombre
+      const vig = ctx.createRadialGradient(W/2, H/2, H*0.1, W/2, H/2, H*0.95);
+      vig.addColorStop(0, 'rgba(0,0,0,0)');
+      vig.addColorStop(1, 'rgba(0,8,18,0.72)');
+      ctx.fillStyle = vig;
+      ctx.fillRect(0, 0, W, H);
+
+      // Teinte cyan très légère
+      ctx.fillStyle = 'rgba(0,20,40,0.12)';
+      ctx.fillRect(0, 0, W, H);
+
+      // ── Sweep ──
+      sweepAngle += SWEEP_SPEED * dt;
+
+      // Traînée lumineuse derrière le faisceau (dégradé angulaire)
+      const TRAIL = Math.PI * 0.38; // ~68° de traînée
+      const grad = ctx.createConicalGradient
+        ? ctx.createConicalGradient(cx, cy, sweepAngle - TRAIL, sweepAngle)
+        : null;
+
+      if (grad) {
+        grad.addColorStop(0, 'rgba(0,216,255,0)');
+        grad.addColorStop(1, 'rgba(0,216,255,0.12)');
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, maxR, sweepAngle - TRAIL, sweepAngle);
+        ctx.closePath();
+        ctx.fillStyle = grad;
+        ctx.fill();
+        ctx.restore();
+      } else {
+        // Fallback : traînée approximée avec plusieurs secteurs
+        const steps = 14;
+        for (let s = 0; s < steps; s++) {
+          const a0 = sweepAngle - TRAIL + (TRAIL / steps) * s;
+          const a1 = sweepAngle - TRAIL + (TRAIL / steps) * (s + 1);
+          const alpha = (s / steps) * 0.14;
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.arc(cx, cy, maxR, a0, a1);
+          ctx.closePath();
+          ctx.fillStyle = `rgba(0,216,255,${alpha.toFixed(3)})`;
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+
+      // Ligne du faisceau
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(
+        cx + Math.cos(sweepAngle) * maxR,
+        cy + Math.sin(sweepAngle) * maxR
+      );
+      const lineGrad = ctx.createLinearGradient(
+        cx, cy,
+        cx + Math.cos(sweepAngle) * maxR,
+        cy + Math.sin(sweepAngle) * maxR
+      );
+      lineGrad.addColorStop(0, 'rgba(0,216,255,0.9)');
+      lineGrad.addColorStop(0.6, 'rgba(0,216,255,0.4)');
+      lineGrad.addColorStop(1, 'rgba(0,216,255,0)');
+      ctx.strokeStyle = lineGrad;
+      ctx.lineWidth = 2.2;
+      ctx.shadowColor = '#00d8ff';
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.restore();
+
+      // ── Anneaux concentriques ──
+      for (let i = rings.length - 1; i >= 0; i--) {
+        const ring = rings[i];
+        ring.r += dt * 0.022;
+        ring.alpha = 0.58 * Math.pow(1 - ring.r / ring.maxR, 1.3);
+        if (ring.alpha <= 0.004) { rings.splice(i, 1); continue; }
+
+        for (let k = 0; k < 3; k++) {
+          const kr = ring.r - k * 14;
+          if (kr < 0) continue;
+          const ka = ring.alpha * (1 - k * 0.28);
+          ctx.save();
+          ctx.shadowColor = '#00d8ff';
+          ctx.shadowBlur = k === 0 ? 8 : 3;
+          ctx.beginPath();
+          ctx.arc(ring.x, ring.y, kr, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(0,216,255,${ka.toFixed(3)})`;
+          ctx.lineWidth = k === 0 ? 1.8 : 0.9;
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      // ── Échos / blips ──
+      for (let i = blips.length - 1; i >= 0; i--) {
+        const b = blips[i];
+        b.life -= dt * 0.0012;
+        if (b.life <= 0) { blips.splice(i, 1); continue; }
+        const ba = b.alpha * Math.min(b.life, 1);
+        ctx.save();
+        ctx.shadowColor = '#00d8ff';
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(0,216,255,${(ba * 0.9).toFixed(3)})`;
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // Spawn anneau toutes les 2s
+      if (ts - lastRingTs > 2000) {
+        lastRingTs = ts;
+        spawnRing(cx, cy);
+        spawnBlips(cx, cy);
+        pruneBlips();
+      }
+
+      requestAnimationFrame(draw);
+    }
+
+    setTimeout(() => { resize(); requestAnimationFrame(draw); }, 400);
   });
 }
 </script>
