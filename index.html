@@ -2417,10 +2417,10 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
     <span class="time-slicer-label">🌅 FENÊTRE HORAIRE</span>
     <select id="time-window" onchange="setTimePeriod('matin'); if(Object.keys(forecasts).length>0){renderMatrix(false);renderCards(false);renderBanner();}">
       <option value="now" id="tw-now">⚡ Maintenant (aujourd'hui)</option>
-      <option value="avg">⭐ (Meilleure clarté)</option>
+      <option value="avg">⭐ Meilleure clarté</option>
       <option value="0">🌅 Lever soleil exact</option>
       <option value="0.5">🌅 +30 min</option>
-      <option value="1" selected>🌅 +1h ⭐ (Meilleure clarté)</option>
+      <option value="1" selected>🌅 +1h</option>
       <option value="1.5">🌅 +1h30</option>
       <option value="2">🌅 +2h</option>
       <option value="3">🌅 +3h</option>
@@ -8352,7 +8352,7 @@ const I18N = {
     'tw.avg': '⭐ Meilleure clarté',
     'tw.0': '🌅 Lever soleil exact',
     'tw.0.5': '🌅 +30 min',
-    'tw.1': '🌅 +1h ⭐ (Meilleure clarté)',
+    'tw.1': '🌅 +1h',
     'tw.1.5': '🌅 +1h30',
     'tw.2': '🌅 +2h',
     'tw.3': '🌅 +3h',
@@ -8497,7 +8497,7 @@ const I18N = {
     'tw.avg': '⭐ Best clarity',
     'tw.0': '🌅 Exact sunrise',
     'tw.0.5': '🌅 +30 min',
-    'tw.1': '🌅 +1h ⭐ (Mirage peak)',
+    'tw.1': '🌅 +1h',
     'tw.1.5': '🌅 +1h30',
     'tw.2': '🌅 +2h',
     'tw.3': '🌅 +3h',
@@ -8628,7 +8628,7 @@ const I18N = {
     'tw.avg': '⭐ Mejor claridad',
     'tw.0': '🌅 Amanecer exacto',
     'tw.0.5': '🌅 +30 min',
-    'tw.1': '🌅 +1h ⭐ (Pico espejismo)',
+    'tw.1': '🌅 +1h',
     'tw.1.5': '🌅 +1h30',
     'tw.2': '🌅 +2h',
     'tw.3': '🌅 +3h',
@@ -8756,10 +8756,10 @@ const I18N = {
     'ts.label': '🌅 النافذة الزمنية',
     'ts.sunrise.pending': '⏳ تحميل التوقعات',
     'tw.now': '⚡ الآن',
-    'tw.avg': 'متوسط الصباح (5ص-11ص)',
+    'tw.avg': '⭐ أفضل وضوح',
     'tw.0': '🌅 وقت الشروق الدقيق',
     'tw.0.5': '🌅 +30 دقيقة',
-    'tw.1': '🌅 +1 ساعة ⭐ (ذروة السراب)',
+    'tw.1': '🌅 +1 ساعة',
     'tw.1.5': '🌅 +1.5 ساعة',
     'tw.2': '🌅 +2 ساعة',
     'tw.3': '🌅 +3 ساعات',
