@@ -4338,40 +4338,14 @@ function scoreDay(spot, h) {
       // Appliquer le facteur solaire au score courant
       score = Math.round(score * solarFactor);
       items.push({ name: '☀️ Géométrie solaire', val: Math.round(diff), unit: '°', pts: 0, max: 0, color: solarColor, verdict: solarVerdict, elim: false });
+      // Exposé hors IIFE pour le calcul Koschmieder (11d) : silhouette (contre-jour)
+      // tolère un contraste initial plus favorable que le front-light (diffusion de Mie directe)
+      h._lightingType = lightingType;
 
-      // ── MODULE 3 : Modulateur AOD adaptatif selon éclairage ──────────
-      // L'AOD est déjà pénalisé dans le critère dust (µg/m³).
-      // Ici on applique un bonus/malus SUPPLÉMENTAIRE sur le score final
-      // en fonction du seuil d'extinction propre à chaque type d'éclairage.
-      // En contre-jour, la silhouette noire tolère plus d'aérosols.
-      // En face/latéral, la diffusion de Mie est directe → seuil plus bas.
-      const aod = h.aod ?? null; // champ optionnel — null si non dispo
-      if (aod !== null) {
-        let aodThresholdPoor, aodThresholdGood;
-        if (lightingType === 'BACKLIGHT_PERFECT') {
-          aodThresholdPoor = 0.19; aodThresholdGood = 0.08;
-        } else if (lightingType === 'BACKLIGHT_GOOD') {
-          aodThresholdPoor = 0.16; aodThresholdGood = 0.07;
-        } else if (lightingType === 'LATERAL_GRAZING') {
-          aodThresholdPoor = 0.13; aodThresholdGood = 0.06;
-        } else {
-          // FRONT_LIGHT — le plus sévère
-          aodThresholdPoor = 0.11; aodThresholdGood = 0.05;
-        }
-        let aodPts = 0, aodColor, aodVerdict;
-        if (aod >= aodThresholdPoor) {
-          aodPts = -12; aodColor = 'red';
-          aodVerdict = `❌ AOD ${aod.toFixed(3)} — extinction optique critique (seuil ${aodThresholdPoor} pour ${lightingType})`;
-        } else if (aod <= aodThresholdGood) {
-          aodPts = 8; aodColor = 'green';
-          aodVerdict = `⭐ AOD ${aod.toFixed(3)} — atmosphère limpide`;
-        } else {
-          aodPts = 0; aodColor = 'amber';
-          aodVerdict = `AOD ${aod.toFixed(3)} — transparence standard`;
-        }
-        score = Math.max(0, score + aodPts);
-        items.push({ name: '🌫️ AOD (éclairage)', val: aod.toFixed(3), unit: '', pts: aodPts, max: 8, color: aodColor, verdict: aodVerdict, elim: false });
-      }
+      // ── MODULE 3 (remplacé) : réservé — voir critère Koschmieder ci-dessous (11d) ──
+      // L'ancien modulateur AOD par paliers fixes a été retiré : la géométrie solaire
+      // (lightingType) est réutilisée directement dans le calcul Koschmieder pour
+      // moduler C0 (contraste initial silhouette vs front-light).
 
       // ── Mirage inférieur / miroitement thermique ──────────────────────
       // Risque si soleil déjà haut (>8°) + air pas parfaitement pur
@@ -4445,35 +4419,60 @@ function scoreDay(spot, h) {
       pts: deltaRHBonus, max: 5, color: drhColor, verdict: drhVerdict, elim: false });
   }
 
-  // ── 11d. AOD BASSE COUCHE 0–3 km (critère de base, 15 pts) ────────────
-  // Champ : aod_bc (CAMS aod550_bc) — fallback sur aod total si indisponible
-  // Distinct du modulateur AOD géométrique existant (qui reste inchangé)
+  // ── 11d. EXTINCTION KOSCHMIEDER (critère de base, 23 pts) ──────────────
+  // Remplace les anciens critères "AOD éclairage" (8 pts) + "AOD basse couche" (15 pts).
+  // Loi de Koschmieder : C(d) = C0 × e^(-σ·d)  →  distance de visibilité optique
+  // théorique d_vis = -ln(ε/C0) / σ, comparée à la distance réelle observateur→cible.
+  //
+  // ⚠️ FACTEUR_CALIBRATION : valeur indicative de départ, PAS une constante physique
+  // universelle. Elle convertit l'AOD colonne (satellite/modèle) en un coefficient
+  // d'extinction proche-sol utilisable à l'horizontale. À calibrer avec des sessions
+  // VLD réelles (AOD connu + résultat d'observation connu) pour caler l'outil sur
+  // le terrain plutôt que sur une approximation théorique. Voir notes de session.
+  const KOSCH_FACTEUR_CALIBRATION = 0.20; // ajustable — calibrage terrain à venir
+  const KOSCH_EPSILON = 0.02; // seuil de détection de contraste (norme météo standard)
+
   const aodBc = h.aod_bc ?? h.aod ?? null;
-  let aodBcPts = 0;
-  if (aodBc !== null) {
-    let aodBcColor, aodBcVerdict;
-    if (aodBc < 0.10) {
-      aodBcPts     = 15;
-      aodBcColor   = 'green';
-      aodBcVerdict = `⭐ AOD bc ${aodBc.toFixed(3)} — excellent, bonus clarté`;
-    } else if (aodBc < 0.30) {
-      aodBcPts     = 10;
-      aodBcColor   = 'green';
-      aodBcVerdict = `✅ AOD bc ${aodBc.toFixed(3)} — correct`;
-    } else if (aodBc < 0.60) {
-      aodBcPts     = 4;
-      aodBcColor   = 'amber';
-      aodBcVerdict = `⚠️ AOD bc ${aodBc.toFixed(3)} — médiocre`;
+  const rh_sol_k = h.rh ?? null;
+  const distKm = spot.dist_km ?? null;
+
+  if (aodBc !== null && distKm !== null && distKm > 0) {
+    // Coefficient d'extinction dérivé de l'AOD, corrigé de la croissance hygroscopique
+    const sigmaBase = aodBc * KOSCH_FACTEUR_CALIBRATION;
+    const rhFactor = (rh_sol_k !== null) ? 1 / Math.pow(1 - Math.min(rh_sol_k, 95) / 100, 0.3) : 1;
+    const sigma = Math.max(sigmaBase * rhFactor, 0.0001); // évite division par 0
+
+    // Contraste initial C0 : silhouette en contre-jour tolère plus d'extinction
+    // que le front-light (diffusion de Mie directe dans l'axe d'observation)
+    const lt = h._lightingType;
+    let C0 = 1.0;
+    if (lt === 'BACKLIGHT_PERFECT') C0 = 1.3;
+    else if (lt === 'BACKLIGHT_GOOD') C0 = 1.15;
+    else if (lt === 'LATERAL_GRAZING') C0 = 1.0;
+    else if (lt === 'FRONT_LIGHT') C0 = 0.8;
+
+    const dVis = -Math.log(KOSCH_EPSILON / C0) / sigma; // portée optique théorique (km)
+    const ratio = dVis / distKm;
+
+    let koschPts, koschColor, koschVerdict;
+    if (ratio >= 1.3) {
+      koschPts = 23; koschColor = 'green';
+      koschVerdict = `⭐ Portée optique ~${Math.round(dVis)} km — large marge sur les ${Math.round(distKm)} km`;
+    } else if (ratio >= 1.0) {
+      koschPts = 15; koschColor = 'green';
+      koschVerdict = `✅ Portée optique ~${Math.round(dVis)} km — cible dans la portée (${Math.round(distKm)} km)`;
+    } else if (ratio >= 0.85) {
+      koschPts = 6; koschColor = 'amber';
+      koschVerdict = `⚠️ Portée optique ~${Math.round(dVis)} km — cible en limite (${Math.round(distKm)} km)`;
     } else {
-      aodBcPts     = 0;
-      aodBcColor   = 'red';
-      aodBcVerdict = `❌ AOD bc ${aodBc.toFixed(3)} — extinction critique 0–3 km`;
+      koschPts = 0; koschColor = 'red';
+      koschVerdict = `❌ Portée optique ~${Math.round(dVis)} km — cible hors de portée (${Math.round(distKm)} km, contraste résiduel <2%)`;
     }
     // Critère de base : ajouté directement au score brut (et maxScore)
-    score    += aodBcPts;
-    maxScore += 15;
-    items.push({ name: '🌫️ AOD basse couche', val: aodBc.toFixed(3), unit: '',
-      pts: aodBcPts, max: 15, color: aodBcColor, verdict: aodBcVerdict, elim: false });
+    score    += koschPts;
+    maxScore += 23;
+    items.push({ name: '🌫️ Extinction (Koschmieder)', val: Math.round(dVis), unit: 'km',
+      pts: koschPts, max: 23, color: koschColor, verdict: koschVerdict, elim: false });
   }
 
   // ── SCORE FINAL ──────────────────────────────────
@@ -5547,7 +5546,7 @@ function renderDayRow(dayData, date, spot) {
     </div>
     <div class="drow-body" id="${did}">
       <div class="drow-left">${renderMeteoButtons(items)}${explainBtn}${buildIRCard(forecasts[spot.id], day, spot, fullLabel(date))}${journalBtn}</div>
-      <div class="drow-right">${renderNewCurveBlock(spot,k)}${renderKMini(k,h)}${renderHWTBlock(spot)}</div>
+      <div class="drow-right">${renderNewCurveBlock(spot,k)}${renderKMini(k,h)}${renderAngularResolutionBlock(h, spot, getApertureMm())}${renderHWTBlock(spot)}</div>
     </div>
   </div>`;
 }
@@ -5743,6 +5742,43 @@ function renderNewCurveBlock(spot, k_default) {
   </div>`;
 }
 
+// ── Profil d'appareil : ouverture réelle utilisée par le module résolution angulaire ──
+// Persisté par utilisateur/appareil via localStorage — chaque testeur choisit le sien,
+// indépendant du calibrage Koschmieder (qui lui reste atmosphérique, donc partagé).
+const APERTURE_PROFILES = {
+  p1000:  { label: 'Nikon P1000 (67mm à pleine focale)', mm: 67 },
+  scope80:{ label: 'Scope 80mm (ex. SVBONY 80ED)',        mm: 80 },
+  custom: { label: 'Personnalisé',                        mm: null }
+};
+const APERTURE_KEY = 'vld_aperture_profile';
+
+function getApertureProfile() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(APERTURE_KEY) || 'null');
+    if (saved && saved.profile) return saved;
+  } catch(e) {}
+  return { profile: 'p1000', customMm: 80 };
+}
+function setApertureProfile(profile, customMm) {
+  try { localStorage.setItem(APERTURE_KEY, JSON.stringify({ profile, customMm: customMm ?? null })); } catch(e) {}
+}
+function getApertureMm() {
+  const saved = getApertureProfile();
+  if (saved.profile === 'custom') return saved.customMm || 80;
+  return APERTURE_PROFILES[saved.profile]?.mm ?? 67;
+}
+function onApertureProfileChange(sel) {
+  const profile = sel.value;
+  const customMm = profile === 'custom' ? parseFloat(document.getElementById('aperture-custom-input')?.value || '80') : null;
+  setApertureProfile(profile, customMm);
+  try { renderCards(false); } catch(e) {} // re-rendu pour propager le nouveau calcul de résolution
+}
+function onApertureCustomChange(input) {
+  const saved = getApertureProfile();
+  if (saved.profile === 'custom') setApertureProfile('custom', parseFloat(input.value || '80'));
+  try { renderCards(false); } catch(e) {}
+}
+
 // ── U4 Cn2 SCINTILLATION ─────────────────────────────────────────────
 function calcCn2(wind_shear, dTdh, alt) {
   // wind_shear en (km/h)/40m → convertir en m/s/m
@@ -5792,6 +5828,77 @@ function renderCn2Block(h) {
       <span class="dr-cn2-score" style="color:${color}">${score}/10</span>
     </div>
   </div>`;
+}
+
+// ── U4b RÉSOLUTION ANGULAIRE ────────────────────────────────────────
+// Répond à une question distincte de Koschmieder : Koschmieder dit "y a-t-il
+// assez de contraste pour percevoir la cible", ceci dit "peut-on distinguer
+// une FORME (silhouette/détail) plutôt qu'un simple point". Carte indépendante,
+// hors du score /100 — informative comme le compas/checklist terrain.
+//
+// Mapping Cn2 (score 0-10 existant) → seeing en arcsec : échelle indicative
+// alignée sur les 3 paliers déjà utilisés dans renderCn2Block (Faible/Modérée/Forte).
+// À ajuster si une correspondance plus rigoureuse Cn2→seeing est disponible.
+function cn2ScoreToSeeing(cn2Score) {
+  // 0-3 (Faible/stable) → ~1-2" ; 4-6 (Modérée) → ~2-4" ; 7-10 (Forte) → ~4-10"
+  if (cn2Score <= 3) return 1 + (cn2Score / 3) * 1;       // 1" → 2"
+  if (cn2Score <= 6) return 2 + ((cn2Score - 3) / 3) * 2; // 2" → 4"
+  return 4 + ((cn2Score - 6) / 4) * 6;                    // 4" → 10"
+}
+
+function computeAngularResolution(targetHeightM, distanceKm, apertureMm, cn2Score) {
+  if (!targetHeightM || !distanceKm || distanceKm <= 0) return null;
+  // 1. Taille angulaire de la cible (arcsec)
+  const thetaTarget = Math.atan(targetHeightM / (distanceKm * 1000)) * 206265;
+  // 2. Limite de diffraction (Dawes, arcsec) — nécessite une ouverture connue
+  const diffractionLimit = apertureMm ? (116 / apertureMm) : Infinity;
+  // 3. Limite de seeing (arcsec) — dérivée du Cn2 déjà calculé dans l'outil
+  const seeingLimit = cn2ScoreToSeeing(cn2Score ?? 5);
+  // 4. Résolution effective = pire des deux limites (facteur limitant réel)
+  const effectiveResolution = Math.max(diffractionLimit, seeingLimit);
+  // 5. Nombre d'éléments résolus
+  const N = thetaTarget / effectiveResolution;
+  // 6. Niveau de détail perceptible
+  let level, levelColor;
+  if (N < 1)      { level = 'Invisible même en point'; levelColor = 'var(--red)'; }
+  else if (N < 3)  { level = 'Point / tache seulement'; levelColor = 'var(--amber)'; }
+  else if (N < 10) { level = 'Silhouette grossière'; levelColor = 'var(--amber)'; }
+  else             { level = 'Détails structurels visibles'; levelColor = 'var(--green)'; }
+  // 7. Grossissement mini suggéré pour atteindre un confort "silhouette" (N≈8)
+  const magMin = apertureMm ? (effectiveResolution * 8) / thetaTarget : null;
+  return { thetaTarget, diffractionLimit, seeingLimit, effectiveResolution, N, level, levelColor, magMin };
+}
+
+function renderAngularResolutionBlock(h, spot, apertureMm) {
+  try {
+    const targetHeightM = (spot.tgt?.alt ?? 0) - (spot.obs?.alt ?? 0);
+    const distanceKm = spot.dist_km ?? null;
+    const saved = getApertureProfile();
+    const selectorHtml = `
+      <div style="display:flex;align-items:center;gap:.4rem;margin-top:4px;font-size:9px;font-family:var(--mono);color:var(--text3)">
+        <span>📷</span>
+        <select onchange="onApertureProfileChange(this)" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--text2);font-size:9px;font-family:var(--mono);border-radius:4px;padding:2px 4px;">
+          <option value="p1000" ${saved.profile==='p1000'?'selected':''}>Nikon P1000 (67mm)</option>
+          <option value="scope80" ${saved.profile==='scope80'?'selected':''}>Scope 80mm</option>
+          <option value="custom" ${saved.profile==='custom'?'selected':''}>Personnalisé</option>
+        </select>
+        ${saved.profile==='custom' ? `<input id="aperture-custom-input" type="number" min="1" max="1000" value="${saved.customMm||80}" onchange="onApertureCustomChange(this)" style="width:50px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--text2);font-size:9px;font-family:var(--mono);border-radius:4px;padding:2px 4px;"> mm` : ''}
+      </div>`;
+    if (!targetHeightM || targetHeightM <= 0 || !distanceKm) {
+      return `<div class="dr-cn2"><div style="flex:1"><div class="dr-cn2-label">🔎 Résolution angulaire · <span style="color:var(--text3)">données insuffisantes (altitude/distance)</span></div>${selectorHtml}</div></div>`;
+    }
+    const cn2Score = calcCn2(h.wind_shear, h.dTdh, 0);
+    const r = computeAngularResolution(targetHeightM, distanceKm, apertureMm, cn2Score);
+    if (!r) return '';
+    const magTxt = r.magMin ? `Grossissement mini recommandé : ${Math.ceil(r.magMin)}x` : `Ouverture non renseignée — grossissement mini non calculable`;
+    return `<div class="dr-cn2">
+      <div style="flex:1">
+        <div class="dr-cn2-label">🔎 Résolution angulaire · <em style="color:${r.levelColor};font-style:normal">${r.level}</em> · <span style="color:var(--text3)">θ cible ${r.thetaTarget.toFixed(1)}" / résolution ${r.effectiveResolution.toFixed(1)}"</span></div>
+        <div class="dr-cn2-label" style="margin-top:2px;color:var(--text3)">${magTxt}</div>
+        ${selectorHtml}
+      </div>
+    </div>`;
+  } catch(e) { console.warn('renderAngularResolutionBlock error:', e.message); return ''; }
 }
 
 function renderKMini(k, h) {
