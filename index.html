@@ -7439,6 +7439,15 @@ document.getElementById('clock').textContent=new Date().toLocaleTimeString('fr-F
 document.getElementById('date-now').textContent=new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).toUpperCase();
 loadCfg();
   const customCount = loadCustomSpots();
+
+  // ── Lien "vierge" pour les beta testeurs : masque les spots natifs codés en dur ──
+  // Ajouter ?vierge=1 à l'URL pour ne garder que les spots personnalisés du testeur
+  if (new URLSearchParams(location.search).get('vierge') === '1') {
+    const onlyCustom = SPOTS.filter(s => s.custom);
+    SPOTS.length = 0;
+    SPOTS.push(...onlyCustom);
+  }
+
 if (customCount > 0) {
   setStatus(`Prêt · ${SPOTS.length} spots chargés (dont ${customCount} personnalisé${customCount>1?'s':''})`);
 }
