@@ -4823,6 +4823,7 @@ wind: avg(d1.hourly?.wind_speed_10m),
     const sunsetStr = d1.daily?.sunset?.[day];
     const sunsetHour = sunsetStr ? new Date(sunsetStr).getHours() + new Date(sunsetStr).getMinutes()/60 : 20;
     const hourlyScores = {};
+    const _hSnap = {}; // cache des hData par créneau — permet de recalculer le score à une autre altitude sans re-fetch API
     // ── Slots heure absolue (pour mode "Maintenant" sur tous les jours) ──
     // On couvre les heures de la journée (0h–23h) en absolu
     for (let absH = 0; absH < 24; absH++) {
@@ -4851,6 +4852,7 @@ wind: avg(d1.hourly?.wind_speed_10m),
       };
       hourlyScores['abs_' + absH] = scoreDay(spot, hDataAbs).score;
       hourlyScores['abs_' + absH + '_elev'] = Math.round(solarElevation(spot.obs.lat, spot.obs.lon, obsDate) * 10) / 10;
+      _hSnap['abs_' + absH] = hDataAbs;
     }
     const timeOffsets = [0, 0.5, 1, 1.5, 2, 3, 4, 5];
     for (const offset of timeOffsets) {
@@ -4883,8 +4885,8 @@ wind: avg(d1.hourly?.wind_speed_10m),
       const elev = solarElevation(spot.obs.lat, spot.obs.lon, obsDate);
       hourlyScores[offset] = rawScore;
       hourlyScores[offset + '_elev'] = Math.round(elev * 10) / 10;
+      _hSnap[offset] = hData;
     }
-    // Créneaux soir : h-5 à h-1 avant coucher (offsets négatifs = avant coucher)
     const eveningOffsets = [-5, -4, -3, -2, -1];
     for (const offset of eveningOffsets) {
       const hourIdx = day*24 + Math.floor(sunsetHour + offset);
@@ -4914,12 +4916,13 @@ wind: avg(d1.hourly?.wind_speed_10m),
       const elev = solarElevation(spot.obs.lat, spot.obs.lon, obsDate);
       hourlyScores['eve' + offset] = rawScore;
       hourlyScores['eve' + offset + '_elev'] = Math.round(elev * 10) / 10;
+      _hSnap['eve' + offset] = hData;
     }
     
     // Injecter _obsDate dans h pour que solarGeometryAdvanced ait une date réelle (sunrise + 1h)
     const mainObsDate = sunriseStr ? new Date(new Date(sunriseStr).getTime() + 60*60*1000) : (() => { const d=new Date(dt); d.setUTCHours(7,0,0,0); return d; })();
     h._obsDate = mainObsDate.toISOString();
-    daily.push({ date:dt, day, sunriseHour, sunriseStr, sunsetHour, sunsetStr, hourlyScores, ...scoreDay(spot,h), raw:h, _d1:d1, _d2:d2 });;
+    daily.push({ date:dt, day, sunriseHour, sunriseStr, sunsetHour, sunsetStr, hourlyScores, ...scoreDay(spot,h), raw:h, _d1:d1, _d2:d2, _d4:d4, _hSnap });;
   }
   saveToCache(daily);
   return daily;
@@ -5234,6 +5237,75 @@ function renderMatrix(loading) {
 
 function renderBanner() { /* remplacé par animation radar */ }
 
+// ── Sélecteur d'altitude simulée — recalcule le score sans re-fetch API ──────
+// Réutilise les données de pression déjà en cache (dayData._d4) pour ré-interpoler
+// le RH à la nouvelle altitude, puis relance scoreDay avec les snapshots horaires
+// déjà en cache (dayData._hSnap). Ne modifie jamais l'altitude réelle du spot.
+let _altOverrides = {}; // spot.id → altitude simulée (m), runtime uniquement
+
+function applyAltitudeOverride(spotId, rawVal) {
+  const spot = SPOTS.find(s => s.id === spotId);
+  const fc = forecasts[spotId];
+  const newAlt = parseFloat(rawVal);
+  if (!spot || !fc || isNaN(newAlt)) return;
+
+  const realAlt = spot.obs.alt || 0;
+  _altOverrides[spotId] = newAlt;
+  const spotOverride = { ...spot, obs: { ...spot.obs, alt: newAlt } };
+
+  let bestBefore = 0, bestAfter = 0;
+  fc.forEach(dayData => {
+    // Score réel (altitude du spot), figé au premier appel pour servir de référence
+    if (dayData._baselineScore === undefined) dayData._baselineScore = dayData.score;
+    bestBefore = Math.max(bestBefore, dayData._baselineScore);
+
+    const newRhAlt = interpolateRHAtAltitude(dayData._d4, dayData.day, newAlt) ?? dayData.raw.rh_alt;
+    dayData.raw = { ...dayData.raw, rh_alt: newRhAlt };
+    const result = scoreDay(spotOverride, dayData.raw);
+    dayData.score = result.score;
+    dayData.items = result.items;
+    dayData.hasElim = result.hasElim;
+
+    if (dayData._hSnap) {
+      Object.keys(dayData._hSnap).forEach(key => {
+        const snap = { ...dayData._hSnap[key], rh_alt: newRhAlt };
+        dayData.hourlyScores[key] = scoreDay(spotOverride, snap).score;
+      });
+    }
+    bestAfter = Math.max(bestAfter, dayData.score);
+  });
+
+  renderMatrix(false);
+  renderCards(false);
+  renderBanner();
+  showAltitudeAlert(spotId, realAlt, newAlt, bestBefore, bestAfter);
+}
+
+function resetAltitudeOverride(spotId) {
+  const spot = SPOTS.find(s => s.id === spotId);
+  if (!spot) return;
+  applyAltitudeOverride(spotId, spot.obs.alt);
+  delete _altOverrides[spotId];
+  renderCards(false); // redessine avec l'input remis à l'altitude réelle
+}
+
+function showAltitudeAlert(spotId, realAlt, newAlt, bestBefore, bestAfter) {
+  const el = document.getElementById('alt-alert-' + spotId);
+  if (!el) return;
+  if (Math.round(newAlt) === Math.round(realAlt)) { el.innerHTML = ''; return; }
+  const delta = bestAfter - bestBefore;
+  const dir = newAlt > realAlt ? 'plus haut' : 'plus bas';
+  const sign = delta > 0 ? '+' : '';
+  const color = delta > 0 ? '#4ade80' : delta < 0 ? '#f87171' : 'var(--text3)';
+  el.innerHTML = `<div style="margin-top:.5rem;padding:.6rem .75rem;background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.2);border-radius:8px;font-size:11px;color:#fde68a;line-height:1.5;">
+    ⚠️ Score simulé à ${Math.round(newAlt)}m (${dir} que le point réel à ${Math.round(realAlt)}m) :
+    <strong style="color:${color}">${sign}${delta} pt${Math.abs(delta)>1?'s':''}</strong> sur le meilleur score de la semaine.
+    L'humidité n'est pas uniforme verticalement — une couche humide basse peut se trouver sous ou au-dessus
+    du point d'observation selon son altitude, ce qui explique l'écart. Simulation indicative basée sur le
+    profil de pression du modèle, ne remplace pas une mesure terrain.
+  </div>`;
+}
+
 function renderCards(loading) {
   const days=getDays();
   document.getElementById('spot-cards').innerHTML=SPOTS.map(s=>{
@@ -5251,6 +5323,17 @@ function renderCards(loading) {
             ${s.criteria.wind_min ? ` · Mistral min ${s.criteria.wind_min} km/h` : ''}
             ${s.type==='mediterranee_corse' ? ' · Mistral idéal 15–35 km/h' :
               s.type==='mediterranee_marin'  ? ' · Maritime strict' : ''}
+          </div>
+          <div class="alt-selector" style="margin:.6rem 0;padding:.6rem .75rem;background:rgba(0,212,255,.04);border-radius:8px;border:1px solid rgba(0,212,255,.08);display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
+            <label style="font-size:11px;color:var(--text3);font-family:var(--mono)">🏔️ Altitude simulée :</label>
+            <input type="number" id="alt-override-${s.id}" value="${_altOverrides[s.id] ?? s.obs.alt}"
+              style="width:72px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:4px;color:#fff;padding:3px 6px;font-size:12px;font-family:var(--mono)">
+            <span style="font-size:11px;color:var(--text3)">m</span>
+            <button onclick="applyAltitudeOverride('${s.id}', document.getElementById('alt-override-${s.id}').value)"
+              style="font-size:11px;padding:3px 10px;border-radius:4px;background:rgba(0,212,255,.15);border:1px solid rgba(0,212,255,.3);color:#7dd3fc;cursor:pointer">Recalculer</button>
+            <button onclick="resetAltitudeOverride('${s.id}')"
+              style="font-size:11px;padding:3px 10px;border-radius:4px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--text3);cursor:pointer">↺ Réel (${s.obs.alt}m)</button>
+            <div id="alt-alert-${s.id}" style="width:100%"></div>
           </div>
           ${fc.map((dayData,di)=>renderDayRow(dayData,days[di],s)).join('')}
         </div>`;
