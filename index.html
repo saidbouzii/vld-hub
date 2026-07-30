@@ -4045,6 +4045,39 @@ function _rayAltAtMid(spot) {
   return (obsAlt + tgtAlt) / 2; // m
 }
 
+// ── Gradient vertical d'humidité — RH interpolée à l'altitude réelle du point ──
+// Origine : observation terrain (webcam Hôtel Méridien, 40m) montrant un voile
+// d'opacité malgré un bon score, alors que le RH utilisé partout était le RH 2m
+// générique — donc identique quelle que soit l'altitude du point d'observation.
+// Réutilise les niveaux de pression déjà récupérés pour le calcul K ERA5 (urlPres/d4),
+// aucun appel API supplémentaire nécessaire.
+function interpolateRHAtAltitude(d4, dayIdx, targetAlt) {
+  if (!d4?.hourly) return null;
+  const levels = [1000,925,850,700,600,500,400,300];
+  const hi = dayIdx*24 + 7; // même heure de référence que le calcul K ERA5 (7h)
+  const pts = levels.map(P => {
+    const alt = d4.hourly[`geopotential_height_${P}hPa`]?.[hi];
+    const rh  = d4.hourly[`relative_humidity_${P}hPa`]?.[hi];
+    if (alt==null || rh==null || isNaN(alt) || isNaN(rh)) return null;
+    return { alt, rh };
+  }).filter(Boolean).sort((a,b)=>a.alt-b.alt);
+
+  if (pts.length < 2) return null;
+
+  const alt = targetAlt ?? 0;
+  // Clamp aux bornes si l'altitude cible est hors de la plage couverte par les niveaux
+  if (alt <= pts[0].alt) return pts[0].rh;
+  if (alt >= pts[pts.length-1].alt) return pts[pts.length-1].rh;
+
+  for (let i=0; i<pts.length-1; i++) {
+    if (alt >= pts[i].alt && alt <= pts[i+1].alt) {
+      const frac = (alt - pts[i].alt) / (pts[i+1].alt - pts[i].alt);
+      return pts[i].rh + frac*(pts[i+1].rh - pts[i].rh);
+    }
+  }
+  return null;
+}
+
 function scoreDay(spot, h) {
   const items = [];
   let score = 0, maxScore = 0;
@@ -4389,31 +4422,40 @@ function scoreDay(spot, h) {
   }
 
   // ── 11c. GRADIENT VERTICAL RH (modificateur additif) ──────────────────
-  // ΔRH = RH_sol − RH_850hPa (mi-trajet)
+  // ΔRH = RH_obs − RH_850hPa (mi-trajet)
   // ΔRH élevé = air humide en basse couche, sec en altitude = brume de fond piégée
   // ΔRH négatif = air bien mélangé, sec en bas = favorable
-  const rh_sol = h.rh ?? null;
+  //
+  // RH_obs : on utilise en priorité le RH interpolé à l'altitude réelle du point
+  // d'observation (rh_alt, via profil de pression ERA5/urlPres) plutôt que le RH 2m
+  // générique. Ex : un site à 700m peut être au-dessus d'une couche humide basse
+  // que le RH 2m ne verrait pas — utiliser le 2m partout sous-estime/surestime
+  // le gradient réel selon l'altitude du point. Fallback sur h.rh (2m) si le
+  // profil de pression est indisponible (données ERA5 manquantes, etc.).
+  const rh_obs_source = (h.rh_alt !== null && h.rh_alt !== undefined) ? 'alt' : '2m';
+  const rh_sol = (h.rh_alt ?? h.rh) ?? null;
   const rh_850 = h.rh_850 ?? null;
   let deltaRHBonus = 0;
   if (rh_sol !== null && rh_850 !== null) {
     const deltaRH = rh_sol - rh_850; // en %
+    const srcTag = rh_obs_source === 'alt' ? ` (RH@${Math.round(spot.obs?.alt||0)}m)` : ' (RH@2m)';
     let drhColor, drhVerdict;
     if (deltaRH > 30) {
       deltaRHBonus = -10;
       drhColor   = 'red';
-      drhVerdict = `❌ ΔRH +${Math.round(deltaRH)}% — brume de fond piégée en basse couche`;
+      drhVerdict = `❌ ΔRH +${Math.round(deltaRH)}%${srcTag} — brume de fond piégée en basse couche`;
     } else if (deltaRH > 15) {
       deltaRHBonus = -5;
       drhColor   = 'amber';
-      drhVerdict = `⚠️ ΔRH +${Math.round(deltaRH)}% — léger risque brume basse`;
+      drhVerdict = `⚠️ ΔRH +${Math.round(deltaRH)}%${srcTag} — léger risque brume basse`;
     } else if (deltaRH > 0) {
       deltaRHBonus = 0;
       drhColor   = 'green';
-      drhVerdict = `✅ ΔRH +${Math.round(deltaRH)}% — gradient neutre`;
+      drhVerdict = `✅ ΔRH +${Math.round(deltaRH)}%${srcTag} — gradient neutre`;
     } else {
       deltaRHBonus = 5;
       drhColor   = 'green';
-      drhVerdict = `⭐ ΔRH ${Math.round(deltaRH)}% — air bien mélangé, sec en bas`;
+      drhVerdict = `⭐ ΔRH ${Math.round(deltaRH)}%${srcTag} — air bien mélangé, sec en bas`;
     }
     items.push({ name: '💧 Gradient RH vertical', val: Math.round(deltaRH), unit: '%',
       pts: deltaRHBonus, max: 5, color: drhColor, verdict: drhVerdict, elim: false });
@@ -4689,6 +4731,8 @@ async function fetchSpot(spot, pastDays = 0) {
     const P_mbar = avg(d1.hourly?.surface_pressure) || 1013.25;
     const T850 = (()=>{const a=d4?.hourly?.temperature_850hPa;if(!a)return null;const v=a.slice(absDay*24+5,absDay*24+11).filter(x=>x!=null&&!isNaN(x));return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;})();
     const H850 = (()=>{const a=d4?.hourly?.geopotential_height_850hPa;if(!a)return null;const v=a.slice(absDay*24+5,absDay*24+11).filter(x=>x!=null&&!isNaN(x));return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;})();
+    // RH corrigée de l'altitude réelle du point d'observation (voir interpolateRHAtAltitude)
+    const rh_alt = interpolateRHAtAltitude(d4, day, spot.obs.alt||0);
 
     // ── U2 — κ ERA5 multi-niveaux ITU-R P.453 ──────────────────
     let k_bislin;
@@ -4766,6 +4810,7 @@ wind: avg(d1.hourly?.wind_speed_10m),
       // ── Nouveaux champs v4 ──
       blh:    avg(d1.hourly?.boundary_layer_height),        // PBL height (m)
       rh_850: avg(d2?.hourly?.relative_humidity_850hPa),    // RH à 850 hPa au mi-trajet
+      rh_alt, // RH interpolée à l'altitude réelle du point d'observation (spot.obs.alt)
       // aod_bc : AOD 550 nm worst-case sur les 3 points (obs, mid, tgt) — proxy basse couche
       // Open-Meteo air-quality fournit aod550nm (colonne totale) ; aod550nm_bc n'est pas exposé séparément
       aod_bc: (()=>{ const v=[avg(d3b?.hourly?.aod550nm),avg(d3?.hourly?.aod550nm),avg(d3c?.hourly?.aod550nm)].filter(x=>x!==null&&x!==undefined); return v.length?Math.max(...v):null; })(),
@@ -4800,7 +4845,7 @@ wind: avg(d1.hourly?.wind_speed_10m),
         spread: (tH!=null && dH!=null) ? tH-dH : h.spread,
         dust: h.dust, pm10: h.pm10, rh_mid: h.rh_mid, spread_mid: h.spread_mid, cape: h.cape,
         aod: h.aod ?? null,
-        blh: h.blh, rh_850: h.rh_850, aod_bc: h.aod_bc,
+        blh: h.blh, rh_850: h.rh_850, aod_bc: h.aod_bc, rh_alt: h.rh_alt,
         wind_dir: d1.hourly?.wind_direction_10m?.[hourIdx] ?? h.wind_dir ?? null,
         _day: h._day, _obsDate: obsDate.toISOString(),
       };
@@ -4830,7 +4875,7 @@ wind: avg(d1.hourly?.wind_speed_10m),
         spread: (tH!=null && dH!=null) ? tH-dH : h.spread,
         dust: h.dust, pm10: h.pm10, rh_mid: h.rh_mid, spread_mid: h.spread_mid, cape: h.cape,
         aod: h.aod ?? null,
-        blh: h.blh, rh_850: h.rh_850, aod_bc: h.aod_bc,
+        blh: h.blh, rh_850: h.rh_850, aod_bc: h.aod_bc, rh_alt: h.rh_alt,
         wind_dir: d1.hourly?.wind_direction_10m?.[hourIdx] ?? h.wind_dir ?? null,
         _day: h._day, _obsDate: obsDate.toISOString(),
       };
@@ -4861,7 +4906,7 @@ wind: avg(d1.hourly?.wind_speed_10m),
         spread: (tH!=null && dH!=null) ? tH-dH : h.spread,
         dust: h.dust, pm10: h.pm10, rh_mid: h.rh_mid, spread_mid: h.spread_mid, cape: h.cape,
         aod: h.aod ?? null,
-        blh: h.blh, rh_850: h.rh_850, aod_bc: h.aod_bc,
+        blh: h.blh, rh_850: h.rh_850, aod_bc: h.aod_bc, rh_alt: h.rh_alt,
         wind_dir: d1.hourly?.wind_direction_10m?.[hourIdx] ?? h.wind_dir ?? null,
         _day: h._day, _obsDate: obsDate.toISOString(),
       };
@@ -5467,6 +5512,7 @@ function renderDayRow(dayData, date, spot) {
       spread: (tH!=null && dH!=null) ? tH-dH : h.spread,
       dust: h.dust, pm10: h.pm10, rh_mid: h.rh_mid, spread_mid: h.spread_mid, cape: h.cape,
       aod: h.aod ?? null,
+      blh: h.blh, rh_850: h.rh_850, aod_bc: h.aod_bc, rh_alt: h.rh_alt,
       wind_dir: d1.hourly?.wind_direction_10m?.[hourIdx] ?? h.wind_dir ?? null,
       _day: h._day, _obsDate: obsDate.toISOString(),
     };
@@ -5505,6 +5551,7 @@ function renderDayRow(dayData, date, spot) {
       spread: (tH!=null && dH!=null) ? tH-dH : h.spread,
       dust: h.dust, pm10: h.pm10, rh_mid: h.rh_mid, spread_mid: h.spread_mid, cape: h.cape,
       aod: h.aod ?? null,
+      blh: h.blh, rh_850: h.rh_850, aod_bc: h.aod_bc, rh_alt: h.rh_alt,
       wind_dir: d1.hourly?.wind_direction_10m?.[hourIdx] ?? h.wind_dir ?? null,
       _day: h._day, _obsDate: obsDate.toISOString(),
     };
