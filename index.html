@@ -144,11 +144,23 @@ window._loadSpotsFromFirestore = async () => {
   if (!currentUser || typeof SPOTS === 'undefined') return;
   try {
     const snap = await getDocs(collection(db, 'users', currentUser.uid, 'spots'));
-    let added = 0;
+    let added = 0, rejected = 0;
+    const isNum = v => typeof v === 'number' && Number.isFinite(v);
+    const validCoords = spot => spot && spot.obs && spot.tgt &&
+      isNum(spot.obs.lat) && isNum(spot.obs.lon) &&
+      isNum(spot.tgt.lat) && isNum(spot.tgt.lon);
     snap.forEach(d => {
       const spot = d.data();
+      if (!validCoords(spot)) {
+        rejected++;
+        console.warn(`[Firestore] Spot "${spot && spot.name || d.id}" ignoré : coordonnées invalides`, spot);
+        return;
+      }
       if (!SPOTS.find(s => s.id === spot.id)) { SPOTS.push(spot); added++; }
     });
+    if (rejected > 0 && typeof setStatus === 'function') {
+      setStatus(`⚠️ ${rejected} spot(s) ignoré(s) — coordonnées invalides (voir console)`);
+    }
     if (added > 0 && typeof renderMatrix === 'function') {
       renderMatrix(false); renderCards(false);
       if (typeof renderCustomSpotsList === 'function') renderCustomSpotsList();
@@ -6964,9 +6976,14 @@ function renderMapSpots() {
 
   const bounds = [];
   let hasSpots = false;
+  const isNum = v => typeof v === 'number' && Number.isFinite(v);
 
   SPOTS.forEach(spot => {
     if (!spot.obs || !spot.tgt) return;
+    if (!isNum(spot.obs.lat) || !isNum(spot.obs.lon) || !isNum(spot.tgt.lat) || !isNum(spot.tgt.lon)) {
+      console.warn(`[VLD-Map] Spot "${spot.name || spot.id}" ignoré sur la carte : coordonnées invalides`, spot);
+      return;
+    }
     hasSpots = true;
 
     // Score du jour le plus récent disponible
