@@ -6919,6 +6919,15 @@ function initVLDMap() {
     window._vldMapLayers = { sat: tilesSat, labels: tilesLabels, terrain: tilesTerrain };
     window._vldMapMode = 'sat';
 
+    // Filet de sécurité : si les tuiles satellite échouent (réseau/CDN), on log et on
+    // force un redimensionnement pour éviter qu'un conteneur mal dimensionné casse le rendu.
+    let _tileErrCount = 0;
+    tilesSat.on('tileerror', () => {
+      _tileErrCount++;
+      if (_tileErrCount === 1) console.warn('[VLD-Map] Échec de chargement des tuiles satellite ArcGIS — vérifie la connexion réseau.');
+    });
+    setTimeout(() => _vldMap && _vldMap.invalidateSize(), 50);
+
     // Bouton bascule satellite ↔ terrain
     const toggleBtn = L.Control.extend({
       onAdd: function() {
@@ -9588,8 +9597,6 @@ function laboZoomReset() { _laboZoom = 1; _laboPanX = 0; _laboPanY = 0; laboAppl
       <div id="score-modal-body"></div>
     </div>
   </div>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 let _radarInited = false;
 function initRadarOnce() {
