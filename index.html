@@ -3123,6 +3123,11 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
     <div class="creator-title">🛠️ Créateur de Spot</div>
     <div class="creator-sub">Crée un spot personnalisé en entrant les coordonnées de ton point d'observation et de ta cible.</div>
 
+    <div id="edit-mode-banner" style="display:none;align-items:center;gap:.6rem;background:rgba(255,193,7,.12);border:1px solid rgba(255,193,7,.35);border-radius:10px;padding:.6rem .9rem;margin-bottom:1rem;font-size:12.5px;color:#ffd873;">
+      <span id="edit-mode-label" style="flex:1;">✏️ Modification en cours</span>
+      <button onclick="cancelEditSpot()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#cce0f0;border-radius:6px;padding:.3rem .7rem;font-size:11px;cursor:pointer;">Annuler</button>
+    </div>
+
     <div class="creator-section">
       <div class="creator-section-title">🏷️ IDENTITÉ DU SPOT</div>
       <div class="creator-grid">
@@ -3180,7 +3185,7 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
     </div>
 
     <div class="creator-btn-row">
-      <button class="creator-btn primary" onclick="createSpot()">💾 AJOUTER AU DASHBOARD</button>
+      <button class="creator-btn primary" id="creator-save-btn" onclick="createSpot()">💾 AJOUTER AU DASHBOARD</button>
       <button class="creator-btn secondary" onclick="resetCreatorForm()">🔄 Réinitialiser</button>
       <button class="creator-btn secondary" onclick="exportSpots()">📥 Exporter spots</button>
       <button class="creator-btn secondary" onclick="openImportModal()">📤 Importer spots</button>
@@ -7276,8 +7281,8 @@ function createSpot() {
     return;
   }
   
-  // Créer l'objet spot
-  const id = 'custom_' + Date.now();
+  // Créer l'objet spot (ou réutiliser l'id si on modifie un spot existant)
+  const id = _editingSpotId || ('custom_' + Date.now());
   const newSpot = {
     id, name, target, color, country,
     obs: { lat: obsLat, lon: obsLon, alt: obsAlt },
@@ -7290,9 +7295,20 @@ function createSpot() {
     particularites: particularites,
     custom: true,
   };
-  
-  // Ajouter à la liste globale
-  SPOTS.push(newSpot);
+
+  const wasEditing = !!_editingSpotId;
+  if (wasEditing) {
+    const idx = SPOTS.findIndex(sp => sp.id === _editingSpotId);
+    if (idx >= 0) SPOTS[idx] = newSpot; else SPOTS.push(newSpot);
+    _editingSpotId = null;
+    const banner = document.getElementById('edit-mode-banner');
+    if (banner) banner.style.display = 'none';
+    const saveBtn = document.getElementById('creator-save-btn');
+    if (saveBtn) saveBtn.textContent = '💾 AJOUTER AU DASHBOARD';
+  } else {
+    // Ajouter à la liste globale
+    SPOTS.push(newSpot);
+  }
   
   // Sauvegarder dans localStorage
   saveCustomSpots();
@@ -7314,7 +7330,9 @@ function createSpot() {
   // Retour aux prévisions
   switchTab('previsions');
   
-  alert(`✅ Spot "${name}" créé avec succès !\nLes prévisions météo sont en cours de chargement...`);
+  alert(wasEditing
+    ? `✅ Spot "${name}" mis à jour !\nLes prévisions météo sont en cours de rechargement...`
+    : `✅ Spot "${name}" créé avec succès !\nLes prévisions météo sont en cours de chargement...`);
 }
 
 // ═══════════════════════════════════════════════════
@@ -7437,6 +7455,8 @@ function renderGererSpots() {
   }).join('');
 }
 
+let _editingSpotId = null;
+
 function editCustomSpot(id) {
   const s = SPOTS.find(s => s.id === id);
   if (!s || !s.custom) return;
@@ -7457,11 +7477,23 @@ function editCustomSpot(id) {
   document.getElementById('new-dist').value = s.dist_km || '';
   document.getElementById('new-azimut').value = s.azimut || '';
   if (s.type) document.getElementById('new-type').value = s.type;
-  // Supprimer l'ancien pour le recréer à la sauvegarde
-  const idx = SPOTS.findIndex(sp => sp.id === id);
-  if (idx >= 0) SPOTS.splice(idx, 1);
-  saveCustomSpots();
-  renderCustomSpotsList();
+  // On ne supprime RIEN ici : le spot original reste intact tant que le bouton
+  // "Enregistrer" n'a pas été cliqué. On mémorise juste son id pour que
+  // createSpot() sache qu'il doit le mettre à jour et non le dupliquer.
+  _editingSpotId = id;
+  const banner = document.getElementById('edit-mode-banner');
+  if (banner) {
+    banner.style.display = 'flex';
+    const label = document.getElementById('edit-mode-label');
+    if (label) label.textContent = `✏️ Modification de "${s.name}"`;
+  }
+  const saveBtn = document.getElementById('creator-save-btn');
+  if (saveBtn) saveBtn.textContent = '💾 Enregistrer les modifications';
+}
+
+function cancelEditSpot() {
+  _editingSpotId = null;
+  resetCreatorForm();
 }
 
 function renderCustomSpotsList() {
@@ -7505,6 +7537,11 @@ function deleteCustomSpot(id) {
 // CRÉATEUR DE SPOT - Reset form
 // ═══════════════════════════════════════════════════
 function resetCreatorForm() {
+  _editingSpotId = null;
+  const banner = document.getElementById('edit-mode-banner');
+  if (banner) banner.style.display = 'none';
+  const saveBtn = document.getElementById('creator-save-btn');
+  if (saveBtn) saveBtn.textContent = '💾 AJOUTER AU DASHBOARD';
   document.getElementById('new-spot-name').value = '';
   document.getElementById('new-spot-target').value = '';
   document.getElementById('new-spot-color').value = '#38bdf8';
