@@ -409,13 +409,12 @@ body::after {
   border-color: transparent;
   box-shadow: none;
   cursor: pointer;
-  transform: scale(0.77) translateY(0);
-  transform-origin: center center;
+  width: 100%;
   transition: transform .12s;
   min-height: 70px;
 }
 .mb.explain-btn:active {
-  transform: scale(0.77) translateY(3px);
+  transform: translateY(3px);
   box-shadow: 0 2px 8px rgba(0,0,0,.7),
               0 1px 0 rgba(80,20,160,.8),
               inset 0 1px 0 rgba(180,100,255,.1);
@@ -715,7 +714,8 @@ body::after {
 .comm-submit-btn:hover { opacity:.88; }
 
 .drow-journal-card {
-  display: inline-block;
+  display: block;
+  width: 100%;
   margin-top: .65rem;
   cursor: pointer;
   background: none;
@@ -728,8 +728,8 @@ body::after {
   filter: drop-shadow(0 6px 18px rgba(0,212,255,.35));
 }
 .drow-journal-card img {
-  width: 162px;
-  height: 162px;
+  width: 100%;
+  height: auto;
   object-fit: contain;
   display: block;
   filter: drop-shadow(0 4px 12px rgba(0,0,0,.5));
@@ -5502,7 +5502,7 @@ function buildIRCard(fc, di, spot, dateLabel) {
     score, pwvPts, spreadPts, visPts, cloudPts, pwv, spread, vis, cl, filterReco,
     spotName: spot.name, dateLabel
   }))));
-  return `<div onclick="openIRModal('${payload}')" style="cursor:pointer;background:none;border:none;box-shadow:none;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;align-items:stretch;transform:scale(1.43) translateY(12px);transform-origin:center top;">
+  return `<div onclick="openIRModal('${payload}')" style="cursor:pointer;background:none;border:none;box-shadow:none;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;align-items:stretch;width:100%;">
     <img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/refs/heads/main/1000032087.png"
       alt="Score IR"
       style="width:100%;display:block;object-fit:contain;background:transparent;"
