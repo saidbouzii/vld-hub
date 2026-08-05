@@ -156,7 +156,10 @@ window._loadSpotsFromFirestore = async () => {
         console.warn(`[Firestore] Spot "${spot && spot.name || d.id}" ignoré : coordonnées invalides`, spot);
         return;
       }
-      if (!SPOTS.find(s => s.id === spot.id)) { SPOTS.push(spot); added++; }
+      if (!SPOTS.find(s => s.id === spot.id)) {
+        if (typeof normalizeCountry === 'function') spot.country = normalizeCountry(spot.country);
+        SPOTS.push(spot); added++;
+      }
     });
     if (rejected > 0 && typeof setStatus === 'function') {
       setStatus(`⚠️ ${rejected} spot(s) ignoré(s) — coordonnées invalides (voir console)`);
@@ -164,6 +167,7 @@ window._loadSpotsFromFirestore = async () => {
     if (added > 0 && typeof renderMatrix === 'function') {
       renderMatrix(false); renderCards(false);
       if (typeof renderCustomSpotsList === 'function') renderCustomSpotsList();
+      if (typeof renderGererSpots === 'function') renderGererSpots();
       if (typeof setStatus === 'function') setStatus(`☁️ ${snap.size} spot(s) chargés depuis Firestore`);
     }
   } catch(e) { console.warn('Firestore load error:', e); }
@@ -1335,6 +1339,24 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
 .creator-subtab.active{background:rgba(0,212,255,.1);border-color:rgba(0,212,255,.5);color:var(--cyan);}
 
 /* ── Gérer les spots ── */
+.country-filter-box{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:.85rem 1rem;margin-bottom:1.5rem;}
+.country-filter-hdr{display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--text2);text-transform:uppercase;margin-bottom:.65rem;}
+.country-filter-summary{color:var(--cyan);font-size:10px;text-transform:none;letter-spacing:0;}
+.country-filter-list{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:.7rem;}
+.country-filter-chip{display:flex;align-items:center;gap:.35rem;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:.3rem .7rem;font-size:11.5px;color:var(--text3);cursor:pointer;transition:.15s;}
+.country-filter-chip.on{border-color:rgba(0,212,255,.4);color:var(--text);background:rgba(0,212,255,.08);}
+.country-filter-chip input{accent-color:var(--cyan);cursor:pointer;}
+.cfc-count{color:var(--text3);font-size:9.5px;}
+.country-filter-actions{display:flex;gap:.5rem;}
+.matrix-country-hdr{display:flex;align-items:center;gap:.6rem;padding:.5rem .3rem;}
+.matrix-country-hdr.off{opacity:.45;}
+.mch-collapse{background:none;border:none;color:var(--cyan);font-size:12px;cursor:pointer;padding:.1rem .3rem;}
+.mch-collapse:disabled{cursor:default;color:var(--text3);}
+.mch-check{display:flex;align-items:center;gap:.45rem;font-family:var(--display);font-size:12.5px;letter-spacing:.08em;color:var(--text);cursor:pointer;}
+.mch-check input{accent-color:var(--cyan);width:15px;height:15px;cursor:pointer;}
+.mch-count{margin-left:auto;background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.2);color:var(--cyan);padding:1px 8px;border-radius:8px;font-size:10px;font-family:var(--mono);}
+tr.country-group-row td{border-bottom:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.02);}
+.cards-country-hdr{margin:1.1rem 0 .5rem;background:rgba(255,255,255,.03);border-radius:8px;border-left:3px solid var(--cyan);padding:.55rem .85rem;}
 .gerer-country-group{margin-bottom:1.5rem;}
 .gerer-country-header{display:flex;align-items:center;gap:.5rem;font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--text3);text-transform:uppercase;margin-bottom:.6rem;padding-bottom:.4rem;border-bottom:1px solid rgba(255,255,255,.06);}
 .gerer-country-count{background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.2);color:var(--cyan);padding:1px 7px;border-radius:8px;font-size:10px;}
@@ -3134,7 +3156,7 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
         <div class="creator-field"><label>Nom du spot</label><input type="text" id="new-spot-name" placeholder="Mont Ventoux"></div>
         <div class="creator-field"><label>Cible visée</label><input type="text" id="new-spot-target" placeholder="→ Corse · Monte Cinto"></div>
         <div class="creator-field"><label>Couleur</label><input type="color" id="new-spot-color" value="#00D4FF"></div>
-        <div class="creator-field"><label>Pays</label><select id="new-spot-country"><option value="france">🇫🇷 France</option><option value="espagne">🇪🇸 Espagne</option><option value="italie">🇮🇹 Italie</option><option value="autre">🌍 Autre</option></select></div>
+        <div class="creator-field"><label>Pays</label><select id="new-spot-country"></select></div>
       </div>
     </div>
 
@@ -3204,6 +3226,19 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
     <div id="subtab-gerer" style="display:none">
       <div class="creator-title">📋 Gérer les spots</div>
       <div class="creator-sub">Tous tes spots classés par pays. Modifie ou supprime les spots personnalisés.</div>
+
+      <div class="country-filter-box">
+        <div class="country-filter-hdr">
+          <span>🌍 Pays actifs au chargement</span>
+          <span id="country-filter-summary" class="country-filter-summary"></span>
+        </div>
+        <div id="country-filter-list" class="country-filter-list"></div>
+        <div class="country-filter-actions">
+          <button type="button" class="spot-action-btn" onclick="setAllCountryFilter(true)">Tout cocher</button>
+          <button type="button" class="spot-action-btn" onclick="setAllCountryFilter(false)">Tout décocher</button>
+        </div>
+      </div>
+
       <div id="gerer-spots-list"></div>
     </div>
 
@@ -3995,7 +4030,7 @@ window.onunhandledrejection = function(e) {
 };
 const SPOTS = [
   {
-    id: 'cret', name: 'Crêt de la Perdrix', target: '→ Pyrénées', color: '#38bdf8',
+    id: 'cret', name: 'Crêt de la Perdrix', target: '→ Pyrénées', color: '#38bdf8', country: 'fr',
     obs: { lat: 45.4167, lon: 4.2167, alt: 1432 },
     mid: { lat: 44.02, lon: 2.60 },
     tgt: { lat: 42.655, lon: 0.730, alt: 3143 },
@@ -4003,7 +4038,7 @@ const SPOTS = [
     criteria: { wind_elim:30, wind_ok:20 }
   },
   {
-    id: 'mezenc', name: 'Mont Mézenc', target: '→ Pyrénées', color: '#34d399',
+    id: 'mezenc', name: 'Mont Mézenc', target: '→ Pyrénées', color: '#34d399', country: 'fr',
     obs: { lat: 44.9033, lon: 4.1875, alt: 1754 },
     mid: { lat: 44.1, lon: 2.8 },
     tgt: { lat: 42.655, lon: 0.730, alt: 3143 },
@@ -4011,7 +4046,7 @@ const SPOTS = [
     criteria: { wind_elim:30, wind_ok:20 }
   },
   {
-    id: 'puydome', name: 'Puy de Dôme', target: '→ Pyrénées', color: '#c084fc',
+    id: 'puydome', name: 'Puy de Dôme', target: '→ Pyrénées', color: '#c084fc', country: 'fr',
     obs: { lat: 45.7733, lon: 2.965, alt: 1465 },
     mid: { lat: 43.5, lon: 1.8 },
     tgt: { lat: 42.655, lon: 0.730, alt: 3143 },
@@ -4019,7 +4054,7 @@ const SPOTS = [
     criteria: { wind_elim:30, wind_ok:20 }
   },
   {
-    id: 'lozere', name: 'Mont Lozère', target: '→ Corse · 479 km', color: '#fbbf24',
+    id: 'lozere', name: 'Mont Lozère', target: '→ Corse · 479 km', color: '#fbbf24', country: 'fr',
     obs: { lat: 44.432, lon: 3.737, alt: 1699 },
     mid: { lat: 42.5, lon: 6.5 },
     tgt: { lat: 42.376, lon: 8.936, alt: 2706 },
@@ -4027,7 +4062,7 @@ const SPOTS = [
     criteria: { wind_elim:50, wind_ok:35, wind_min:15 }
   },
   {
-    id: 'kelibia', name: 'Fort de Kelibia', target: '→ Monastir · 120 km', color: '#22d3ee',
+    id: 'kelibia', name: 'Fort de Kelibia', target: '→ Monastir · 120 km', color: '#22d3ee', country: 'tn',
     obs: { lat: 36.85, lon: 11.10, alt: 152 },
     mid: { lat: 36.9, lon: 11.5 },
     tgt: { lat: 35.77, lon: 10.83, alt: 30 },
@@ -4035,7 +4070,7 @@ const SPOTS = [
     criteria: { wind_elim:25, wind_ok:20 }
   },
   {
-    id: 'zaghouan', name: 'Djebel Zaghouan', target: '→ Etna · 459 km', color: '#fb7185',
+    id: 'zaghouan', name: 'Djebel Zaghouan', target: '→ Etna · 459 km', color: '#fb7185', country: 'tn',
     obs: { lat: 36.3986, lon: 10.1469, alt: 700 },
     mid: { lat: 37.07, lon: 12.55 },
     tgt: { lat: 37.748, lon: 14.999, alt: 3357 },
@@ -4043,6 +4078,37 @@ const SPOTS = [
     criteria: { wind_elim:25, wind_ok:20 }
   }
 ];
+
+// ═══════════════════════════════════════════════════
+// PAYS — liste complète (ISO 3166-1), noms FR + drapeau générés dynamiquement
+// ═══════════════════════════════════════════════════
+const ISO_COUNTRY_CODES = ["AF","AL","DZ","AD","AO","AR","AM","AU","AT","AZ","BS","BH","BD","BB","BY","BE","BZ","BJ","BT","BO","BA","BW","BR","BN","BG","BF","BI","CV","KH","CM","CA","CF","TD","CL","CN","CO","KM","CG","CD","CR","CI","HR","CU","CY","CZ","DK","DJ","DM","DO","EC","EG","SV","GQ","ER","EE","SZ","ET","FJ","FI","FR","GA","GM","GE","DE","GH","GR","GD","GT","GN","GW","GY","HT","HN","HU","IS","IN","ID","IR","IQ","IE","IL","IT","JM","JP","JO","KZ","KE","KI","KW","KG","LA","LV","LB","LS","LR","LY","LI","LT","LU","MG","MW","MY","MV","ML","MT","MR","MU","MX","MD","MC","MN","ME","MA","MZ","MM","NA","NP","NL","NZ","NI","NE","NG","MK","NO","OM","PK","PA","PG","PY","PE","PH","PL","PT","QA","RO","RU","RW","KN","LC","VC","WS","SM","ST","SA","SN","RS","SC","SL","SG","SK","SI","SB","SO","ZA","KR","SS","ES","LK","SD","SR","SE","CH","SY","TW","TJ","TZ","TH","TL","TG","TO","TT","TN","TR","TM","TV","UG","UA","AE","GB","US","UY","UZ","VU","VA","VE","VN","YE","ZM","ZW","PS","XK"];
+function countryFlagEmoji(code){
+  if (!code || code.length !== 2) return '🌍';
+  return code.toUpperCase().replace(/./g, c => String.fromCodePoint(127397 + c.charCodeAt(0)));
+}
+function countryName(code){
+  try { return new Intl.DisplayNames(['fr'], { type: 'region' }).of((code||'').toUpperCase()) || code; }
+  catch(e){ return code; }
+}
+// Migration des anciennes valeurs texte (france, tunisie...) vers codes ISO
+const LEGACY_COUNTRY_MAP = { france:'fr', espagne:'es', italie:'it', tunisie:'tn', maroc:'ma', autre:'xx' };
+function normalizeCountry(code){
+  if (!code) return 'fr';
+  const c = String(code).toLowerCase();
+  if (LEGACY_COUNTRY_MAP[c]) return LEGACY_COUNTRY_MAP[c];
+  return c;
+}
+function populateCountrySelect(selectId, selectedValue){
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  const list = ISO_COUNTRY_CODES.map(code => ({ code, name: countryName(code) }))
+    .sort((a,b) => a.name.localeCompare(b.name, 'fr'));
+  sel.innerHTML = list.map(c => `<option value="${c.code.toLowerCase()}">${countryFlagEmoji(c.code)} ${c.name}</option>`).join('');
+  const norm = normalizeCountry(selectedValue);
+  if (norm && sel.querySelector(`option[value="${norm}"]`)) sel.value = norm;
+  else sel.value = 'fr';
+}
 
 // ═══════════════════════════════════════════════════
 // SCORING
@@ -4398,13 +4464,16 @@ function scoreDay(spot, h) {
       // moduler C0 (contraste initial silhouette vs front-light).
 
       // ── Mirage inférieur / miroitement thermique ──────────────────────
-      // Risque si soleil déjà haut (>8°) + air pas parfaitement pur
-      // Pénalité de netteté (flou thermique de surface)
-      const transpScore = h._transp ?? 20;
-      if (sunAlt > 8 && transpScore < 14) {
-        const miragePts = -8;
+      // Basé sur le K réel calculé (ERA5/Bislin) plutôt que sur une règle séparée
+      // (sunAlt + transparence) déconnectée du calcul physique. Sévérité proportionnelle
+      // à quel point K est bas : seuil de risque à K<0,10, max de pénalité à K=-0,05 (borne basse).
+      const kReal = h.k_bislin;
+      if (kReal !== undefined && kReal !== null && kReal < 0.10) {
+        const severity = Math.min(1, Math.max(0, (0.10 - kReal) / 0.15)); // 0 → 1
+        const miragePts = -Math.round(8 * severity);
         score = Math.max(0, score + miragePts);
-        items.push({ name: '🌡️ Mirage inférieur', val: Math.round(sunAlt), unit: '°', pts: miragePts, max: 0, color: 'amber', verdict: `⚠️ Risque miroitement thermique (soleil ${Math.round(sunAlt)}°, axe dégradé)`, elim: false });
+        const mirageColor = severity > 0.6 ? 'red' : 'amber';
+        items.push({ name: '🌡️ Mirage inférieur', val: kReal.toFixed(2), unit: '', pts: miragePts, max: 0, color: mirageColor, verdict: `⚠️ Risque miroitement thermique (K=${kReal.toFixed(2)}, réfraction défavorable)`, elim: false });
       }
 
     } catch(e) { console.warn('solarGeometryAdvanced error:', e.message, e.stack); items.push({ name: '☀️ Géométrie solaire', val: 'err', unit: '', pts: 0, max: 0, color: 'red', verdict: '⚠️ Calcul impossible: ' + e.message, elim: false }); }
@@ -4512,6 +4581,9 @@ function scoreDay(spot, h) {
 
     const dVis = -Math.log(KOSCH_EPSILON / C0) / sigma; // portée optique théorique (km)
     const ratio = dVis / distKm;
+    // Exposés pour réutilisation par le calcul IPR (calcIPR) : C(d)/C0 = exp(-sigma*d)
+    h.kosch_sigma = sigma;
+    h.kosch_C0 = C0;
 
     let koschPts, koschColor, koschVerdict;
     if (ratio >= 1.3) {
@@ -4786,7 +4858,9 @@ async function fetchSpot(spot, pastDays = 0) {
         const dNdh  = (n*sumXY - sumX*sumY) / (n*sumX2 - sumX*sumX); // N-units/m
         const R_earth = 6371000;
         k_bislin = -R_earth * dNdh * 1e-6;
-        k_bislin = Math.max(0.05, Math.min(0.45, k_bislin)); // garde-fou physique
+        // Borne basse réaliste : autorise le mirage inférieur (K négatif) au lieu de
+        // bloquer artificiellement K à 0,05. Plafond haut 0,45 conservé (super-réfraction).
+        k_bislin = Math.max(-0.05, Math.min(0.45, k_bislin));
         k_source = 'era5';
       } else {
         throw new Error('not enough levels');
@@ -4996,17 +5070,6 @@ function solarElevation(lat, lon, date) {
   return toDeg(Math.asin(sinAlt));
 }
 
-// Coefficient de réfraction VLD selon élévation solaire (basé sur Bennett/VLD)
-function refractionCoeff(elevDeg) {
-  if (elevDeg < 0)   return 0.80; // avant lever : réfraction sub-horizon
-  if (elevDeg < 5)   return 1.00; // 0–5° : réfraction maximale
-  if (elevDeg < 10)  return 0.92; // 5–10°
-  if (elevDeg < 15)  return 0.80; // 10–15°
-  if (elevDeg < 20)  return 0.65; // 15–20°
-  if (elevDeg < 25)  return 0.50; // 20–25°
-  return 0.38;                     // >25° : réfraction négligeable
-}
-
 // ═══════════════════════════════════════════════════
 // STATE & RENDER
 // ═══════════════════════════════════════════════════
@@ -5021,19 +5084,21 @@ async function fetchAll(pastDays = 0) {
   document.getElementById('prog').style.display='block';
   setStatus(pastDays > 0 ? `Chargement historique J-${pastDays}…` : 'Interrogation Open-Meteo…');
   renderMatrix(true); renderCards(true);
+  // Filtre pays actifs — n'interroge/charge que les spots des pays cochés
+  const activeSpots = getActiveSpots();
   // Séquençage avec délai 350ms entre spots pour éviter les 429 Open-Meteo
   const results = [];
-  for (let i = 0; i < SPOTS.length; i++) {
+  for (let i = 0; i < activeSpots.length; i++) {
     if (i > 0) await new Promise(r => setTimeout(r, 350));
-    const s = SPOTS[i];
-    setStatus(`Chargement ${s.name}… (${i+1}/${SPOTS.length})`);
+    const s = activeSpots[i];
+    setStatus(`Chargement ${s.name}… (${i+1}/${activeSpots.length})`);
     const r = await Promise.allSettled([fetchSpot(s, pastDays)]);
     results.push(r[0]);
-    setProgress(Math.round((i+1)/SPOTS.length*100));
+    setProgress(Math.round((i+1)/activeSpots.length*100));
   }
   const errors = [];
   results.forEach((r,i)=>{
-    const s=SPOTS[i];
+    const s=activeSpots[i];
     if(r.status==='fulfilled'){forecasts[s.id]=r.value;log(`✅ ${s.name}`,'ok');}
     else{forecasts[s.id]=null;log(`❌ ${s.name}: ${r.reason}`,'err');errors.push(`${s.name}: ${r.reason}`);}
   });
@@ -5042,7 +5107,7 @@ async function fetchAll(pastDays = 0) {
   else { eb.style.display='none'; }
   // U5 — meilleur score semaine par spot pour la carte
   window._lastScores = {};
-  SPOTS.forEach(s => {
+  activeSpots.forEach(s => {
     const fc = forecasts[s.id];
     if (fc) window._lastScores[s.id] = Math.max(...fc.map(d => d.score || 0));
   });
@@ -5231,24 +5296,76 @@ function renderMatrix(loading) {
     ${days.map((d,i)=>`<th class="${i===0?'today-col':''}">${dayLabel(d)}<br><small style="color:var(--cyan);font-size:11
     px">${twLbl}</small></th>`).join('')}
   </tr>`;
-  document.getElementById('matrix-body').innerHTML=SPOTS.map(s=>{
-    const fc=forecasts[s.id];
-    let bestDay=-1,bestSc=-1;
-    if(fc) fc.forEach((d,i)=>{const sc=getScore(fc,i); if(sc>bestSc){bestSc=sc;bestDay=i;}});
-    return `<tr>
-      <td class="spot-nm">
-        <span class="snm" style="color:${s.color}">${s.name}</span>
-        <span class="stg">${s.target}</span>
+  document.getElementById('matrix-body').innerHTML=renderMatrixGroupedRows(loading, days);
+}
+
+// ── Groupes pays pliables + cochables, directement dans le tableau ──────────
+function getCollapsedCountries() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('vld_matrix_collapsed_countries') || '[]');
+    return new Set(Array.isArray(saved) ? saved : []);
+  } catch(e) { return new Set(); }
+}
+function setCollapsedCountries(set) {
+  localStorage.setItem('vld_matrix_collapsed_countries', JSON.stringify([...set]));
+}
+function toggleMatrixCountryCollapse(code) {
+  const set = getCollapsedCountries();
+  if (set.has(code)) set.delete(code); else set.add(code);
+  setCollapsedCountries(set);
+  renderMatrix(false); renderCards(false);
+}
+function renderMatrixGroupedRows(loading, days) {
+  const grouped = {};
+  SPOTS.forEach(s => {
+    const c = normalizeCountry(s.country);
+    if (!grouped[c]) grouped[c] = [];
+    grouped[c].push(s);
+  });
+  const countryKeys = Object.keys(grouped).sort((a,b) => countryName(a).localeCompare(countryName(b), 'fr'));
+  const activeList = getActiveCountries();
+  const activeSet = new Set(activeList === null ? countryKeys : activeList);
+  const collapsed = getCollapsedCountries();
+  const colspan = days.length + 1;
+
+  return countryKeys.map(ck => {
+    const spots = grouped[ck];
+    const isOn = activeSet.has(ck);
+    const isCollapsed = collapsed.has(ck);
+    const arrow = !isOn ? '⏸' : (isCollapsed ? '▶' : '🔽');
+    const headerRow = `<tr class="country-group-row">
+      <td colspan="${colspan}">
+        <div class="matrix-country-hdr ${isOn ? '' : 'off'}">
+          <button type="button" class="mch-collapse" ${isOn ? '' : 'disabled'} onclick="toggleMatrixCountryCollapse('${ck}')">${arrow}</button>
+          <label class="mch-check">
+            <input type="checkbox" ${isOn ? 'checked' : ''} onchange="toggleCountryFilter('${ck}', this.checked)">
+            ${countryFlagEmoji(ck)} ${countryName(ck).toUpperCase()}
+          </label>
+          <span class="mch-count">${spots.length}</span>
+        </div>
       </td>
-      ${days.map((_,di)=>{
-        if(loading) return `<td><div class="dcell loading">…</div></td>`;
-        if(!fc) return `<td><div class="dcell empty">—</div></td>`;
-        const sc=getScore(fc,di), isBest=di===bestDay;
-        const irSc=getIRScoreVal(fc,di);
-        const irDot=(sc<75 && irSc>=75)?'<span class="ir-dot"></span>':'';
-        return `<td><div class="dcell ${cellClass(sc)} ${isBest?'best-day':''}">${irDot}${sc}</div></td>`;
-      }).join('')}
     </tr>`;
+    const showRows = isOn && !isCollapsed;
+    const rows = !showRows ? '' : spots.map(s => {
+      const fc=forecasts[s.id];
+      let bestDay=-1,bestSc=-1;
+      if(fc) fc.forEach((d,i)=>{const sc=getScore(fc,i); if(sc>bestSc){bestSc=sc;bestDay=i;}});
+      return `<tr>
+        <td class="spot-nm">
+          <span class="snm" style="color:${s.color}">${s.name}</span>
+          <span class="stg">${s.target}</span>
+        </td>
+        ${days.map((_,di)=>{
+          if(loading) return `<td><div class="dcell loading">…</div></td>`;
+          if(!fc) return `<td><div class="dcell empty">—</div></td>`;
+          const sc=getScore(fc,di), isBest=di===bestDay;
+          const irSc=getIRScoreVal(fc,di);
+          const irDot=(sc<75 && irSc>=75)?'<span class="ir-dot"></span>':'';
+          return `<td><div class="dcell ${cellClass(sc)} ${isBest?'best-day':''}">${irDot}${sc}</div></td>`;
+        }).join('')}
+      </tr>`;
+    }).join('');
+    return headerRow + rows;
   }).join('');
 }
 
@@ -5325,7 +5442,40 @@ function showAltitudeAlert(spotId, realAlt, newAlt, bestBefore, bestAfter) {
 
 function renderCards(loading) {
   const days=getDays();
-  document.getElementById('spot-cards').innerHTML=SPOTS.map(s=>{
+  document.getElementById('spot-cards').innerHTML=renderCardsGrouped(loading, days);
+}
+function renderCardsGrouped(loading, days) {
+  const grouped = {};
+  SPOTS.forEach(s => {
+    const c = normalizeCountry(s.country);
+    if (!grouped[c]) grouped[c] = [];
+    grouped[c].push(s);
+  });
+  const countryKeys = Object.keys(grouped).sort((a,b) => countryName(a).localeCompare(countryName(b), 'fr'));
+  const activeList = getActiveCountries();
+  const activeSet = new Set(activeList === null ? countryKeys : activeList);
+  const collapsed = getCollapsedCountries();
+
+  return countryKeys.map(ck => {
+    const spots = grouped[ck];
+    const isOn = activeSet.has(ck);
+    const isCollapsed = collapsed.has(ck);
+    const arrow = !isOn ? '⏸' : (isCollapsed ? '▶' : '🔽');
+    const header = `
+      <div class="matrix-country-hdr cards-country-hdr ${isOn ? '' : 'off'}">
+        <button type="button" class="mch-collapse" ${isOn ? '' : 'disabled'} onclick="toggleMatrixCountryCollapse('${ck}')">${arrow}</button>
+        <label class="mch-check">
+          <input type="checkbox" ${isOn ? 'checked' : ''} onchange="toggleCountryFilter('${ck}', this.checked)">
+          ${countryFlagEmoji(ck)} ${countryName(ck).toUpperCase()}
+        </label>
+        <span class="mch-count">${spots.length}</span>
+      </div>`;
+    if (!isOn || isCollapsed) return header;
+    const cards = spots.map(s => renderSpotCard(s, loading, days)).join('');
+    return header + cards;
+  }).join('');
+}
+function renderSpotCard(s, loading, days) {
     const fc=forecasts[s.id];
     let bestSc=0,bestDayLabel='';
        if(fc){let bi=0;fc.forEach((d,i)=>{const sc=getScore(fc,i); if(sc>bestSc){bestSc=sc;bi=i;}});bestDayLabel=fullLabel(days[bi]);}
@@ -5371,7 +5521,6 @@ function renderCards(loading) {
       </div>
       ${body}
     </div>`;
-  }).join('');
 }
 
 function openScoreModal(dataB64) {
@@ -5617,6 +5766,9 @@ function renderDayRow(dayData, date, spot) {
       _day: h._day, _obsDate: obsDate.toISOString(),
     };
     scoredResult = scoreDay(spot, hData);
+    // scoreDay a calculé kosch_sigma/C0 sur l'objet hData local (créneau soir) — on les
+    // recopie sur h (objet jour, affiché par renderKMini) pour que l'IPR les retrouve.
+    h.kosch_sigma = hData.kosch_sigma; h.kosch_C0 = hData.kosch_C0;
   } else if (tw === 'avg' || tw === 'now') {
     // S'assurer que h a une _obsDate correcte pour solarGeometryAdvanced
     if (!h._obsDate || isNaN(new Date(h._obsDate).getTime())) {
@@ -5656,6 +5808,8 @@ function renderDayRow(dayData, date, spot) {
       _day: h._day, _obsDate: obsDate.toISOString(),
     };
     scoredResult = scoreDay(spot, hData);
+    // Même correctif que pour le créneau soir : recopier kosch_sigma/C0 sur h.
+    h.kosch_sigma = hData.kosch_sigma; h.kosch_C0 = hData.kosch_C0;
   }
   items = scoredResult.items;
 
@@ -5693,7 +5847,7 @@ function renderDayRow(dayData, date, spot) {
     </div>
     <div class="drow-body" id="${did}">
       <div class="drow-left">${renderMeteoButtons(items)}${explainBtn}${buildIRCard(forecasts[spot.id], day, spot, fullLabel(date))}${journalBtn}</div>
-      <div class="drow-right">${renderNewCurveBlock(spot,k)}${renderKMini(k,h)}${renderAngularResolutionBlock(h, spot, getApertureMm())}${renderHWTBlock(spot)}</div>
+      <div class="drow-right">${renderNewCurveBlock(spot,k)}${renderKMini(k,h,spot)}${renderAngularResolutionBlock(h, spot, getApertureMm())}${renderHWTBlock(spot)}</div>
     </div>
   </div>`;
 }
@@ -6048,7 +6202,7 @@ function renderAngularResolutionBlock(h, spot, apertureMm) {
   } catch(e) { console.warn('renderAngularResolutionBlock error:', e.message); return ''; }
 }
 
-function renderKMini(k, h) {
+function renderKMini(k, h, spot) {
   if (k === undefined || k === null) return `<div class="dr-k"><div class="dr-k-main"><span class="dr-k-eq" style="color:var(--text3)">K = —</span></div></div>`;
   let kColor='var(--text3)', kVerdict='—';
   if(k>0.4){kColor='#22d3ee';kVerdict='Super-réfraction 🌊';}
@@ -6060,11 +6214,33 @@ function renderKMini(k, h) {
   const sourceBadge = h.k_source === 'era5'
     ? `<span style="font-size:9px;font-family:var(--mono);padding:1px 6px;border-radius:3px;background:rgba(0,212,255,.12);border:1px solid rgba(0,212,255,.3);color:var(--cyan);margin-left:6px">ERA5 réel</span>`
     : `<span style="font-size:9px;font-family:var(--mono);padding:1px 6px;border-radius:3px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);color:var(--amber);margin-left:6px">Bislin</span>`;
+  // IPR — Indice de Perception Réelle (informatif, n'impacte pas le score /100)
+  let iprHtml = '';
+  if (spot) {
+    const iprData = calcIPR(spot, k, h);
+    if (iprData) {
+      const iprPct = Math.round(iprData.ipr);
+      let iprColor;
+      if (iprPct >= 70) iprColor = 'var(--green)';
+      else if (iprPct >= 40) iprColor = 'var(--amber)';
+      else iprColor = 'var(--red)';
+      iprHtml = `<span style="margin-left:auto;padding-left:10px;border-left:1px solid rgba(255,255,255,.12);display:inline-flex;align-items:baseline;gap:4px">
+        <span style="font-family:var(--mono);font-size:9px;color:var(--text3)">IPR</span>
+        <span style="font-family:var(--display);font-size:14px;font-weight:600;color:${iprColor}">${iprPct}%</span>
+      </span>`;
+    } else {
+      // Placeholder visible plutôt qu'un IPR silencieusement absent (ex. AOD indisponible)
+      iprHtml = `<span style="margin-left:auto;padding-left:10px;border-left:1px solid rgba(255,255,255,.12);display:inline-flex;align-items:baseline;gap:4px">
+        <span style="font-family:var(--mono);font-size:9px;color:var(--text3)">IPR</span>
+        <span style="font-family:var(--display);font-size:14px;font-weight:600;color:var(--text3)">—</span>
+      </span>`;
+    }
+  }
   return `<div class="dr-k">
     <div class="dr-k-main">
       <span class="dr-k-eq" style="color:${kColor}">K = ${k.toFixed(3)}</span>
       ${sourceBadge}
-      <span class="dr-k-verdict" style="color:${kColor}">${kVerdict}</span>
+      ${iprHtml}
     </div>
     ${dTdh!==undefined?`<div class="dr-k-sub">dT/dh = ${(dTdh*1000).toFixed(2)} °C/100m</div>`:''}
   </div>
@@ -6358,6 +6534,21 @@ function _calcBislin(spot, k) {
     topAngle,
     d_H
   };
+}
+
+// ── IPR — Indice de Perception Réelle ──────────────────────
+// Combine deux filtres appliqués en série (produit, pas moyenne) :
+// 1. Fraction géométrique visible : part de la cible au-dessus de l'horizon réfracté (K)
+// 2. Fraction de contraste retenu : loi de Koschmieder C(d)/C0 = exp(-sigma*d)
+// Purement informatif — n'impacte jamais le score de clarté /100.
+function calcIPR(spot, k, h) {
+  const d = _calcBislin(spot, k);
+  const fracGeo = d.h2 > 0 ? Math.min(1, Math.max(0, d.visible / d.h2)) : 0;
+  const sigma = h.kosch_sigma;
+  const distKm = spot.dist_km;
+  if (sigma === undefined || sigma === null || !distKm) return null; // AOD indisponible
+  const fracContraste = Math.exp(-sigma * distKm);
+  return { ipr: fracGeo * fracContraste * 100, fracGeo, fracContraste };
 }
 
 function _updateOverlayStats(k) {
@@ -6983,7 +7174,7 @@ function renderMapSpots() {
   let hasSpots = false;
   const isNum = v => typeof v === 'number' && Number.isFinite(v);
 
-  SPOTS.forEach(spot => {
+  getActiveSpots().forEach(spot => {
     if (!spot.obs || !spot.tgt) return;
     if (!isNum(spot.obs.lat) || !isNum(spot.obs.lon) || !isNum(spot.tgt.lat) || !isNum(spot.tgt.lon)) {
       console.warn(`[VLD-Map] Spot "${spot.name || spot.id}" ignoré sur la carte : coordonnées invalides`, spot);
@@ -7117,6 +7308,7 @@ function importFromJSON() {
       // Validation champs minimaux
       if (!spot.name || !spot.obs || !spot.tgt || !spot.mid) throw new Error('Champs manquants (name, obs, tgt, mid requis)');
       spot.custom = true;
+      spot.country = normalizeCountry(spot.country);
       if (!spot.id) spot.id = 'custom_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
       if (!SPOTS.find(s => s.id === spot.id)) { SPOTS.push(spot); added++; }
     });
@@ -7364,6 +7556,9 @@ function loadCustomSpots() {
         if (!spot.criteria.wind_elim) { spot.criteria.wind_elim = 30; dirty = true; }
         if (!spot.criteria.wind_ok)   { spot.criteria.wind_ok   = 20; dirty = true; }
       }
+      // Migration : anciennes valeurs texte de pays (france, tunisie...) → codes ISO (fr, tn...)
+      const normCountry = normalizeCountry(spot.country);
+      if (normCountry !== spot.country) { spot.country = normCountry; dirty = true; }
       if (!SPOTS.find(s => s.id === spot.id)) SPOTS.push(spot);
     });
     // Resauvegarder si des critères ont été corrigés
@@ -7388,7 +7583,73 @@ function switchCreatorSubtab(tab) {
   document.getElementById('subtab-gerer').style.display = tab === 'gerer' ? '' : 'none';
   document.getElementById('subtab-btn-creer').classList.toggle('active', tab === 'creer');
   document.getElementById('subtab-btn-gerer').classList.toggle('active', tab === 'gerer');
+  if (tab === 'creer') populateCountrySelect('new-spot-country', document.getElementById('new-spot-country').value);
   if (tab === 'gerer') renderGererSpots();
+}
+
+// ═══════════════════════════════════════════════════
+// FILTRE PAYS ACTIFS — quels spots sont chargés/affichés
+// ═══════════════════════════════════════════════════
+function getActiveCountries() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('vld_active_countries') || 'null');
+    if (Array.isArray(saved)) return saved;
+  } catch(e) {}
+  return null; // null = tous actifs (aucun filtre défini encore)
+}
+function setActiveCountries(list) {
+  localStorage.setItem('vld_active_countries', JSON.stringify(list));
+}
+function getSpotCountries() {
+  // Liste des pays réellement présents parmi les spots (natifs + custom), ordonnée par nb de spots desc
+  const counts = {};
+  SPOTS.forEach(s => { const c = normalizeCountry(s.country); counts[c] = (counts[c]||0) + 1; });
+  return Object.keys(counts).sort((a,b) => counts[b]-counts[a] || countryName(a).localeCompare(countryName(b),'fr'))
+    .map(c => ({ code: c, count: counts[c] }));
+}
+function getActiveSpots() {
+  const active = getActiveCountries();
+  if (!active) return SPOTS; // pas de filtre = tout charger
+  const set = new Set(active);
+  const filtered = SPOTS.filter(s => set.has(normalizeCountry(s.country)));
+  return filtered.length ? filtered : SPOTS; // sécurité : jamais 0 spot chargé
+}
+function toggleCountryFilter(code, checked) {
+  const present = getSpotCountries().map(c => c.code);
+  let active = getActiveCountries();
+  if (active === null) active = present.slice(); // initialise à "tout coché"
+  if (checked) { if (!active.includes(code)) active.push(code); }
+  else { active = active.filter(c => c !== code); }
+  setActiveCountries(active);
+  renderCountryFilter();
+  if (typeof renderMatrix === 'function') renderMatrix(false);
+  if (typeof renderCards === 'function') renderCards(false);
+  if (typeof updateMapIfVisible === 'function') updateMapIfVisible();
+}
+function setAllCountryFilter(checked) {
+  const present = getSpotCountries().map(c => c.code);
+  setActiveCountries(checked ? present : []);
+  renderCountryFilter();
+  if (typeof renderMatrix === 'function') renderMatrix(false);
+  if (typeof renderCards === 'function') renderCards(false);
+  if (typeof updateMapIfVisible === 'function') updateMapIfVisible();
+}
+function renderCountryFilter() {
+  const box = document.getElementById('country-filter-list');
+  if (!box) return;
+  const countries = getSpotCountries();
+  const active = getActiveCountries();
+  const activeSet = new Set(active === null ? countries.map(c => c.code) : active);
+  box.innerHTML = countries.map(c => `
+    <label class="country-filter-chip ${activeSet.has(c.code) ? 'on' : ''}">
+      <input type="checkbox" ${activeSet.has(c.code) ? 'checked' : ''} onchange="toggleCountryFilter('${c.code}', this.checked)">
+      ${countryFlagEmoji(c.code)} ${countryName(c.code)} <span class="cfc-count">${c.count}</span>
+    </label>`).join('');
+  const summary = document.getElementById('country-filter-summary');
+  if (summary) {
+    const n = getActiveSpots().length;
+    summary.textContent = `${n} / ${SPOTS.length} spot(s) actif(s) au chargement`;
+  }
 }
 
 // ═══════════════════════════════════════════════════
@@ -7397,26 +7658,17 @@ function switchCreatorSubtab(tab) {
 function renderGererSpots() {
   const container = document.getElementById('gerer-spots-list');
   if (!container) return;
+  renderCountryFilter();
 
-  const countryMeta = {
-    france:  { flag: '🇫🇷', label: 'France' },
-    espagne: { flag: '🇪🇸', label: 'Espagne' },
-    italie:  { flag: '🇮🇹', label: 'Italie' },
-    maroc:   { flag: '🇲🇦', label: 'Maroc' },
-    tunisie: { flag: '🇹🇳', label: 'Tunisie' },
-    autre:   { flag: '🌍', label: 'Autre' },
-  };
-
-  // Groupe par pays
+  // Groupe par pays (code ISO normalisé)
   const groups = {};
   SPOTS.forEach(s => {
-    const key = s.country || 'france';
+    const key = normalizeCountry(s.country);
     if (!groups[key]) groups[key] = [];
     groups[key].push(s);
   });
 
-  const order = ['france', 'espagne', 'italie', 'maroc', 'tunisie', 'autre'];
-  const keys = [...order.filter(k => groups[k]), ...Object.keys(groups).filter(k => !order.includes(k))];
+  const keys = Object.keys(groups).sort((a,b) => countryName(a).localeCompare(countryName(b), 'fr'));
 
   if (!SPOTS.length) {
     container.innerHTML = '<div class="gerer-empty">Aucun spot disponible.</div>';
@@ -7425,7 +7677,7 @@ function renderGererSpots() {
 
   container.innerHTML = keys.map(key => {
     const spots = groups[key];
-    const meta = countryMeta[key] || { flag: '🌍', label: key };
+    const meta = { flag: countryFlagEmoji(key), label: countryName(key) };
     const rows = spots.map(s => {
       const isCustom = !!s.custom;
       const actions = isCustom
@@ -7465,7 +7717,7 @@ function editCustomSpot(id) {
   document.getElementById('new-spot-name').value = s.name || '';
   document.getElementById('new-spot-target').value = s.target || '';
   document.getElementById('new-spot-color').value = s.color || '#00D4FF';
-  document.getElementById('new-spot-country').value = s.country || 'france';
+  populateCountrySelect('new-spot-country', s.country);
   document.getElementById('new-obs-lat').value = s.obs?.lat || '';
   document.getElementById('new-obs-lon').value = s.obs?.lon || '';
   document.getElementById('new-obs-alt').value = s.obs?.alt || '';
@@ -7545,6 +7797,7 @@ function resetCreatorForm() {
   document.getElementById('new-spot-name').value = '';
   document.getElementById('new-spot-target').value = '';
   document.getElementById('new-spot-color').value = '#38bdf8';
+  populateCountrySelect('new-spot-country', 'fr');
   document.getElementById('new-obs-lat').value = '';
   document.getElementById('new-obs-lon').value = '';
   document.getElementById('new-obs-alt').value = '';
