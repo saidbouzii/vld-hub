@@ -1395,6 +1395,39 @@ tr.country-group-row td{border-bottom:1px solid rgba(255,255,255,.08);background
 .hwt-btn{font-family:var(--mono);font-size:10px;padding:5px 11px;border-radius:7px;cursor:pointer;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:var(--text2);transition:all .2s;margin-right:.4rem;margin-bottom:.3rem;}
 .hwt-btn:hover{border-color:rgba(0,212,255,.3);color:var(--cyan);}
 
+/* ── Rangée des 3 cards pédagogiques (Score / IR / IPR) alignées à ~31% chacune, même taille ── */
+.drow-explain-row{
+  grid-column:1/-1;
+  display:flex; flex-wrap:wrap; gap:3.5%;
+}
+.drow-explain-row > *{
+  flex:0 0 31%; max-width:31%; min-width:0;
+  aspect-ratio:1/1; min-height:0;
+  overflow:hidden;
+}
+.drow-explain-row > * img{
+  width:100%; height:100%; object-fit:contain; display:block;
+}
+@media(max-width:480px){
+  .drow-explain-row{gap:2%;}
+  .drow-explain-row > *{flex:0 0 32%; max-width:32%;}
+}
+
+/* ── Bandeau bouton "Poster dans Communauté" (sous Relief intermédiaire) ── */
+.comm-banner-btn{
+  display:flex; align-items:center; justify-content:center; gap:.4rem;
+  width:100%; margin-top:.6rem; padding:.6rem .8rem;
+  border-radius:9px; cursor:pointer;
+  background:rgba(255,214,0,.06); border:1px solid rgba(255,214,0,.28);
+  transition:all .2s;
+}
+.comm-banner-btn:hover{background:rgba(255,214,0,.12); border-color:rgba(255,214,0,.5);}
+.comm-banner-label{
+  font-family:'Inter','Helvetica Neue',sans-serif;
+  font-weight:800; font-size:12.5px; letter-spacing:.02em;
+  color:#ffd400; text-transform:uppercase;
+}
+
 /* ── DR-CURVE — Panneau droit courbure + K ── */
 .dr-curve{padding:.65rem .85rem;border-bottom:1px solid rgba(255,255,255,.05);}
 .dr-curve-title{font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:.06em;margin-bottom:.45rem;text-transform:uppercase;}
@@ -5654,13 +5687,54 @@ function buildIRCard(fc, di, spot, dateLabel) {
   return `<div onclick="openIRModal('${payload}')" style="cursor:pointer;background:none;border:none;box-shadow:none;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;align-items:stretch;width:100%;">
     <img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/refs/heads/main/1000032087.png"
       alt="Score IR"
+      style="width:100%;height:100%;display:block;object-fit:contain;background:transparent;transform:scale(1.12);transform-origin:center;"
+      loading="lazy"
+    />
+  </div>`;
+}
+
+function buildIPRCard(spot, k, h, dateLabel) {
+  const iprData = (typeof calcIPR === 'function') ? calcIPR(spot, k, h) : null;
+  const score = iprData ? Math.round(iprData.ipr) : null;
+  const color = score === null ? '#9ca3af' : score >= 70 ? '#4ade80' : score >= 40 ? '#fbbf24' : '#f87171';
+  const payload = btoa(unescape(encodeURIComponent(JSON.stringify({
+    ipr: iprData ? iprData.ipr : null,
+    fracRefraction: iprData ? iprData.fracRefraction : null,
+    fracContraste: iprData ? iprData.fracContraste : null,
+    sigmaSource: iprData ? iprData.sigmaSource : null,
+    k: k ?? null,
+    spotName: spot.name, dateLabel
+  }))));
+  return `<div onclick="openIPRModal('${payload}')" style="cursor:pointer;background:none;border:none;box-shadow:none;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;align-items:stretch;width:100%;">
+    <img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/refs/heads/main/file_00000000aa2481f48535be6b448adecc.png"
+      alt="Comprendre l'IPR"
       style="width:100%;display:block;object-fit:contain;background:transparent;"
       loading="lazy"
     />
-    <div style="text-align:center;padding:.1rem 0 .05rem;font-family:'Inter','Helvetica Neue',sans-serif;font-size:13px;font-weight:900;letter-spacing:.03em;line-height:1;color:${color}">
-      📷 IR <span style="font-size:18px">${score}</span><span style="font-size:10px;color:rgba(255,255,255,.4)">/100</span>
-    </div>
   </div>`;
+}
+
+function openIPRModal(dataB64) {
+  const d = JSON.parse(decodeURIComponent(escape(atob(dataB64))));
+  const { ipr, fracRefraction, fracContraste, sigmaSource, k, spotName, dateLabel } = d;
+  const score = (ipr !== null && ipr !== undefined) ? Math.round(ipr) : null;
+  const scColor = score === null ? '#9ca3af' : score >= 70 ? '#4ade80' : score >= 40 ? '#fbbf24' : '#f87171';
+  document.getElementById('score-modal-body').innerHTML = `
+    <div class="score-modal-title">🔭 IPR — ${spotName} · ${dateLabel}</div>
+    <img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/refs/heads/main/file_00000000aa2481f48535be6b448adecc.png"
+      alt="Comprendre l'IPR"
+      style="width:100%;border-radius:10px;margin:.5rem 0 1rem;display:block;object-fit:cover;"
+      loading="lazy"
+    />
+    <div class="score-modal-score" style="color:${scColor}">${score !== null ? score : '—'}<span style="font-size:18px;color:var(--text3)">%</span></div>
+    <div style="margin-top:.75rem;font-family:var(--mono);font-size:11px;color:var(--text3);line-height:1.7">
+      Réfraction : <strong style="color:var(--text2)">${fracRefraction !== null && fracRefraction !== undefined ? Math.round(fracRefraction*100)+'%' : '—'}</strong> · K = ${(k !== null && k !== undefined) ? Number(k).toFixed(3) : '—'}<br>
+      Contraste retenu (Koschmieder) : <strong style="color:var(--text2)">${fracContraste !== null && fracContraste !== undefined ? Math.round(fracContraste*100)+'%' : '—'}</strong>${sigmaSource === 'vis' ? ' (via visibilité)' : ''}<br>
+      IPR = Réfraction × Contraste — indicateur informatif, sans impact sur le score de clarté /100.
+    </div>
+  `;
+  document.getElementById('score-modal-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
 }
 
 function openIRModal(dataB64) {
@@ -5826,17 +5900,22 @@ function renderDayRow(dayData, date, spot) {
     wind: h.wind ?? null,
     slp: h.slp ?? null,
   }).replace(/'/g, '&apos;');
-  const journalBtn = `<div class="drow-journal-card"
+  // Bandeau bouton "Poster dans Communauté" — même data/clic que l'ancienne card,
+  // repositionné en bandeau sous "Relief intermédiaire" (drow-right).
+  const communityBanner = `<div class="comm-banner-btn"
     data-spot-id="${spot.id}"
     data-journal-payload='${journalPayload}'
     data-date-label="${fullLabel(date).replace(/"/g, '&quot;')}"
     onclick="handleJournalCardClick(this)"
     role="button" tabindex="0">
-    <img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/refs/heads/main/1000031340%20(3).png" alt="Journal de Bord" loading="lazy">
-    <div class="drow-journal-card-text">
-      <span class="drow-journal-card-label">JOURNAL<br>DE BORD</span>
-      <span class="drow-journal-card-sub">${journalSubLabel}</span>
-    </div>
+    <span class="comm-banner-label">📌 Poster dans communauté</span>
+  </div>`;
+
+  // Rangée des 3 cards pédagogiques alignées à ~31% chacune
+  const explainRow = `<div class="drow-explain-row">
+    ${explainBtn}
+    ${buildIRCard(forecasts[spot.id], day, spot, fullLabel(date))}
+    ${buildIPRCard(spot, k, h, fullLabel(date))}
   </div>`;
 
   return `<div class="drow">
@@ -5846,8 +5925,8 @@ function renderDayRow(dayData, date, spot) {
       <span class="drow-score" style="color:${sc}">${score}</span>
     </div>
     <div class="drow-body" id="${did}">
-      <div class="drow-left">${renderMeteoButtons(items)}${explainBtn}${buildIRCard(forecasts[spot.id], day, spot, fullLabel(date))}${journalBtn}</div>
-      <div class="drow-right">${renderNewCurveBlock(spot,k)}${renderKMini(k,h,spot)}${renderAngularResolutionBlock(h, spot, getApertureMm())}${renderHWTBlock(spot)}</div>
+      <div class="drow-left">${renderMeteoButtons(items)}${explainRow}</div>
+      <div class="drow-right">${renderNewCurveBlock(spot,k)}${renderKMini(k,h,spot,getIRScore(forecasts[spot.id], day))}${renderAngularResolutionBlock(h, spot, getApertureMm())}${renderHWTBlock(spot)}${communityBanner}</div>
     </div>
   </div>`;
 }
@@ -6202,7 +6281,7 @@ function renderAngularResolutionBlock(h, spot, apertureMm) {
   } catch(e) { console.warn('renderAngularResolutionBlock error:', e.message); return ''; }
 }
 
-function renderKMini(k, h, spot) {
+function renderKMini(k, h, spot, irResult) {
   if (k === undefined || k === null) return `<div class="dr-k"><div class="dr-k-main"><span class="dr-k-eq" style="color:var(--text3)">K = —</span></div></div>`;
   let kColor='var(--text3)', kVerdict='—';
   if(k>0.4){kColor='#22d3ee';kVerdict='Super-réfraction 🌊';}
@@ -6214,6 +6293,16 @@ function renderKMini(k, h, spot) {
   const sourceBadge = h.k_source === 'era5'
     ? `<span style="font-size:9px;font-family:var(--mono);padding:1px 6px;border-radius:3px;background:rgba(0,212,255,.12);border:1px solid rgba(0,212,255,.3);color:var(--cyan);margin-left:6px">ERA5 réel</span>`
     : `<span style="font-size:9px;font-family:var(--mono);padding:1px 6px;border-radius:3px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);color:var(--amber);margin-left:6px">Bislin</span>`;
+  // IR — Score infrarouge (badge compact aligné avec K / IPR)
+  let irHtml = '';
+  if (irResult) {
+    const irScore = irResult.score;
+    const irColor = irScore >= 70 ? 'var(--green)' : irScore >= 45 ? 'var(--amber)' : 'var(--red)';
+    irHtml = `<span style="margin-left:auto;padding-left:14px;border-left:1px solid rgba(255,255,255,.14);display:inline-flex;align-items:baseline;gap:10px">
+      <span style="font-family:var(--display);font-size:16px;font-weight:800;color:#fff">📷 IR</span>
+      <span style="font-family:var(--display);font-size:26px;font-weight:800;color:${irColor}">${irScore}</span>
+    </span>`;
+  }
   // IPR — Indice de Perception Réelle (informatif, n'impacte pas le score /100)
   let iprHtml = '';
   if (spot) {
@@ -6224,15 +6313,21 @@ function renderKMini(k, h, spot) {
       if (iprPct >= 70) iprColor = 'var(--green)';
       else if (iprPct >= 40) iprColor = 'var(--amber)';
       else iprColor = 'var(--red)';
-      iprHtml = `<span style="margin-left:auto;padding-left:10px;border-left:1px solid rgba(255,255,255,.12);display:inline-flex;align-items:baseline;gap:4px">
-        <span style="font-family:var(--mono);font-size:9px;color:var(--text3)">IPR</span>
-        <span style="font-family:var(--display);font-size:14px;font-weight:600;color:${iprColor}">${iprPct}%</span>
+      const srcTag = iprData.sigmaSource === 'vis'
+        ? `<span style="font-family:var(--mono);font-size:9px;color:var(--text3);opacity:.7" title="Contraste estimé depuis la visibilité (AOD indisponible)">~vis</span>`
+        : '';
+      const refLabel = `Réfraction: ${Math.round(iprData.fracRefraction*100)}%`;
+      const ctrLabel = `Contraste: ${Math.round(iprData.fracContraste*100)}%`;
+      iprHtml = `<span style="${irHtml ? '' : 'margin-left:auto;'}padding-left:14px;border-left:1px solid rgba(255,255,255,.14);display:inline-flex;align-items:baseline;gap:10px" title="IPR = ${refLabel} × ${ctrLabel}">
+        <span style="font-family:var(--display);font-size:16px;font-weight:800;color:#fff">🔭 IPR</span>
+        <span style="font-family:var(--display);font-size:26px;font-weight:800;color:${iprColor}">${iprPct}%</span>
+        ${srcTag}
       </span>`;
     } else {
       // Placeholder visible plutôt qu'un IPR silencieusement absent (ex. AOD indisponible)
-      iprHtml = `<span style="margin-left:auto;padding-left:10px;border-left:1px solid rgba(255,255,255,.12);display:inline-flex;align-items:baseline;gap:4px">
-        <span style="font-family:var(--mono);font-size:9px;color:var(--text3)">IPR</span>
-        <span style="font-family:var(--display);font-size:14px;font-weight:600;color:var(--text3)">—</span>
+      iprHtml = `<span style="${irHtml ? '' : 'margin-left:auto;'}padding-left:14px;border-left:1px solid rgba(255,255,255,.14);display:inline-flex;align-items:baseline;gap:10px">
+        <span style="font-family:var(--display);font-size:16px;font-weight:800;color:#fff">🔭 IPR</span>
+        <span style="font-family:var(--display);font-size:26px;font-weight:800;color:#fff">—</span>
       </span>`;
     }
   }
@@ -6240,6 +6335,7 @@ function renderKMini(k, h, spot) {
     <div class="dr-k-main">
       <span class="dr-k-eq" style="color:${kColor}">K = ${k.toFixed(3)}</span>
       ${sourceBadge}
+      ${irHtml}
       ${iprHtml}
     </div>
     ${dTdh!==undefined?`<div class="dr-k-sub">dT/dh = ${(dTdh*1000).toFixed(2)} °C/100m</div>`:''}
@@ -6538,17 +6634,53 @@ function _calcBislin(spot, k) {
 
 // ── IPR — Indice de Perception Réelle ──────────────────────
 // Combine deux filtres appliqués en série (produit, pas moyenne) :
-// 1. Fraction géométrique visible : part de la cible au-dessus de l'horizon réfracté (K)
+// 1. Fraction de réfraction favorable : dérivée uniquement de K (gradient thermique réel, ERA5)
+//    AUCUNE référence à hiddenByEarth() / courbure terrestre / altitude cachée.
 // 2. Fraction de contraste retenu : loi de Koschmieder C(d)/C0 = exp(-sigma*d)
 // Purement informatif — n'impacte jamais le score de clarté /100.
 function calcIPR(spot, k, h) {
-  const d = _calcBislin(spot, k);
-  const fracGeo = d.h2 > 0 ? Math.min(1, Math.max(0, d.visible / d.h2)) : 0;
-  const sigma = h.kosch_sigma;
   const distKm = spot.dist_km;
-  if (sigma === undefined || sigma === null || !distKm) return null; // AOD indisponible
-  const fracContraste = Math.exp(-sigma * distKm);
-  return { ipr: fracGeo * fracContraste * 100, fracGeo, fracContraste };
+  if (!distKm) return null;
+
+  // F_refraction : favorabilité du régime de réfraction (K seul)
+  const K_MIN = -0.05; // mirage inférieur fort (sol surchauffé)
+  const K_MAX = 0.45;  // mirage supérieur fort
+  const fracRefraction = Math.min(1, Math.max(0, (k - K_MIN) / (K_MAX - K_MIN)));
+
+  // sigma depuis Koschmieder (AOD) — priorité 1
+  let sigma = (h.kosch_sigma !== undefined && h.kosch_sigma !== null) ? h.kosch_sigma : null;
+  let sigmaSource = 'aod';
+
+  // Fallback sur visibilité si AOD indisponible : V = 3.912/sigma => sigma = 3.912/V
+  if (sigma === null) {
+    const visKm = h.vis_mid ?? h.vis ?? null;
+    if (visKm && visKm > 0.1) {
+      sigma = 3.912 / visKm;
+      sigmaSource = 'vis';
+    }
+  }
+
+  if (sigma === null) return null;
+
+  // F_contraste : rescalé sur le ratio dVis/distKm (même sémantique que le
+  // scoring Koschmieder existant, seuils 0.85/1.0/1.3), plutôt que sur le
+  // C(d)/C0 brut — qui est structurellement compris entre 2 et 10% en VLD
+  // (300-500 km) même dans d'excellentes conditions, et rend le badge IPR
+  // illisible (voir mémo correctif IPR, section contraste).
+  const C0 = h.kosch_C0 ?? 1.0;
+  const KOSCH_EPSILON = 0.02; // même seuil de détection que le scoring Koschmieder
+  const dVis = -Math.log(KOSCH_EPSILON / C0) / sigma;
+  const ratio = dVis / distKm;
+
+  const _lerp = (x, x0, x1, y0, y1) => y0 + (x - x0) * (y1 - y0) / (x1 - x0);
+
+  let fracContraste;
+  if (ratio >= 1.3) fracContraste = 1.0;
+  else if (ratio >= 1.0) fracContraste = _lerp(ratio, 1.0, 1.3, 0.60, 1.0);
+  else if (ratio >= 0.85) fracContraste = _lerp(ratio, 0.85, 1.0, 0.20, 0.60);
+  else fracContraste = Math.max(0, _lerp(ratio, 0.5, 0.85, 0, 0.20));
+
+  return { ipr: fracRefraction * fracContraste * 100, fracRefraction, fracContraste, sigmaSource };
 }
 
 function _updateOverlayStats(k) {
