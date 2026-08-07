@@ -1145,9 +1145,10 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
 .drow-left {
   flex:0 0 60%;min-width:0;
   padding:.9rem .9rem .9rem 1.1rem;
-  display:grid; grid-template-columns:repeat(3,1fr);
-  gap:.55rem; align-content:start;
+  display:flex; flex-direction:column;
+  gap:.55rem;
 }
+.mb-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:.55rem;}
 
 /* ── BOUTONS MÉTÉO — widget sombre + ombre forte (image 2 style) ── */
 .mb {
@@ -1416,7 +1417,7 @@ tr.country-group-row td{border-bottom:1px solid rgba(255,255,255,.08);background
 /* ── Bandeau bouton "Poster dans Communauté" (sous Relief intermédiaire) ── */
 .comm-banner-btn{
   display:flex; align-items:center; justify-content:center; gap:.4rem;
-  width:100%; margin-top:.6rem; padding:.6rem .8rem;
+  width:100%; margin-top:auto; padding:.6rem .8rem;
   border-radius:9px; cursor:pointer;
   background:rgba(255,214,0,.06); border:1px solid rgba(255,214,0,.28);
   transition:all .2s;
@@ -5945,13 +5946,12 @@ function renderDayRow(dayData, date, spot) {
   }).replace(/'/g, '&apos;');
   // Bandeau bouton "Poster dans Communauté" — même data/clic que l'ancienne card,
   // repositionné en bandeau sous "Relief intermédiaire" (drow-right).
-  const communityBanner = `<div class="comm-banner-btn" style="display:flex;align-items:center;gap:.65rem;"
+  const communityBanner = `<div class="comm-banner-btn"
     data-spot-id="${spot.id}"
     data-journal-payload='${journalPayload}'
     data-date-label="${fullLabel(date).replace(/"/g, '&quot;')}"
     onclick="handleJournalCardClick(this)"
     role="button" tabindex="0">
-    <img src="bandeau4communaute.png" alt="" style="width:60px;height:44px;object-fit:cover;border-radius:8px;flex-shrink:0;">
     <span class="comm-banner-label">📌 Poster dans communauté</span>
   </div>`;
 
@@ -5969,8 +5969,8 @@ function renderDayRow(dayData, date, spot) {
       <span class="drow-score" style="color:${sc}">${score}</span>
     </div>
     <div class="drow-body" id="${did}">
-      <div class="drow-left">${renderMeteoButtons(items)}${explainRow}</div>
-      <div class="drow-right">${renderNewCurveBlock(spot,k)}<img src="bandeau2optique.png" alt="" style="width:100%;height:65px;object-fit:cover;border-radius:10px;display:block;margin:.75rem 0;">${renderKMini(k,h,spot,getIRScore(forecasts[spot.id], day))}${renderAngularResolutionBlock(h, spot, getApertureMm())}<img src="bandeau3relief.png" alt="" style="width:100%;height:65px;object-fit:cover;border-radius:10px;display:block;margin:.75rem 0;">${renderHWTBlock(spot)}${communityBanner}</div>
+      <div class="drow-left"><div class="mb-grid">${renderMeteoButtons(items)}</div>${explainRow}<img src="bandeau4communaute.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;">${communityBanner}</div>
+      <div class="drow-right">${renderNewCurveBlock(spot,k)}<img src="bandeau2optique.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;margin:.75rem 0;">${renderKMini(k,h,spot,getIRScore(forecasts[spot.id], day))}${renderAngularResolutionBlock(h, spot, getApertureMm())}<img src="bandeau3relief.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;margin:.75rem 0;">${renderHWTBlock(spot)}</div>
     </div>
   </div>`;
 }
@@ -6135,7 +6135,7 @@ function renderNewCurveBlock(spot, k_default) {
   </svg>`;
 
   return `<div class="dr-curve">
-    <div style="width:100%;height:65px;overflow:hidden;border-radius:10px;margin-bottom:.75rem;position:relative;"><img src="bandeau1svdcourbure.png" alt="" style="width:100%;height:auto;position:absolute;top:50%;left:0;transform:translateY(-50%);display:block;"></div>
+    <img src="bandeau1svdcourbure.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;margin-bottom:.75rem;">
     <div class="dr-curve-title">🌍 ${spot.name} → ${spot.target}</div>
     <div class="dr-curve-cta" onclick="openCurveOverlay('${spot.id}', ${k.toFixed(3)})" title="Ouvrir le profil de courbure interactif">
       <div class="dr-cta-illust">${illustSVG}</div>
