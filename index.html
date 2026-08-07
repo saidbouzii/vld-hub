@@ -5969,7 +5969,7 @@ function renderDayRow(dayData, date, spot) {
     </div>
     <div class="drow-body" id="${did}">
       <div class="drow-left">${renderMeteoButtons(items)}${explainRow}</div>
-      <div class="drow-right">${renderNewCurveBlock(spot,k)}${renderKMini(k,h,spot,getIRScore(forecasts[spot.id], day))}${renderAngularResolutionBlock(h, spot, getApertureMm())}${renderHWTBlock(spot)}${communityBanner}</div>
+      <div class="drow-right">${renderNewCurveBlock(spot,k)}<img src="bandeau2optique.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;margin:.75rem 0;">${renderKMini(k,h,spot,getIRScore(forecasts[spot.id], day))}${renderAngularResolutionBlock(h, spot, getApertureMm())}<img src="bandeau3relief.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;margin:.75rem 0;">${renderHWTBlock(spot)}<img src="bandeau4communaute.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;margin:.75rem 0;">${communityBanner}</div>
     </div>
   </div>`;
 }
@@ -6134,6 +6134,7 @@ function renderNewCurveBlock(spot, k_default) {
   </svg>`;
 
   return `<div class="dr-curve">
+    <img src="bandeau1svdcourbure.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;margin-bottom:.75rem;">
     <div class="dr-curve-title">🌍 ${spot.name} → ${spot.target}</div>
     <div class="dr-curve-cta" onclick="openCurveOverlay('${spot.id}', ${k.toFixed(3)})" title="Ouvrir le profil de courbure interactif">
       <div class="dr-cta-illust">${illustSVG}</div>
