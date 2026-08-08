@@ -5970,7 +5970,7 @@ function renderDayRow(dayData, date, spot) {
     </div>
     <div class="drow-body" id="${did}">
       <div class="drow-left"><div class="mb-grid">${renderMeteoButtons(items)}</div>${explainRow}<img src="bandeau4communaute.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;">${communityBanner}</div>
-      <div class="drow-right">${renderNewCurveBlock(spot,k)}<img src="bandeau2optique.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;margin:.75rem 0;">${renderKMini(k,h,spot,getIRScore(forecasts[spot.id], day))}${renderAngularResolutionBlock(h, spot, getApertureMm())}<img src="bandeau3relief.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;margin:.75rem 0;">${renderHWTBlock(spot)}</div>
+      <div class="drow-right">${renderNewCurveBlock(spot,k)}<img src="bandeau2optique.png" alt="" style="width:100%;height:100px;object-fit:cover;object-position:center;border-radius:10px;display:block;margin:.75rem 0;">${renderKMini(k,h,spot,getIRScore(forecasts[spot.id], day))}${renderAngularResolutionBlock(h, spot, getApertureMm())}<img src="bandeau3relief.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;margin:.75rem 0;">${renderHWTBlock(spot)}</div>
     </div>
   </div>`;
 }
