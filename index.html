@@ -1150,45 +1150,52 @@ tbody tr:hover td{background:rgba(0,212,255,.03);}
 }
 .mb-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:.55rem;}
 
-/* ── BOUTONS MÉTÉO — widget sombre + ombre forte (image 2 style) ── */
+/* ── BOUTONS MÉTÉO — verre dépoli intégré ── */
 .mb {
   display:flex; flex-direction:column;
   align-items:center; justify-content:center;
-  gap:5px; padding:.6rem .3rem .55rem;
-  border-radius:18px; border:1px solid transparent;
-  cursor:default; position:relative; overflow:hidden;
+  gap:5px; padding:.75rem .4rem 1rem;
+  border-radius:16px; border:1px solid rgba(255,255,255,.06);
+  cursor:default; position:relative; overflow:visible;
   transition:transform .18s var(--ease);
   min-height:84px;
+  background:rgba(32,42,62,.55);
+  backdrop-filter:blur(18px) saturate(150%);
+  -webkit-backdrop-filter:blur(18px) saturate(150%);
+  box-shadow:0 6px 20px rgba(0,0,0,.35);
 }
-/* OK : fond bleu nuit profond */
-.mb.ok {
-  background:linear-gradient(160deg, #0e2840 0%, #081624 100%);
-  border-color:rgba(0,212,255,.3);
-  box-shadow:0 6px 20px rgba(0,0,0,.6), inset 0 1px 0 rgba(0,212,255,.1), inset 0 -1px 0 rgba(0,0,0,.4);
-}
-/* WARN : fond ambre foncé */
-.mb.warn {
-  background:linear-gradient(160deg, #2a1a00 0%, #1a1000 100%);
-  border-color:rgba(255,138,0,.3);
-  box-shadow:0 6px 20px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,138,0,.08);
-}
-/* ELIM : fond rouge très sombre */
-.mb.elim {
-  background:linear-gradient(160deg, #2a0808 0%, #180404 100%);
-  border-color:rgba(239,68,68,.35);
-  box-shadow:0 6px 20px rgba(0,0,0,.6), inset 0 1px 0 rgba(239,68,68,.07);
-}
-/* Reflet supérieur (gloss comme image 2) */
-.mb::before {
-  content:''; position:absolute; top:0; left:0; right:0; height:45%;
-  background:linear-gradient(180deg,rgba(255,255,255,.09) 0%,transparent 100%);
-  border-radius:18px 18px 0 0; pointer-events:none;
-}
-.mb-icon{width:30px;height:30px;display:flex;align-items:center;justify-content:center;position:relative;z-index:1;}
-.mb-icon svg{width:28px;height:28px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.6));}
-.mb-lbl{font-size:8px;font-family:var(--mono);color:rgba(160,200,230,.7);text-align:center;line-height:1.2;position:relative;z-index:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;padding:0 3px;}
+.mb.ok{--mb-glow:#22c55e;}
+.mb.warn{--mb-glow:#f59e0b;}
+.mb.elim{--mb-glow:#ef4444;}
+
+.mb-icon{width:26px;height:26px;display:flex;align-items:center;justify-content:center;position:relative;z-index:1;}
+.mb-icon svg{width:24px;height:24px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.5));}
+.mb-lbl{font-size:8.5px;font-family:var(--mono);color:rgba(180,195,220,.75);text-align:center;line-height:1.2;position:relative;z-index:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;padding:0 3px;}
 .mb-val{font-family:var(--display);font-size:14px;letter-spacing:.05em;color:#fff;position:relative;z-index:1;line-height:1;}
 .mb-sub{font-size:7.5px;color:rgba(160,200,230,.5);position:relative;z-index:1;font-family:var(--mono);text-align:center;}
+
+/* Badge score (haut-droit) — remplace/complète le badge ÉLIM existant */
+.mb-badge, .mb-score{
+  position:absolute; top:6px; right:6px; z-index:2;
+  font-size:7px; font-weight:700; letter-spacing:.02em;
+  padding:.18rem .4rem; border-radius:20px;
+  color:#0a0f1a; white-space:nowrap;
+  font-family:var(--mono);
+}
+.mb-score{background:var(--mb-glow, #94a3b8);}
+.mb-score.tag{color:#1a2030; background:#e2e8f0;}
+.mb-badge{left:6px; right:auto; background:#ef4444; color:#fff;}
+
+/* Barre lumineuse en bas = statut, avec glow */
+.mb-glow{
+  position:absolute; left:50%; bottom:7px; transform:translateX(-50%);
+  width:56%; height:3px; border-radius:10px; z-index:1;
+  background:var(--mb-glow, #64748b);
+}
+.mb-glow::after{
+  content:''; position:absolute; inset:-6px -4px;
+  background:var(--mb-glow, #64748b); filter:blur(9px); opacity:.6; z-index:-1;
+}
 
 /* ── COLONNE DROITE ── */
 .drow-right{flex:0 0 40%;width:40%;border-left:1px solid rgba(255,255,255,.04);display:flex;flex-direction:column;gap:0;overflow:hidden;}
@@ -5970,7 +5977,7 @@ function renderDayRow(dayData, date, spot) {
     </div>
     <div class="drow-body" id="${did}">
       <div class="drow-left"><div class="mb-grid">${renderMeteoButtons(items)}</div>${explainRow}<img src="bandeau4communaute.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;">${communityBanner}</div>
-      <div class="drow-right">${renderNewCurveBlock(spot,k)}<img src="bandeau2optique.png" alt="" style="width:100%;height:100px;object-fit:cover;object-position:center;border-radius:10px;display:block;margin:.75rem 0;">${renderKMini(k,h,spot,getIRScore(forecasts[spot.id], day))}${renderAngularResolutionBlock(h, spot, getApertureMm())}<img src="bandeau3relief.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;margin:.75rem 0;">${renderHWTBlock(spot)}</div>
+      <div class="drow-right">${renderNewCurveBlock(spot,k)}<img src="bandeau2optique.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;margin:.75rem 0;">${renderKMini(k,h,spot,getIRScore(forecasts[spot.id], day))}${renderAngularResolutionBlock(h, spot, getApertureMm())}<img src="bandeau3relief.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;margin:.75rem 0;">${renderHWTBlock(spot)}</div>
     </div>
   </div>`;
 }
@@ -6033,9 +6040,11 @@ function renderMeteoButtons(items) {
         const factor = blhVal > 1500 ? 'x1.10' : blhVal >= 800 ? 'x1.00' : blhVal >= 300 ? 'x0.90' : 'x0.75';
         return `<div class="mb ${state}" title="${it.verdict || ''}">
           ${badge}
+          <span class="mb-score tag">MODIF.</span>
           <div class="mb-icon">🌁</div>
           <div class="mb-lbl">PBL</div>
           <div class="mb-val">${factor}</div>
+          <div class="mb-glow"></div>
         </div>`;
       }
 
@@ -6044,17 +6053,22 @@ function renderMeteoButtons(items) {
         const sign = it.pts > 0 ? '+' : '';
         return `<div class="mb ${state}" title="${it.verdict || ''}">
           ${badge}
+          <span class="mb-score">${sign}${it.pts}pt</span>
           <div class="mb-icon">💧</div>
           <div class="mb-lbl">ΔRH</div>
           <div class="mb-val">${sign}${it.pts}pt</div>
+          <div class="mb-glow"></div>
         </div>`;
       }
 
+      const scoreTag = it.max > 0 ? `<span class="mb-score">${it.pts}/${it.max}pt</span>` : '';
       return `<div class="mb ${state}">
       ${badge}
+      ${scoreTag}
       <div class="mb-icon">${icon}</div>
       <div class="mb-lbl">${it.name}</div>
       <div class="mb-val">${it.val}${it.unit}</div>
+      <div class="mb-glow"></div>
     </div>`;
     }).join('');
 
@@ -6065,9 +6079,11 @@ function renderMeteoButtons(items) {
     const solarState = solar.color === 'green' ? 'ok' : solar.color === 'amber' ? 'warn' : 'elim';
     const solarIcon = getMbIcon('Géométrie solaire');
     solarBtn = `<div class="mb ${solarState}" title="${solar.verdict || ''}">
+      <span class="mb-score tag" style="background:#facc15;color:#2a2100;">GÉOM.</span>
       <div class="mb-icon">${solarIcon}</div>
       <div class="mb-lbl">Solaire</div>
       <div class="mb-val">${solar.val}°</div>
+      <div class="mb-glow" style="--mb-glow:#facc15"></div>
     </div>`;
   }
 
