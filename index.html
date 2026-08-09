@@ -5860,6 +5860,7 @@ function renderDayRow(dayData, date, spot) {
   // Recalculer les items selon le créneau horaire sélectionné
   const tw = document.getElementById('time-window')?.value || '1';
   let items, scoredResult;
+  let effectiveH = h; // météo réellement utilisée pour le score affiché (patché ci-dessous si créneau ≠ défaut)
   if (_timePeriod === 'soir') {
     const twe = document.getElementById('time-window-eve')?.value || 'eve-2';
     const eveOffset = parseInt(twe.replace('eve',''));
@@ -5894,6 +5895,7 @@ function renderDayRow(dayData, date, spot) {
     // scoreDay a calculé kosch_sigma/C0 sur l'objet hData local (créneau soir) — on les
     // recopie sur h (objet jour, affiché par renderKMini) pour que l'IPR les retrouve.
     h.kosch_sigma = hData.kosch_sigma; h.kosch_C0 = hData.kosch_C0;
+    effectiveH = hData;
   } else if (tw === 'avg' || tw === 'now') {
     // S'assurer que h a une _obsDate correcte pour solarGeometryAdvanced
     if (!h._obsDate || isNaN(new Date(h._obsDate).getTime())) {
@@ -5935,6 +5937,7 @@ function renderDayRow(dayData, date, spot) {
     scoredResult = scoreDay(spot, hData);
     // Même correctif que pour le créneau soir : recopier kosch_sigma/C0 sur h.
     h.kosch_sigma = hData.kosch_sigma; h.kosch_C0 = hData.kosch_C0;
+    effectiveH = hData;
   }
   items = scoredResult.items;
 
@@ -6735,6 +6738,528 @@ function calcIPR(spot, k, h) {
 
   return { ipr: fracRefraction * fracContraste * 100, fracRefraction, fracContraste, sigmaSource };
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// VLD ENGINE V2 — FONDATIONS (Phase V2.0-A : types, JSON, diagnostics, adapter)
+// Scaffolding uniquement. Aucun module physique V2 n'est encore branché ;
+// le moteur V1 (scoreDay, calcIPR, _calcBislin, calcCn2...) reste l'unique
+// source utilisée par le frontend. Rien ci-dessous n'est appelé par l'UI —
+// zéro impact, zéro risque de régression. Réf. cahier des charges §2, §9,
+// §25, §26, §33-34 (phase V2.0-A).
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * Niveau de justification épistémique d'une valeur ou d'une formule.
+ * @typedef {"physical"|"empirical"|"proxy"|"heuristic"} ModelType
+ */
+const VLD_MODEL_TYPES = Object.freeze({
+  PHYSICAL:  "physical",   // relation physique établie (Beer-Lambert, Bislin...)
+  EMPIRICAL: "empirical",  // calibrée sur observations réelles
+  PROXY:     "proxy",      // approximation d'une grandeur non mesurée directement
+  HEURISTIC: "heuristic"   // règle pratique, pas de modèle physique complet
+});
+
+/**
+ * @typedef {Object} VLDDiagnostic
+ * @property {string} id
+ * @property {"info"|"warning"|"error"} severity
+ * @property {ModelType} modelType
+ * @property {string} message
+ */
+function vldDiag(id, severity, modelType, message) {
+  return { id, severity, modelType, message };
+}
+
+/**
+ * Constante de calibration Koschmieder héritée de V1 (§4.4 doc technique).
+ * Conservée pour comparaison historique uniquement — désactivée du cœur
+ * physique V2 (cahier des charges §9).
+ */
+const VLD_LEGACY_KOSCH_CALIBRATION = Object.freeze({
+  id: "kosch_legacy_020",
+  value: 0.20,
+  modelType: VLD_MODEL_TYPES.EMPIRICAL,
+  status: "legacy",
+  enabled: false
+});
+
+/**
+ * Schéma JSON de référence V2 (cahier des charges §26). Les champs des
+ * modules non encore implémentés restent à null/[]/{} — jamais une valeur
+ * inventée. Chaque bloc portera son propre modelType une fois son module
+ * branché.
+ * @param {Object} spot
+ * @returns {Object} VLDEngineResult
+ */
+function createEmptyV2Result(spot) {
+  return {
+    engine: {
+      version: "2.0.0-a",
+      timestamp: new Date().toISOString(),
+      spotId: spot?.id ?? null,
+      geometryModel: "globe" // seul modèle branché à ce stade ; "alternative" = phase ultérieure
+    },
+    geometry:    { hiddenHeightM: null, visibleHeightM: null, refractionLiftM: null, modelType: null },
+    atmosphere:  { transmission550: null, transmission850: null, opticalDepth550: null, opticalDepth850: null, aod: {}, modelType: null },
+    clouds:      { low: {}, mid: {}, high: {}, precipitation: {}, modelType: null },
+    refraction:  { profile: [], kEffective: null, mirageRisk: null, modelType: null },
+    turbulence:  { cn2Profile: [], r0: null, seeingArcsec: null, modelType: null },
+    optical:     { thetaTargetArcsec: null, diffractionArcsec: null, pixelScaleArcsec: null, effectiveResolutionArcsec: null },
+    score:       { atmosphere: null, cloud: null, refraction: null, turbulence: null, optical: null, geometry: null, final: null, confidence: null, modelType: null },
+    diagnostics: [],
+    legacy:      { score: null, rawScore: null, items: [], regimes: [], hasElim: false }
+  };
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * PHASE V2.0-D — buildSightline() : ligne de visée échantillonnée
+ * ═══════════════════════════════════════════════════════════════════════
+ * Cahier des charges §5 : la V2 abandonne le point météo unique comme
+ * représentation principale du trajet. Une ligne de visée est discrétisée
+ * en segments entre l'observateur (spot.obs) et la cible (spot.tgt), chaque
+ * point portant sa position géographique, sa distance cumulée et une
+ * altitude interpolée. "Un premier modèle simple à 4-8 segments est
+ * suffisant pour V2.0" (§5) — le pas adaptatif et le vrai ray-tracing
+ * viendront en V2.1+/V3 sans changer le contrat de sortie.
+ *
+ * IMPORTANT — infrastructure pure, aucun impact frontend : buildSightline()
+ * ne fait QUE construire la géométrie du trajet (aucune météo interpolée
+ * par point — ce sera le rôle de sampleWeatherProfile(), phase ultérieure ;
+ * aucun K segmenté — ce sera computeRefractionProfile(), V2.0-E). Rien
+ * n'appelle encore cette fonction depuis scoreDay() ni depuis l'UI.
+ */
+
+const VLD_SIGHTLINE_DEFAULT_SEGMENTS = 6; // 4-8 recommandé §5 pour V2.0
+
+/** Distance orthodromique (haversine) en km entre deux points lat/lon. */
+function _vldHaversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+/**
+ * Point intermédiaire sur le grand cercle entre A et B, à la fraction f∈[0,1]
+ * (formule standard d'interpolation orthodromique, Aviation Formulary / Ed Williams).
+ */
+function _vldGreatCircleInterp(lat1, lon1, lat2, lon2, f) {
+  const toRad = d => d * Math.PI / 180, toDeg = r => r * 180 / Math.PI;
+  const φ1 = toRad(lat1), λ1 = toRad(lon1), φ2 = toRad(lat2), λ2 = toRad(lon2);
+  const δ = 2 * Math.asin(Math.sqrt(Math.sin((φ2-φ1)/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin((λ2-λ1)/2)**2));
+  if (δ === 0) return { lat: lat1, lon: lon1 };
+  const A = Math.sin((1-f)*δ) / Math.sin(δ);
+  const B = Math.sin(f*δ) / Math.sin(δ);
+  const x = A*Math.cos(φ1)*Math.cos(λ1) + B*Math.cos(φ2)*Math.cos(λ2);
+  const y = A*Math.cos(φ1)*Math.sin(λ1) + B*Math.cos(φ2)*Math.sin(λ2);
+  const z = A*Math.sin(φ1) + B*Math.sin(φ2);
+  const φi = Math.atan2(z, Math.sqrt(x*x + y*y));
+  const λi = Math.atan2(y, x);
+  return { lat: toDeg(φi), lon: toDeg(λi) };
+}
+
+/** Cap initial (bearing) en degrés entre deux points, formule standard. */
+function _vldBearingDeg(lat1, lon1, lat2, lon2) {
+  const toRad = d => d * Math.PI / 180, toDeg = r => r * 180 / Math.PI;
+  const φ1 = toRad(lat1), φ2 = toRad(lat2), Δλ = toRad(lon2 - lon1);
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x = Math.cos(φ1)*Math.sin(φ2) - Math.sin(φ1)*Math.cos(φ2)*Math.cos(Δλ);
+  return (toDeg(Math.atan2(y, x)) + 360) % 360;
+}
+
+/**
+ * Construit la ligne de visée échantillonnée OBS → CIBLE (cahier des
+ * charges §5). Retourne nSeg+1 points normalisés, chacun prêt à recevoir
+ * une interpolation météo/K dans une phase ultérieure.
+ *
+ * @param {Object} spot - doit exposer spot.obs{lat,lon,alt}, spot.tgt{lat,lon,alt}, spot.dist_km
+ * @param {Object} [options]
+ * @param {number} [options.segments=6] - nombre de segments (4-8 recommandé §5 pour V2.0)
+ * @returns {Object} { points, totalDistanceKm, segments, modelType, diagnostics }
+ */
+function buildSightline(spot, options) {
+  const diagnostics = [];
+  const opts = options || {};
+  const nSeg = Math.max(2, Math.min(12, opts.segments || VLD_SIGHTLINE_DEFAULT_SEGMENTS));
+
+  if (!spot || !spot.obs || !spot.tgt) {
+    diagnostics.push(vldDiag("SIGHTLINE_MISSING_COORDS", "error", VLD_MODEL_TYPES.PHYSICAL,
+      "spot.obs ou spot.tgt manquant : ligne de visée non calculable."));
+    return { points: [], totalDistanceKm: null, segments: 0, modelType: VLD_MODEL_TYPES.PHYSICAL, diagnostics };
+  }
+
+  const obs = spot.obs, tgt = spot.tgt;
+  const altObs = obs.alt ?? 0;
+  const altTgt = tgt.alt ?? altObs;
+
+  // Distance recalculée par haversine — indépendante de spot.dist_km (saisi manuellement à
+  // la création du spot) — sert de contrôle de cohérence, cf. diagnostic ci-dessous.
+  const geodesicDistKm = _vldHaversineKm(obs.lat, obs.lon, tgt.lat, tgt.lon);
+  if (spot.dist_km && Math.abs(geodesicDistKm - spot.dist_km) > Math.max(5, spot.dist_km * 0.03)) {
+    diagnostics.push(vldDiag("SIGHTLINE_DIST_MISMATCH", "warning", VLD_MODEL_TYPES.PHYSICAL,
+      `Distance orthodromique calculée (${geodesicDistKm.toFixed(1)} km) diffère de spot.dist_km (${spot.dist_km} km) de plus de 3% — à vérifier.`));
+  }
+
+  // Passe 1 : positions géographiques de chaque point sur le grand cercle
+  const raw = [];
+  for (let i = 0; i <= nSeg; i++) {
+    const f = i / nSeg;
+    const { lat, lon } = _vldGreatCircleInterp(obs.lat, obs.lon, tgt.lat, tgt.lon, f);
+    raw.push({ f, lat, lon, distanceKm: geodesicDistKm * f });
+  }
+
+  // Passe 2 : cap local, altitude interpolée (proxy grossier, cf. diagnostic), métadonnées
+  const points = raw.map((p, i) => {
+    const next = raw[i + 1];
+    const prev = raw[i - 1];
+    const azimuthDeg = next ? _vldBearingDeg(p.lat, p.lon, next.lat, next.lon)
+      : prev ? _vldBearingDeg(prev.lat, prev.lon, p.lat, p.lon) : null;
+    const altitudeGeomM = altObs + (altTgt - altObs) * p.f;
+    const role = i === 0 ? 'observer' : (i === nSeg ? 'target' : 'intermediate');
+    return {
+      index: i,
+      fraction: p.f,
+      distanceKm: p.distanceKm,
+      lat: p.lat, lon: p.lon,
+      altitudeGeomM,
+      azimuthDeg,
+      terrain: { role, altM: role === 'observer' ? altObs : role === 'target' ? altTgt : null },
+      segmentLengthKm: next ? (next.distanceKm - p.distanceKm) : 0
+    };
+  });
+
+  diagnostics.push(vldDiag("SIGHTLINE_ALTITUDE_LINEAR_PROXY", "info", VLD_MODEL_TYPES.PROXY,
+    "Altitude interpolée linéairement entre obs et cible (pas de relief réel intermédiaire) — un profil de terrain réel (MNT/API élévation par point) est prévu en phase ultérieure."));
+  diagnostics.push(vldDiag("SIGHTLINE_BUILT", "info", VLD_MODEL_TYPES.PHYSICAL,
+    `Ligne de visée construite : ${nSeg} segments sur ${geodesicDistKm.toFixed(1)} km (orthodromie), cap initial ${points[0].azimuthDeg !== null ? points[0].azimuthDeg.toFixed(1) + '°' : '—'}.`));
+
+  return { points, totalDistanceKm: geodesicDistKm, segments: nSeg, modelType: VLD_MODEL_TYPES.PHYSICAL, diagnostics };
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * PHASE V2.0-C — AOD basse couche via BLH (proxy) + transmission spectrale
+ * 550/850 nm (cahier des charges §8, §9, §10)
+ * ═══════════════════════════════════════════════════════════════════════
+ * Constat documenté (doc technique §3.2/§6.2, cahier des charges §8) :
+ * Open-Meteo air-quality n'expose que l'AOD colonne totale (aod550nm), pas
+ * l'AOD basse couche (0-3 km) qui détermine réellement l'extinction sur une
+ * ligne de visée quasi-horizontale VLD. V1 traite la colonne totale comme
+ * si elle était entièrement basse couche — surestimation possible si
+ * l'aérosol est concentré en altitude.
+ */
+
+/** Paramètres du proxy BLH→fraction basse couche (calibrables, cf. §8). */
+const VLD_AOD_BLH_PROXY_PARAMS = Object.freeze({
+  H_REF_M: 1500, // BLH au-delà de laquelle la colonne est considérée ~entièrement mélangée
+  F_MIN: 0.15,   // fraction plancher (aérosol résiduel même si BLH très faible)
+  F_MAX: 1.0     // fraction plafond (jamais plus que la colonne totale)
+});
+
+/** Exposant d'Angström par défaut (aérosol continental typique) — proxy tant que non mesuré localement. */
+const VLD_ANGSTROM_ALPHA_DEFAULT = 1.3;
+
+/**
+ * Estime l'AOD "basse couche" effective à partir de l'AOD colonne totale et
+ * de la hauteur de couche limite (BLH), selon la formule du cahier des
+ * charges §8 : fractionBL = clamp(BLH / H_ref, f_min, f_max).
+ * IMPORTANT : fractionBL n'est PAS une mesure d'AOD 0-3km — c'est une
+ * approximation (modelType: proxy) tant qu'aucun profil vertical d'aérosol
+ * réel n'est disponible (cf. §8 du cahier des charges).
+ *
+ * @param {number|null} aodColumn - AOD 550nm colonne totale (worst-case 3 pts, h.aod_bc)
+ * @param {number|null} blh - hauteur de couche limite en mètres (h.blh)
+ * @returns {Object} { aodColumn, aodEffective, fractionBL, modelType, diagnostic }
+ */
+function computeAodEffectiveV2(aodColumn, blh) {
+  if (aodColumn === null || aodColumn === undefined) {
+    return {
+      aodColumn: null, aodEffective: null, fractionBL: null, modelType: VLD_MODEL_TYPES.PROXY,
+      diagnostic: vldDiag("AOD_UNAVAILABLE", "warning", VLD_MODEL_TYPES.PROXY,
+        "AOD colonne indisponible : aucune estimation basse couche possible.")
+    };
+  }
+  const p = VLD_AOD_BLH_PROXY_PARAMS;
+  const fractionBL = (blh === null || blh === undefined)
+    ? 1.0 // fallback conservateur : comportement V1 (colonne entière = basse couche)
+    : Math.min(p.F_MAX, Math.max(p.F_MIN, blh / p.H_REF_M));
+  const aodEffective = aodColumn * fractionBL;
+  return {
+    aodColumn, aodEffective, fractionBL, modelType: VLD_MODEL_TYPES.PROXY,
+    diagnostic: vldDiag("AOD_BLH_PROXY", "info", VLD_MODEL_TYPES.PROXY,
+      (blh !== null && blh !== undefined)
+        ? `AOD colonne ${aodColumn.toFixed(2)} pondérée par BLH=${Math.round(blh)}m → fractionBL=${Math.round(fractionBL*100)}% → AOD effective ${aodEffective.toFixed(3)}.`
+        : `BLH indisponible : fractionBL=100% par défaut (équivalent au comportement V1, colonne entière assimilée à la basse couche).`)
+  };
+}
+
+/**
+ * Transmission atmosphérique spectrale 550nm (visible) et 850nm (IR proche,
+ * filtre de Saïd), dérivée de l'AOD effective (basse couche) via Beer-Lambert
+ * et extrapolée à 850nm par la loi d'Angström (cahier des charges §10).
+ * L'exposant d'Angström n'étant pas mesuré localement, la valeur par défaut
+ * (aérosol continental typique) est utilisée et taguée "proxy".
+ *
+ * La conversion AOD→coefficient d'extinction à 550nm reste basée sur la
+ * constante Koschmieder legacy (0.20) : ce n'est pas encore la refonte
+ * physique complète visée en V3, seulement le remplacement de "colonne
+ * totale" par "AOD effective basse couche" (V2.0-C).
+ *
+ * @param {Object} spot
+ * @param {Object} h - heure/jour météo tel que consommé par scoreDay()
+ * @param {Object} [aodResPrecomputed] - résultat de computeAodEffectiveV2 déjà calculé (évite un doublon de diagnostic)
+ * @returns {Object} transmission550/850, opticalDepth550/850, dVis550/850, aod, modelType, diagnostics
+ */
+function computeSpectralTransmissionV2(spot, h, aodResPrecomputed) {
+  const diagnostics = [];
+  const aodColumn = h.aod_bc ?? h.aod ?? null;
+  const blh = h.blh ?? null;
+  const rh = h.rh ?? null;
+  const distKm = spot.dist_km ?? null;
+
+  const aodRes = aodResPrecomputed || computeAodEffectiveV2(aodColumn, blh);
+  if (!aodResPrecomputed) diagnostics.push(aodRes.diagnostic);
+
+  const aodBlock = { aodColumn: aodRes.aodColumn, aodEffective: aodRes.aodEffective, fractionBL: aodRes.fractionBL, blhM: blh };
+
+  if (aodRes.aodEffective === null || distKm === null || distKm <= 0) {
+    return {
+      transmission550: null, transmission850: null, opticalDepth550: null, opticalDepth850: null,
+      dVis550: null, dVis850: null, aod: aodBlock, modelType: VLD_MODEL_TYPES.PROXY, diagnostics
+    };
+  }
+
+  // Extinction 550nm — même formule Koschmieder que V1 (0.20 legacy + facteur hygroscopique
+  // RH), appliquée sur l'AOD EFFECTIVE (basse couche) plutôt que sur la colonne totale.
+  const sigmaBase550 = aodRes.aodEffective * VLD_LEGACY_KOSCH_CALIBRATION.value;
+  const rhFactor = (rh !== null) ? 1 / Math.pow(1 - Math.min(rh, 95) / 100, 0.3) : 1;
+  const sigma550 = Math.max(sigmaBase550 * rhFactor, 0.0001); // km⁻¹
+
+  // Extrapolation spectrale vers 850nm — loi d'Angström : tau ∝ λ^(-alpha)
+  const alpha = VLD_ANGSTROM_ALPHA_DEFAULT;
+  const sigma850 = sigma550 * Math.pow(850 / 550, -alpha);
+
+  const tau550 = sigma550 * distKm;
+  const tau850 = sigma850 * distKm;
+  const transmission550 = Math.exp(-tau550);
+  const transmission850 = Math.exp(-tau850);
+
+  const lt = h._lightingType;
+  const C0 = lt === 'BACKLIGHT_PERFECT' ? 1.3 : lt === 'BACKLIGHT_GOOD' ? 1.15 : lt === 'FRONT_LIGHT' ? 0.8 : 1.0;
+  const dVis550 = -Math.log(0.02 / C0) / sigma550;
+  const dVis850 = -Math.log(0.02 / C0) / sigma850;
+
+  diagnostics.push(vldDiag("SPECTRAL_ANGSTROM_PROXY", "info", VLD_MODEL_TYPES.PROXY,
+    `Transmission 850nm extrapolée depuis 550nm via loi d'Angström (α=${alpha}, valeur continentale typique non mesurée localement).`));
+  diagnostics.push(vldDiag("SPECTRAL_KOSCH_LEGACY", "warning", VLD_MODEL_TYPES.EMPIRICAL,
+    "Conversion AOD→coefficient d'extinction à 550nm toujours basée sur la constante Koschmieder legacy 0.20 (non recalibrée terrain)."));
+
+  return {
+    transmission550, transmission850, opticalDepth550: tau550, opticalDepth850: tau850,
+    dVis550, dVis850, aod: aodBlock, modelType: VLD_MODEL_TYPES.PROXY, diagnostics
+  };
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * PHASE V2.0-B — Sous-score Atmosphere sans double comptage RH/dust
+ * ═══════════════════════════════════════════════════════════════════════
+ * Constat documenté (doc technique §6, cahier des charges §21) : dans
+ * scoreDay() (V1), RH intervient jusqu'à 5 fois (spread axe transparenceAxe,
+ * humidité directe §8, malus combiné RH×axe §8b, gradient ΔRH §11c, facteur
+ * hygroscopique Koschmieder §11d), et dust intervient 2 fois (transparenceAxe
+ * §2 + critère standalone §10). Un même phénomène physique (air chargé en
+ * aérosols/humide) peut ainsi pénaliser le score /100 plusieurs fois pour
+ * une seule cause réelle.
+ *
+ * Cette fonction recalcule un sous-score Atmosphere (0-100) où chaque
+ * variable brute n'est utilisée QU'UNE SEULE FOIS, avec un rôle physique
+ * distinct et non redondant :
+ *   1. Extinction Koschmieder (AOD EFFECTIVE basse couche, via BLH depuis
+ *      V2.0-C, × croissance hygroscopique RH) → seule utilisation légitime
+ *      de RH pour l'extinction optique elle-même.
+ *   2. Dust (µg/m³) → une seule fois, plus aucun doublon avec transparenceAxe.
+ *   3. PM10 → indépendant (particules fines vs poussière minérale grossière).
+ *   4. CAPE → instabilité convective, phénomène indépendant de RH/dust.
+ *   5. Gradient vertical ΔRH → structure verticale de l'humidité (brume de
+ *      fond piégée), phénomène distinct de l'extinction optique du point 1.
+ *
+ * IMPORTANT : ce sous-score est calculé EN PARALLÈLE du score V1 affiché sur
+ * les cards. Il n'y a AUCUN impact frontend à ce stade — c'est un résultat de
+ * comparaison exposé via VLD_ENGINE_V2 pour que Saïd puisse juger si la
+ * consolidation est cohérente avant qu'elle ne remplace un jour l'affichage.
+ *
+ * @param {Object} spot
+ * @param {Object} h - heure/jour météo tel que consommé par scoreDay()
+ * @param {Object} [aodResPrecomputed] - résultat de computeAodEffectiveV2 déjà calculé (évite un doublon de diagnostic)
+ * @returns {Object} { scorePct, rawScore, maxScore, modelType, diagnostics }
+ */
+function computeAtmosphereSubscoreV2(spot, h, aodResPrecomputed) {
+  const diagnostics = [];
+  let score = 0, maxScore = 0;
+
+  // 1) Extinction Koschmieder sur AOD EFFECTIVE (basse couche via BLH, V2.0-C)
+  //    — seule légitime utilisation de RH ici (croissance hygroscopique).
+  const aodColumn = h.aod_bc ?? h.aod ?? null;
+  const blh = h.blh ?? null;
+  const rh = h.rh ?? null;
+  const distKm = spot.dist_km ?? null;
+  const aodRes = aodResPrecomputed || computeAodEffectiveV2(aodColumn, blh);
+  if (!aodResPrecomputed) diagnostics.push(aodRes.diagnostic);
+
+  if (aodRes.aodEffective !== null && distKm !== null && distKm > 0) {
+    const sigmaBase = aodRes.aodEffective * VLD_LEGACY_KOSCH_CALIBRATION.value; // 0.20 legacy, non recalibré (V3)
+    const rhFactor = (rh !== null) ? 1 / Math.pow(1 - Math.min(rh, 95) / 100, 0.3) : 1;
+    const sigma = Math.max(sigmaBase * rhFactor, 0.0001);
+    const lt = h._lightingType;
+    const C0 = lt === 'BACKLIGHT_PERFECT' ? 1.3 : lt === 'BACKLIGHT_GOOD' ? 1.15 : lt === 'FRONT_LIGHT' ? 0.8 : 1.0;
+    const dVis = -Math.log(0.02 / C0) / sigma;
+    const ratio = dVis / distKm;
+    const koschScore = ratio >= 1.3 ? 60 : ratio >= 1.0 ? 42 : ratio >= 0.85 ? 18 : 0; // sur 60
+    score += koschScore; maxScore += 60;
+    diagnostics.push(vldDiag("ATM_EXTINCTION_KOSCH", "info", VLD_MODEL_TYPES.EMPIRICAL,
+      `Extinction Koschmieder (AOD effective basse couche × croissance hygroscopique RH) : ratio dVis/d=${ratio.toFixed(2)} → ${koschScore}/60.`));
+  } else {
+    diagnostics.push(vldDiag("ATM_EXTINCTION_UNAVAILABLE", "warning", VLD_MODEL_TYPES.PROXY,
+      "AOD indisponible : composante extinction non calculable, sous-score basé sur les variables restantes uniquement."));
+  }
+
+  // 2) Dust — une seule fois (V1 la comptait 2× : transparenceAxe + critère §10)
+  const dust = h.dust ?? null;
+  if (dust !== null) {
+    const dustScore = dust < 20 ? 15 : dust < 80 ? 9 : dust < 200 ? 3 : 0;
+    score += dustScore; maxScore += 15;
+    diagnostics.push(vldDiag("ATM_DUST_DEDUP", "info", VLD_MODEL_TYPES.EMPIRICAL,
+      `Dust ${Math.round(dust)} µg/m³ comptée 1× (V1 la comptait 2× : transparenceAxe + critère §10 dédié) → ${dustScore}/15.`));
+  }
+
+  // 3) PM10 — indépendant (particules fines, pas la même mesure que dust minéral)
+  const pm10 = h.pm10 ?? null;
+  if (pm10 !== null) {
+    const pm10Score = pm10 < 30 ? 10 : pm10 < 60 ? 7 : pm10 < 100 ? 3 : 0;
+    score += pm10Score; maxScore += 10;
+  }
+
+  // 4) CAPE — instabilité convective, indépendant de RH/dust
+  const cape = h.cape ?? null;
+  if (cape !== null) {
+    const capeScore = cape < 200 ? 10 : cape < 500 ? 7 : cape < 1000 ? 3 : 0;
+    score += capeScore; maxScore += 10;
+  }
+
+  // 5) Gradient vertical ΔRH — une seule fois (V1 la comptait indirectement
+  //    aussi via humidité directe §8 + malus combiné RH×axe §8b)
+  const rh_sol = (h.rh_alt ?? h.rh) ?? null;
+  const rh_850 = h.rh_850 ?? null;
+  if (rh_sol !== null && rh_850 !== null) {
+    const deltaRH = rh_sol - rh_850;
+    const gradScore = deltaRH > 30 ? 0 : deltaRH > 15 ? 2 : 5; // sur 5
+    score += gradScore; maxScore += 5;
+    diagnostics.push(vldDiag("ATM_RH_GRADIENT_DEDUP", "info", VLD_MODEL_TYPES.HEURISTIC,
+      `Gradient ΔRH=${deltaRH.toFixed(1)}% compté 1× (V1 le comptait avec RH directe + malus combiné en plus) → ${gradScore}/5.`));
+  }
+
+  diagnostics.push(vldDiag("ATM_RH_CONSOLIDATION_SUMMARY", "info", VLD_MODEL_TYPES.HEURISTIC,
+    "RH consolidée à 2 usages distincts en V2 (extinction Koschmieder + gradient vertical ΔRH), contre jusqu'à 5 usages cumulés en V1 (spread axe, humidité directe, malus combiné, ΔRH, facteur Koschmieder)."));
+
+  const scorePct = maxScore > 0 ? Math.round((score / maxScore) * 100) : null;
+  return { scorePct, rawScore: score, maxScore, modelType: VLD_MODEL_TYPES.HEURISTIC, diagnostics };
+}
+
+/**
+ * Enveloppe le résultat V1 existant (scoreDay + calcIPR) dans le schéma V2,
+ * sans recalculer ni modifier le score /100 affiché sur les cards.
+ * - V2.0-A : structure JSON + diagnostics + adapter, passthrough legacy pur.
+ * - V2.0-B : v2.score.atmosphere porte un sous-score comparatif sans double
+ *   comptage RH/dust (computeAtmosphereSubscoreV2).
+ * - V2.0-C : v2.atmosphere porte en plus l'AOD effective basse couche (proxy
+ *   BLH) et la transmission spectrale 550/850nm (computeSpectralTransmissionV2),
+ *   utile pour évaluer l'intérêt du filtre IR 850nm par session.
+ * Dans tous les cas, v2.score.final reste strictement égal au score V1
+ * affiché — AUCUN impact frontend à ce stade.
+ *
+ * @param {Object} spot
+ * @param {Object} h - heure/jour météo tel que consommé par scoreDay()
+ * @param {number} k - coefficient de réfraction (ERA5 ou fallback Bislin)
+ * @returns {Object} VLDEngineResult
+ */
+function wrapLegacyResult(spot, h, k) {
+  const v2 = createEmptyV2Result(spot);
+  const v1 = scoreDay(spot, h);
+  const ipr = calcIPR(spot, k, h);
+
+  // Source unique de vérité pour l'AOD effective basse couche (V2.0-C),
+  // partagée par le sous-score Atmosphere (V2.0-B) et la transmission
+  // spectrale (V2.0-C) pour éviter un diagnostic AOD_BLH_PROXY en double.
+  const aodColumn = h.aod_bc ?? h.aod ?? null;
+  const blh = h.blh ?? null;
+  const aodRes = computeAodEffectiveV2(aodColumn, blh);
+  const atmSub = computeAtmosphereSubscoreV2(spot, h, aodRes);
+  const spectral = computeSpectralTransmissionV2(spot, h, aodRes);
+
+  v2.legacy = { score: v1.score, rawScore: v1.rawScore, items: v1.items, regimes: v1.regimes, hasElim: v1.hasElim };
+
+  v2.refraction.kEffective = k;
+  v2.refraction.modelType = VLD_MODEL_TYPES.PHYSICAL; // ERA5 multi-niveaux / fallback Bislin = physique établie
+
+  v2.atmosphere.modelType = spectral.modelType;
+  v2.atmosphere.transmission550 = spectral.transmission550;
+  v2.atmosphere.transmission850 = spectral.transmission850;
+  v2.atmosphere.opticalDepth550 = spectral.opticalDepth550;
+  v2.atmosphere.opticalDepth850 = spectral.opticalDepth850;
+  v2.atmosphere.aod = spectral.aod; // { aodColumn, aodEffective, fractionBL, blhM }
+
+  if (ipr) {
+    v2.score.refraction = ipr.fracRefraction * 100;
+  }
+  v2.score.atmosphere = atmSub.scorePct; // sous-score V2.0-B, comparatif uniquement
+  v2.score.final = v1.score; // ← toujours le score legacy, seul affiché sur les cards
+  v2.score.modelType = VLD_MODEL_TYPES.HEURISTIC; // synthèse /100 additive V1, poids non calibrés
+
+  v2.diagnostics.push(
+    vldDiag("V1_PASSTHROUGH", "info", VLD_MODEL_TYPES.HEURISTIC,
+      "Score final (v2.score.final) produit intégralement par le moteur V1 (scoreDay). Aucun impact frontend."),
+    vldDiag("KOSCH_020_LEGACY", "warning", VLD_MODEL_TYPES.EMPIRICAL,
+      "Extinction dérivée de la constante de calibration historique 0.20, non recalée sur données terrain (voir VLD_LEGACY_KOSCH_CALIBRATION)."),
+    aodRes.diagnostic,
+    ...atmSub.diagnostics,
+    ...spectral.diagnostics
+  );
+
+  return v2;
+}
+
+/**
+ * Traduit un résultat V2 vers le format consommé par les cards existantes
+ * (adaptV2ToLegacyUI, cahier des charges §33). À ce stade (V2.0-A),
+ * équivalent à une lecture directe de v2.legacy ; deviendra une vraie
+ * synthèse au fur et à mesure que les modules V2 remplaceront le
+ * passthrough legacy dans wrapLegacyResult/runVLDv2.
+ */
+function adaptV2ToLegacyUI(v2) {
+  return { score: v2.legacy.score, rawScore: v2.legacy.rawScore, items: v2.legacy.items, regimes: v2.legacy.regimes, hasElim: v2.legacy.hasElim };
+}
+
+// Exposé pour tests manuels en console pendant la migration. Aucun appel
+// automatique nulle part : le frontend V1 continue d'utiliser scoreDay()/
+// calcIPR() directement, sans passer par ce module.
+window.VLD_ENGINE_V2 = {
+  MODEL_TYPES: VLD_MODEL_TYPES,
+  LEGACY_KOSCH_CALIBRATION: VLD_LEGACY_KOSCH_CALIBRATION,
+  AOD_BLH_PROXY_PARAMS: VLD_AOD_BLH_PROXY_PARAMS,
+  ANGSTROM_ALPHA_DEFAULT: VLD_ANGSTROM_ALPHA_DEFAULT,
+  SIGHTLINE_DEFAULT_SEGMENTS: VLD_SIGHTLINE_DEFAULT_SEGMENTS,
+  createEmptyV2Result,
+  wrapLegacyResult,
+  adaptV2ToLegacyUI,
+  computeAtmosphereSubscoreV2,
+  computeAodEffectiveV2,
+  computeSpectralTransmissionV2,
+  buildSightline,
+  diag: vldDiag
+};
 
 function _updateOverlayStats(k) {
   if (!_overlaySpot) return;
