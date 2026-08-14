@@ -4464,8 +4464,14 @@ function scoreDay(spot, h) {
       let solarFactor = 1.0;
       let solarVerdict, solarColor;
 
+      // Exposé systématiquement (y compris NO_SUN) pour réutilisation V2 (V2.0-K :
+      // sous-score géométrie solaire) sans dupliquer le calcul Meeus/azimut ci-dessus.
+      h._lightingType = lightingType;
+      h._sunTargetDiffDeg = diff;
+      h._sunAltDeg = sunAlt;
+
       if (lightingType === 'NO_SUN') {
-        // Nuit / avant aube nautique — pas de calcul solaire
+        // Nuit / avant aube nautique — pas de calcul solaire sur le score V1
         return;
       } else if (lightingType === 'BACKLIGHT_PERFECT') {
         // Bonus ombre chinoise : silhouette noire découpe l'horizon
@@ -4495,9 +4501,9 @@ function scoreDay(spot, h) {
       // Appliquer le facteur solaire au score courant
       score = Math.round(score * solarFactor);
       items.push({ name: '☀️ Géométrie solaire', val: Math.round(diff), unit: '°', pts: 0, max: 0, color: solarColor, verdict: solarVerdict, elim: false });
-      // Exposé hors IIFE pour le calcul Koschmieder (11d) : silhouette (contre-jour)
-      // tolère un contraste initial plus favorable que le front-light (diffusion de Mie directe)
-      h._lightingType = lightingType;
+      // h._lightingType déjà exposé plus haut (avant le early-return NO_SUN) ; réutilisé
+      // ici par le calcul Koschmieder (11d) : silhouette (contre-jour) tolère un contraste
+      // initial plus favorable que le front-light (diffusion de Mie directe).
 
       // ── MODULE 3 (remplacé) : réservé — voir critère Koschmieder ci-dessous (11d) ──
       // L'ancien modulateur AOD par paliers fixes a été retiré : la géométrie solaire
@@ -4734,7 +4740,78 @@ function scoreDay(spot, h) {
 // ═══════════════════════════════════════════════════
 // FETCH
 // ═══════════════════════════════════════════════════
+/**
+ * V2.0-L — Politique de cache stale-while-revalidate (cahier des charges §28).
+ * TTL distincts météo / AOD : les aérosols sont plus volatils que la météo de
+ * fond, donc "frais" et "acceptable" sont plus courts pour l'AOD.
+ * fresh   → réponse immédiate depuis le cache, AUCUN appel réseau.
+ * stale   → réponse immédiate depuis le cache (ne bloque jamais l'UI) + un
+ *           rafraîchissement réseau est lancé en tâche de fond pour la
+ *           prochaine visite (§28 : "refresh background").
+ * expiré  → cache invalidé, fetch réseau obligatoire (bloquant).
+ */
+const VLD_CACHE_POLICY_V2 = Object.freeze({
+  version: "cache-policy-2026-08-v1",
+  weather: { freshMs: 60 * 60 * 1000, staleMs: 12 * 3600 * 1000 },      // fresh 1h / acceptable 12h
+  aod:     { freshMs: 30 * 60 * 1000, staleMs: 6 * 3600 * 1000 }        // fresh 30min / acceptable 6h — plus volatil
+});
+
+function _vldCacheKey(kind, spotId, pastDays, suffix) {
+  return `vld_cache_v2_${kind}_${spotId}_${pastDays}_${suffix}`;
+}
+function _vldCacheRead(kind, spotId, pastDays, suffix) {
+  try {
+    const raw = localStorage.getItem(_vldCacheKey(kind, spotId, pastDays, suffix));
+    if (!raw) return null;
+    const { ts, data } = JSON.parse(raw);
+    const policy = VLD_CACHE_POLICY_V2[kind];
+    const age = Date.now() - ts;
+    if (age > policy.staleMs) return null; // invalidé (§28)
+    return { data, ts, ageMin: Math.round(age / 60000), freshness: age <= policy.freshMs ? 'fresh' : 'stale' };
+  } catch(e) { return null; }
+}
+function _vldCacheWrite(kind, spotId, pastDays, suffix, data) {
+  try { localStorage.setItem(_vldCacheKey(kind, spotId, pastDays, suffix), JSON.stringify({ ts: Date.now(), data })); }
+  catch(e) { console.warn('Cache write error:', e); }
+}
+
+/**
+ * V2.0-L — Vrai retry réseau avec backoff exponentiel (cahier des charges §27).
+ * IMPORTANT : contrairement à l'ancien fetchWithFallback (retiré), cette
+ * fonction ne prétend PAS à un failover multi-fournisseur — les 3 "mirrors"
+ * de l'ancien code étaient en réalité 3 fois la même URL Open-Meteo, ce que
+ * le cahier des charges §27 identifie explicitement comme un faux failover
+ * ("Ne pas prétendre à un failover si les URLs sont en réalité le même
+ * fournisseur"). Ici : retries honnêtes sur LA MÊME instance, avec backoff
+ * croissant. Le paramètre secondaryUrl reste prévu pour un vrai second
+ * fournisseur le jour où il sera configuré — actuellement toujours absent,
+ * et le diagnostic le dit explicitement plutôt que de le taire.
+ */
+async function fetchWithRetryV2(url, opts = {}) {
+  const maxRetries = opts.maxRetries ?? 3;
+  const baseTimeoutMs = opts.timeoutMs ?? 8000;
+  const onRetry = opts.onRetry || (() => {});
+  let lastErr;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(baseTimeoutMs + attempt * 3000) });
+      if (r.ok) return r;
+      lastErr = new Error(`HTTP ${r.status}`);
+    } catch(e) { lastErr = e; }
+    if (attempt < maxRetries - 1) {
+      const backoffMs = 1500 * Math.pow(2, attempt); // 1.5s, 3s, 6s…
+      onRetry(attempt + 1, maxRetries, backoffMs);
+      await new Promise(res => setTimeout(res, backoffMs));
+    }
+  }
+  throw new Error(`Échec après ${maxRetries} tentatives sur la même instance — aucun fournisseur secondaire configuré actuellement (§27) : ${lastErr?.message}`);
+}
+
 async function fetchSpot(spot, pastDays = 0) {
+  // Cache legacy (blob complet par spot, TTL 12h) : conservé comme ultime
+  // filet de sécurité si même le cache par-source V2.0-L est vide (première
+  // visite après une longue coupure). Le cache par-source ci-dessous est
+  // désormais la voie normale (§28 : TTL distincts + stale-while-revalidate).
   const CACHE_KEY = `vld_cache_${spot.id}_${pastDays}`;
   const CACHE_TTL = 12 * 3600 * 1000; // 12h
 
@@ -4760,51 +4837,49 @@ async function fetchSpot(spot, pastDays = 0) {
   'boundary_layer_height'  // PBL height — critère couche limite
 ].join(',');
 
-  // ── Fallback fetch : essaie open-meteo, puis le mirror européen ──
-  async function fetchWithFallback(url) {
-    const eb = document.getElementById('err-banner');
-    const showBanner = (msg, type='warn') => {
-      if (!eb) return;
-      eb.style.display = 'block';
-      eb.style.background = type==='ok' ? 'rgba(34,197,94,.10)' : type==='err' ? 'rgba(239,68,68,.12)' : 'rgba(251,191,36,.10)';
-      eb.style.borderColor = type==='ok' ? 'rgba(34,197,94,.3)' : type==='err' ? 'rgba(239,68,68,.3)' : 'rgba(251,191,36,.3)';
-      eb.style.color = type==='ok' ? '#86efac' : type==='err' ? '#fca5a5' : '#fde68a';
-      eb.textContent = msg;
-    };
+  const eb = document.getElementById('err-banner');
+  const showBanner = (msg, type='warn') => {
+    if (!eb) return;
+    eb.style.display = 'block';
+    eb.style.background = type==='ok' ? 'rgba(34,197,94,.10)' : type==='err' ? 'rgba(239,68,68,.12)' : 'rgba(251,191,36,.10)';
+    eb.style.borderColor = type==='ok' ? 'rgba(34,197,94,.3)' : type==='err' ? 'rgba(239,68,68,.3)' : 'rgba(251,191,36,.3)';
+    eb.style.color = type==='ok' ? '#86efac' : type==='err' ? '#fca5a5' : '#fde68a';
+    eb.textContent = msg;
+  };
 
-    // Instances Open-Meteo — retry avec délai croissant
-    const mirrors = [
-      'https://api.open-meteo.com',
-      'https://api.open-meteo.com',
-      'https://api.open-meteo.com',
-    ];
-
-    for (let i = 0; i < mirrors.length; i++) {
-      const tryUrl = url.replace('https://api.open-meteo.com', mirrors[i]);
-      if (i > 0) showBanner(`⚠️ Open-Meteo instable — tentative instance ${i+1}/3…`);
-      try {
-        const r = await fetch(tryUrl, { signal: AbortSignal.timeout(i === 0 ? 8000 : 10000) });
-        if (r.ok) {
-          if (i > 0) { showBanner(`✅ Données récupérées via instance de secours ${i+1}`, 'ok'); setTimeout(()=>{if(eb)eb.style.display='none';}, 5000); }
-          return r;
-        }
-        console.warn(`[fallback] instance ${i+1} HTTP ${r.status}`);
-      } catch(e) {
-        console.warn(`[fallback] instance ${i+1} KO:`, e.message);
-      }
-      if (i < mirrors.length - 1) await new Promise(res => setTimeout(res, 2000));
+  /**
+   * V2.0-L — Une source de données passée par le cycle fresh → stale (SWR) →
+   * expiré → réseau (§28), avec retry honnête (§27) au moment du fetch.
+   * Retourne toujours { json, provenance, ageMin } — jamais un throw, SAUF si
+   * appelant explicitement marqué "required" (utilisé pour urlObs, la seule
+   * source dont l'échec total doit faire tomber sur le cache legacy blob).
+   */
+  async function fetchDataWithCache(kind, suffix, url, fetchOpts, required=false) {
+    const cached = _vldCacheRead(kind, spot.id, pastDays, suffix);
+    if (cached && cached.freshness === 'fresh') {
+      return { json: cached.data, provenance: 'cache-fresh', ageMin: cached.ageMin };
     }
-
-    // Dernier recours : retry instance primaire après 5s (parfois les pannes sont brèves)
-    showBanner('⚠️ Toutes les instances KO — dernier essai dans 5s…');
-    await new Promise(res => setTimeout(res, 5000));
+    if (cached && cached.freshness === 'stale') {
+      // Stale-while-revalidate (§28) : on sert le stale tout de suite, on
+      // rafraîchit en tâche de fond sans bloquer l'UI ni cette réponse.
+      fetchWithRetryV2(url, fetchOpts).then(r => r.json()).then(json => {
+        if (json && !json.error) _vldCacheWrite(kind, spot.id, pastDays, suffix, json);
+      }).catch(e => console.warn(`[SWR bg refresh] ${suffix} KO:`, e.message));
+      return { json: cached.data, provenance: 'cache-stale-revalidating', ageMin: cached.ageMin };
+    }
+    // Pas de cache exploitable → fetch bloquant obligatoire, retries honnêtes (§27).
     try {
-      const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
-      if (r.ok) { showBanner('✅ Open-Meteo rétabli', 'ok'); setTimeout(()=>{if(eb)eb.style.display='none';}, 4000); return r; }
-      throw new Error(`HTTP ${r.status}`);
+      const r = await fetchWithRetryV2(url, {
+        ...fetchOpts,
+        onRetry: (attempt, max, backoffMs) => showBanner(`⚠️ Open-Meteo instable — nouvelle tentative ${attempt}/${max} dans ${Math.round(backoffMs/1000)}s…`)
+      });
+      const json = await r.json().catch(() => null);
+      if (json && !json.error) _vldCacheWrite(kind, spot.id, pastDays, suffix, json);
+      return { json, provenance: 'network', ageMin: 0 };
     } catch(e) {
-      showBanner(`❌ Open-Meteo indisponible (${e.message}) — réessaie dans quelques minutes`, 'err');
-      throw new Error(`Open-Meteo indisponible après 4 tentatives : ${e.message}`);
+      if (required) throw e;
+      console.warn(`[${suffix}] fetch KO sans cache exploitable:`, e.message);
+      return { json: null, provenance: 'error', ageMin: null };
     }
   }
 
@@ -4822,26 +4897,36 @@ async function fetchSpot(spot, pastDays = 0) {
   const urlDustTgt = `${_aqBase}?latitude=${spot.tgt.lat}&longitude=${spot.tgt.lon}&hourly=dust,pm10,aod550nm&timezone=auto${_aqPast}`;
   // U2 — ERA5 pressure levels pour calcul κ ITU-R P.453
   const urlPres = `https://api.open-meteo.com/v1/forecast?latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=temperature_1000hPa,temperature_925hPa,temperature_850hPa,temperature_700hPa,temperature_600hPa,temperature_500hPa,temperature_400hPa,temperature_300hPa,relative_humidity_1000hPa,relative_humidity_925hPa,relative_humidity_850hPa,relative_humidity_700hPa,relative_humidity_600hPa,relative_humidity_500hPa,relative_humidity_400hPa,relative_humidity_300hPa,geopotential_height_1000hPa,geopotential_height_925hPa,geopotential_height_850hPa,geopotential_height_700hPa,geopotential_height_600hPa,geopotential_height_500hPa,geopotential_height_400hPa,geopotential_height_300hPa&forecast_days=7${pastDays > 0 ? `&past_days=${pastDays}` : ''}&timezone=auto`;
-  const [r1,r2,r3,r3b,r3c,r4] = await Promise.all([
-    fetchWithFallback(urlObs),
-    fetchWithFallback(urlMid).catch(e=>{console.warn('urlMid fetch failed:',e);return null;}),
-    fetch(urlDust, {signal: AbortSignal.timeout(10000)}).catch(e=>{console.warn('urlDust failed:',e);return null;}),
-    fetch(urlDustObs, {signal: AbortSignal.timeout(10000)}).catch(e=>{console.warn('urlDustObs failed:',e);return null;}),
-    fetch(urlDustTgt, {signal: AbortSignal.timeout(10000)}).catch(e=>{console.warn('urlDustTgt failed:',e);return null;}),
-    fetch(urlPres).catch(e=>{console.warn('urlPres fetch failed:',e);return null;})
+
+  const [rObs, rMid, rDustMid, rDustObs, rDustTgt, rPres] = await Promise.all([
+    fetchDataWithCache('weather', 'obs', urlObs, { timeoutMs: 8000 }, true),
+    fetchDataWithCache('weather', 'mid', urlMid, { timeoutMs: 8000 }),
+    fetchDataWithCache('aod', 'dust_mid', urlDust, { timeoutMs: 10000 }),
+    fetchDataWithCache('aod', 'dust_obs', urlDustObs, { timeoutMs: 10000 }),
+    fetchDataWithCache('aod', 'dust_tgt', urlDustTgt, { timeoutMs: 10000 }),
+    fetchDataWithCache('weather', 'pres', urlPres, { timeoutMs: 10000 }),
   ]);
-  if(!r1.ok) throw new Error(`urlObs HTTP ${r1.status}`);
-  if(r2&&!r2.ok) console.warn(`urlMid HTTP ${r2.status}`);
-  const [d1,d2,d3,d3b,d3c] = await Promise.all([
-    r1.json().catch(()=>null),
-    (r2&&r2.ok)?r2.json().catch(()=>null):Promise.resolve(null),
-    r3?.json().catch(()=>null),
-    (r3b&&r3b.ok)?r3b.json().catch(()=>null):Promise.resolve(null),
-    (r3c&&r3c.ok)?r3c.json().catch(()=>null):Promise.resolve(null)
-  ]);
+  const d1 = rObs.json, d2 = rMid.json, d3 = rDustMid.json, d3b = rDustObs.json, d3c = rDustTgt.json, d4 = rPres.json;
   if(!d1||d1.error) throw new Error(`urlObs: ${d1?.reason||'réponse invalide'}`);
   if(d2?.error) console.warn(`urlMid: ${d2.reason}`);
-  const d4 = r4 ? await r4.json().catch(()=>null) : null;
+  if(d4?.error) console.warn('urlPres ERA5:', d4.reason);
+
+  // Provenance/fraîcheur consolidée (§25+§27+§28) — pire cas parmi les sources
+  // utilisées, exposée sur h._dataProvenanceWorst / h._dataAgeMin pour que
+  // computeConfidenceScoreV2 puisse enfin tracer forecastAge (jusqu'ici listé
+  // "non traçable" faute d'horodatage de fetch conservé — corrigé ici).
+  const _provenanceRank = { 'network': 0, 'cache-fresh': 0, 'cache-stale-revalidating': 1, 'error': 2 };
+  const _allProv = [rObs, rMid, rDustMid, rDustObs, rDustTgt, rPres];
+  const _dataProvenanceWorst = _allProv.reduce((worst, p) => _provenanceRank[p.provenance] > _provenanceRank[worst] ? p.provenance : worst, 'network');
+  const _dataAgeMin = Math.max(0, ..._allProv.map(p => p.ageMin ?? 0));
+  if (_dataProvenanceWorst === 'cache-stale-revalidating') {
+    showBanner(`📦 Cache un peu daté utilisé (${_dataAgeMin} min) — rafraîchissement en cours en tâche de fond`, 'warn');
+    setTimeout(() => { if (eb) eb.style.display = 'none'; }, 5000);
+  } else if (eb && eb.style.display === 'block' && _dataProvenanceWorst !== 'error') {
+    // Une bannière de retry était affichée pendant fetchDataWithCache : la nettoyer si tout a fini par passer.
+    showBanner('✅ Open-Meteo rétabli', 'ok');
+    setTimeout(() => { if (eb) eb.style.display = 'none'; }, 4000);
+  }
   if(d4?.error) console.warn('urlPres ERA5:', d4.reason);
   const daily = [];
   // En mode historique (pastDays>0), open-meteo renvoie [pastDays + 7] jours.
@@ -4868,6 +4953,7 @@ async function fetchSpot(spot, pastDays = 0) {
     let k_bislin;
     let k_source = 'bislin';
     let dTdh = -0.0065;
+    let refractionLevels = null; // profil {alt,N} par niveau de pression — réutilisé en V2.0-E pour un K segmenté par altitude
     if (T850!==null&&temp!==null&&H850!==null&&H850>(spot.obs.alt||0)+50)
       dTdh = (T850-temp)/(H850-(spot.obs.alt||0));
     try {
@@ -4886,7 +4972,7 @@ async function fetchSpot(spot, pastDays = 0) {
         const e  = (RH/100) * es; // hPa
         // ITU-R P.453 refractivity N
         const N = 77.6 * P / T_K + 3.73e5 * e / (T_K * T_K);
-        return { alt, N };
+        return { alt, N, P };
       }).filter(Boolean);
 
       if (pts.length >= 4) {
@@ -4903,6 +4989,7 @@ async function fetchSpot(spot, pastDays = 0) {
         // bloquer artificiellement K à 0,05. Plafond haut 0,45 conservé (super-réfraction).
         k_bislin = Math.max(-0.05, Math.min(0.45, k_bislin));
         k_source = 'era5';
+        refractionLevels = pts; // conservé pour le K segmenté par altitude (V2.0-E)
       } else {
         throw new Error('not enough levels');
       }
@@ -4939,6 +5026,8 @@ wind: avg(d1.hourly?.wind_speed_10m),
       precip: avg(d1.hourly?.precipitation_probability),
       vis_mid: (avg(d2.hourly?.visibility)??0)/1000,
       temp, dTdh, k_bislin, lift_m, k_source,
+      _refractionLevels: refractionLevels, // profil {alt,N,P} par niveau — réutilisé en V2.0-E
+      _dataProvenanceWorst, _dataAgeMin, // V2.0-L (§27-28) — traçabilité fraîcheur pour confidence.forecastAge
       // ── Nouveaux champs v4 ──
       blh:    avg(d1.hourly?.boundary_layer_height),        // PBL height (m)
       rh_850: avg(d2?.hourly?.relative_humidity_850hPa),    // RH à 850 hPa au mi-trajet
@@ -4981,6 +5070,7 @@ wind: avg(d1.hourly?.wind_speed_10m),
         blh: h.blh, rh_850: h.rh_850, aod_bc: h.aod_bc, rh_alt: h.rh_alt,
         wind_dir: d1.hourly?.wind_direction_10m?.[hourIdx] ?? h.wind_dir ?? null,
         _day: h._day, _obsDate: obsDate.toISOString(),
+        _dataProvenanceWorst: h._dataProvenanceWorst, _dataAgeMin: h._dataAgeMin,
       };
       hourlyScores['abs_' + absH] = scoreDay(spot, hDataAbs).score;
       hourlyScores['abs_' + absH + '_elev'] = Math.round(solarElevation(spot.obs.lat, spot.obs.lon, obsDate) * 10) / 10;
@@ -5012,6 +5102,7 @@ wind: avg(d1.hourly?.wind_speed_10m),
         blh: h.blh, rh_850: h.rh_850, aod_bc: h.aod_bc, rh_alt: h.rh_alt,
         wind_dir: d1.hourly?.wind_direction_10m?.[hourIdx] ?? h.wind_dir ?? null,
         _day: h._day, _obsDate: obsDate.toISOString(),
+        _dataProvenanceWorst: h._dataProvenanceWorst, _dataAgeMin: h._dataAgeMin,
       };
       const rawScore = scoreDay(spot, hData).score;
       const elev = solarElevation(spot.obs.lat, spot.obs.lon, obsDate);
@@ -5043,6 +5134,7 @@ wind: avg(d1.hourly?.wind_speed_10m),
         blh: h.blh, rh_850: h.rh_850, aod_bc: h.aod_bc, rh_alt: h.rh_alt,
         wind_dir: d1.hourly?.wind_direction_10m?.[hourIdx] ?? h.wind_dir ?? null,
         _day: h._day, _obsDate: obsDate.toISOString(),
+        _dataProvenanceWorst: h._dataProvenanceWorst, _dataAgeMin: h._dataAgeMin,
       };
       const rawScore = scoreDay(spot, hData).score;
       const elev = solarElevation(spot.obs.lat, spot.obs.lon, obsDate);
@@ -5566,7 +5658,7 @@ function renderSpotCard(s, loading, days) {
 
 function openScoreModal(dataB64) {
   const data = JSON.parse(decodeURIComponent(escape(atob(dataB64))));
-  const { items, score, spotName, dateLabel, creneauBadge } = data;
+  const { items, score, spotName, dateLabel, creneauBadge, v2Summary } = data;
 
   // Critères avec max > 0 → classés good/bad selon ratio
   const scored = items.filter(it => it.max > 0);
@@ -5626,6 +5718,37 @@ function openScoreModal(dataB64) {
 
   const scColor = score >= 75 ? '#4ade80' : score >= 55 ? 'var(--amber)' : score >= 35 ? '#f97316' : 'var(--red)';
 
+  // Deuxième avis (moteur V2, cahier des charges §21-22) — purement informatif,
+  // ne modifie jamais la note ci-dessus. Expliqué en mots simples pour rester
+  // lisible sans connaître le détail technique du moteur.
+  const v2Html = v2Summary ? `
+    <div class="sep-section" style="color:#c084fc;margin-top:1rem;padding-top:.75rem;border-top:1px dashed rgba(255,255,255,.08)">
+      🧪 Deuxième avis (en test)
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:.5rem;line-height:1.5">
+      Un nouveau moteur de calcul tourne en coulisses, en parallèle de celui qui donne la note ci-dessus.
+      Il regarde la même météo mais avec une méthode plus poussée. Pour l'instant il ne fait que
+      <strong>comparer</strong> — la note affichée en haut n'a pas bougé et ne bougera pas tant qu'on
+      n'a pas vérifié qu'il est fiable sur plusieurs vraies sorties.
+    </div>
+    ${v2Summary.atmosphere != null ? `<div class="sep-item">🌫️ Air (transparence) selon le nouveau calcul : <strong>${Math.round(v2Summary.atmosphere)}/100</strong></div>` : ''}
+    ${v2Summary.cloud != null ? `<div class="sep-item">☁️ Nuages (trajet dégagé) : <strong>${Math.round(v2Summary.cloud)}/100</strong></div>` : ''}
+    ${v2Summary.refraction != null ? `<div class="sep-item">📐 Trajet de la lumière (réfraction) : <strong>${Math.round(v2Summary.refraction)}/100</strong></div>` : ''}
+    ${v2Summary.seeingArcsec != null ? `<div class="sep-item">🌀 Flou attendu (turbulence) : <strong>${v2Summary.seeingArcsec.toFixed(2)}″</strong>${v2Summary.legacySeeingArcsec != null ? ` <span style="color:var(--text3)">(ancienne estimation : ${v2Summary.legacySeeingArcsec.toFixed(2)}″)</span>` : ''}</div>` : ''}
+    ${v2Summary.optical != null ? `<div class="sep-item">🔭 Résolution optique (instrument) : <strong>${Math.round(v2Summary.optical)}/100</strong></div>` : ''}
+    ${v2Summary.solar != null ? `<div class="sep-item">☀️ Géométrie solaire (contre-jour/rasant/face) : <strong>${Math.round(v2Summary.solar)}/100</strong></div>`
+      : (v2Summary.solarLightingType === 'NO_SUN' ? `<div class="sep-item" style="color:var(--text3)">☀️ Géométrie solaire : soleil sous l'horizon à cet horaire — exclue de la note</div>` : '')}
+    ${v2Summary.synthesis != null ? `<div class="sep-item">🧮 Note globale selon le nouveau calcul : <strong>${v2Summary.synthesis}/100</strong></div>
+      <div style="font-size:11px;color:var(--text3);margin:.15rem 0 .5rem;line-height:1.5">
+        Combine, pondérés : Air 30% · Nuages 18% · Réfraction 15% · Turbulence 12% · Optique 10% · Géométrie solaire 15%
+        (renormalisé si un critère manque ce jour-là). La courbure terrestre (Bislin/globe) n'entre volontairement
+        <strong>jamais</strong> dans cette note — elle reste affichée séparément, à titre informatif uniquement.
+        Pas encore la note affichée en haut.
+      </div>` : ''}
+    ${v2Summary.eliminated ? `<div class="sep-item" style="color:var(--red)">⛔ Le nouveau calcul éliminerait cette sortie : ${v2Summary.eliminatorReasons.map(r => r.label).join(' · ')}</div>` : ''}
+    ${v2Summary.confidence != null ? `<div class="sep-item">🎯 Fiabilité de ce deuxième avis : <strong>${Math.round(v2Summary.confidence)}%</strong> <span style="color:var(--text3)">(dépend de la qualité des données météo dispo ce jour-là)</span></div>` : ''}
+  ` : '';
+
   document.getElementById('score-modal-body').innerHTML = `
     <div class="score-modal-title">🔭 ANALYSE DU SCORE — ${spotName} · ${dateLabel}</div>
     <img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/refs/heads/main/Gemini_Generated_Image_frshvkfrshvkfrsh.png"
@@ -5641,6 +5764,7 @@ function openScoreModal(dataB64) {
     <div class="sep-section sep-bad">⚠️ Ce qui a pénalisé</div>
     ${badHtml}
     ${transpHtml}
+    ${v2Html}
   `;
   document.getElementById('score-modal-overlay').classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -5651,9 +5775,9 @@ function closeScoreModal() {
   document.body.style.overflow = '';
 }
 
-function buildScoreExplain(items, score, spotId, day, spotName, dateLabel) {
+function buildScoreExplain(items, score, spotId, day, spotName, dateLabel, v2Summary) {
   const creneauBadge = getCreneauBadge();
-  const payload = btoa(unescape(encodeURIComponent(JSON.stringify({ items, score, spotName, dateLabel, creneauBadge }))));
+  const payload = btoa(unescape(encodeURIComponent(JSON.stringify({ items, score, spotName, dateLabel, creneauBadge, v2Summary: v2Summary || null }))));
   return `<div class="mb explain-btn" onclick="openScoreModal('${payload}')" style="padding:0;overflow:hidden;background:none;border:none;box-shadow:none;border-radius:0;">
     <img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/refs/heads/main/1000031942.png"
       alt="Comprendre le score"
@@ -5890,6 +6014,7 @@ function renderDayRow(dayData, date, spot) {
       blh: h.blh, rh_850: h.rh_850, aod_bc: h.aod_bc, rh_alt: h.rh_alt,
       wind_dir: d1.hourly?.wind_direction_10m?.[hourIdx] ?? h.wind_dir ?? null,
       _day: h._day, _obsDate: obsDate.toISOString(),
+      _dataProvenanceWorst: h._dataProvenanceWorst, _dataAgeMin: h._dataAgeMin,
     };
     scoredResult = scoreDay(spot, hData);
     // scoreDay a calculé kosch_sigma/C0 sur l'objet hData local (créneau soir) — on les
@@ -5933,6 +6058,7 @@ function renderDayRow(dayData, date, spot) {
       blh: h.blh, rh_850: h.rh_850, aod_bc: h.aod_bc, rh_alt: h.rh_alt,
       wind_dir: d1.hourly?.wind_direction_10m?.[hourIdx] ?? h.wind_dir ?? null,
       _day: h._day, _obsDate: obsDate.toISOString(),
+      _dataProvenanceWorst: h._dataProvenanceWorst, _dataAgeMin: h._dataAgeMin,
     };
     scoredResult = scoreDay(spot, hData);
     // Même correctif que pour le créneau soir : recopier kosch_sigma/C0 sur h.
@@ -5941,7 +6067,34 @@ function renderDayRow(dayData, date, spot) {
   }
   items = scoredResult.items;
 
-  const explainBtn = buildScoreExplain(items, score, spot.id, day, spot.name, fullLabel(date));
+  // Deuxième avis (moteur V2 en coulisses, cahier des charges §21-22) — calcul
+  // isolé dans un try/catch : s'il échoue ou si le moteur V2 n'est pas encore
+  // chargé, la note affichée et le reste de la modale ne sont jamais impactés.
+  let v2Summary = null;
+  try {
+    if (window.VLD_ENGINE_V2 && typeof VLD_ENGINE_V2.wrapLegacyResult === 'function') {
+      const v2 = VLD_ENGINE_V2.wrapLegacyResult(spot, effectiveH, k);
+      v2Summary = {
+        atmosphere: v2.score.atmosphere,
+        refraction: v2.score.refraction,
+        cloud: v2.score.cloud,
+        optical: v2.score.optical,
+        turbulence: v2.score.turbulence,
+        solar: v2.score.solar,
+        solarLightingType: v2.solar.lightingType,
+        synthesis: v2.score.synthesis,
+        eliminated: v2.eliminators.eliminated,
+        eliminatorReasons: v2.eliminators.reasons,
+        confidence: v2.score.confidence,
+        seeingArcsec: v2.turbulence.seeingArcsec,
+        legacySeeingArcsec: v2.turbulence.legacySeeingArcsec,
+      };
+    }
+  } catch (e) {
+    v2Summary = null;
+  }
+
+  const explainBtn = buildScoreExplain(items, score, spot.id, day, spot.name, fullLabel(date), v2Summary);
 
   // Card widget Journal de Bord
   const isPast = day < 0;
@@ -5979,8 +6132,8 @@ function renderDayRow(dayData, date, spot) {
       <span class="drow-score" style="color:${sc}">${score}</span>
     </div>
     <div class="drow-body" id="${did}">
-      <div class="drow-left"><div class="mb-grid">${renderMeteoButtons(items)}</div>${explainRow}<img src="bandeau4communaute.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;">${communityBanner}</div>
-      <div class="drow-right">${renderNewCurveBlock(spot,k)}<img src="bandeau2optique.png" alt="" style="width:100%;height:66px;object-fit:cover;object-position:center;border-radius:10px;display:block;margin:.75rem 0;">${renderKMini(k,h,spot,getIRScore(forecasts[spot.id], day))}${renderAngularResolutionBlock(h, spot, getApertureMm())}<img src="bandeau3relief.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;margin:.75rem 0;">${renderHWTBlock(spot)}</div>
+      <div class="drow-left"><div class="mb-grid">${renderMeteoButtons(items)}</div>${explainRow}<img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/bandeau4communaute.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;">${communityBanner}</div>
+      <div class="drow-right">${renderNewCurveBlock(spot,k)}<img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/bandeau2optique.png" alt="" style="width:100%;height:66px;object-fit:cover;object-position:center;border-radius:10px;display:block;margin:.75rem 0;">${renderKMini(k,h,spot,getIRScore(forecasts[spot.id], day))}${renderAngularResolutionBlock(h, spot, getApertureMm())}<img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/bandeau3relief.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;margin:.75rem 0;">${renderHWTBlock(spot)}</div>
     </div>
   </div>`;
 }
@@ -6154,7 +6307,7 @@ function renderNewCurveBlock(spot, k_default) {
   </svg>`;
 
   return `<div class="dr-curve">
-    <img src="bandeau1svdcourbure.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;margin-bottom:.75rem;">
+    <img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/bandeau1svdcourbure.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;margin-bottom:.75rem;">
     <div class="dr-curve-title">🌍 ${spot.name} → ${spot.target}</div>
     <div class="dr-curve-cta" onclick="openCurveOverlay('${spot.id}', ${k.toFixed(3)})" title="Ouvrir le profil de courbure interactif">
       <div class="dr-cta-illust">${illustSVG}</div>
@@ -6221,6 +6374,44 @@ function onApertureCustomChange(input) {
   const saved = getApertureProfile();
   if (saved.profile === 'custom') setApertureProfile('custom', parseFloat(input.value || '80'));
   try { renderCards(false); } catch(e) {}
+}
+
+// ── Profil de capteur : taille pixel utilisée par l'échantillonnage optique V2 (§19) ──
+// Sources : pixel pitch mesuré (sensor-info tiers), focale native fabricant.
+// Indépendant du profil d'ouverture ci-dessus (une même optique peut recevoir
+// plusieurs boîtiers) — persisté séparément.
+const VLD_CAMERA_PROFILES = Object.freeze({
+  canon500d: { label: 'Canon 500D full spectrum (actuel)', pixelUm: 4.69 },
+  canon60d:  { label: 'Canon 60D full spectrum (cible upgrade)', pixelUm: 4.30 },
+  custom:    { label: 'Personnalisé', pixelUm: null }
+});
+const CAMERA_KEY = 'vld_camera_profile';
+function getCameraProfile() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CAMERA_KEY) || 'null');
+    if (saved && saved.profile) return saved;
+  } catch(e) {}
+  return { profile: 'canon500d', customUm: 4.69 };
+}
+function setCameraProfile(profile, customUm) {
+  try { localStorage.setItem(CAMERA_KEY, JSON.stringify({ profile, customUm: customUm ?? null })); } catch(e) {}
+}
+function getCameraPixelUm() {
+  const saved = getCameraProfile();
+  if (saved.profile === 'custom') return saved.customUm || 4.69;
+  return VLD_CAMERA_PROFILES[saved.profile]?.pixelUm ?? 4.69;
+}
+
+// Focale (mm) associée à chaque profil d'ouverture existant (§19-20). null si
+// non pertinente (P1000 : zoom variable, pas de focale fixe utile ici).
+const VLD_OPTIC_FOCAL_MM = Object.freeze({
+  p1000: null,
+  scope80: 430, // SVBONY SV406P — focale native confirmée fabricant
+  custom: null
+});
+function getFocalMm() {
+  const saved = getApertureProfile();
+  return VLD_OPTIC_FOCAL_MM[saved.profile] ?? null;
 }
 
 // ── U4 Cn2 SCINTILLATION ─────────────────────────────────────────────
@@ -6805,9 +6996,147 @@ function createEmptyV2Result(spot) {
     refraction:  { profile: [], kEffective: null, mirageRisk: null, modelType: null },
     turbulence:  { cn2Profile: [], r0: null, seeingArcsec: null, modelType: null },
     optical:     { thetaTargetArcsec: null, diffractionArcsec: null, pixelScaleArcsec: null, effectiveResolutionArcsec: null },
-    score:       { atmosphere: null, cloud: null, refraction: null, turbulence: null, optical: null, geometry: null, final: null, confidence: null, modelType: null },
+    solar:       { lightingType: null, diffDeg: null, sunAltDeg: null, modelType: null },
+    score:       { atmosphere: null, cloud: null, refraction: null, turbulence: null, optical: null, geometry: null, solar: null, final: null, synthesis: null, confidence: null, modelType: null },
+    confidence:  { value: null, factors: {} },
+    eliminators: { eliminated: false, reasons: [] },
+    regimeBonus: { pct: null, breakdown: [] },
     diagnostics: [],
     legacy:      { score: null, rawScore: null, items: [], regimes: [], hasElim: false }
+  };
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * PHASE V2.0-G — Confidence Score (cahier des charges §25)
+ * ═══════════════════════════════════════════════════════════════════════
+ * Les trois audits croisés (doc technique/référence) sont unanimes : un
+ * score de 85/100 sans indication de fiabilité des données est trompeur.
+ * Un score calculé avec un profil ERA5 complet et un AOD disponible n'a pas
+ * le même sens qu'un score basé sur des fallbacks partout.
+ *
+ * IMPORTANT — la confiance ne doit JAMAIS masquer une mauvaise physique :
+ * elle renseigne la fiabilité du calcul, pas son résultat (§25). Elle ne
+ * modifie donc jamais v2.score.final.
+ *
+ * Facteurs réellement traçables avec le modèle de données actuel de VLD Hub
+ * (weatherCompleteness, aodAvailability, verticalProfileCompleteness,
+ * forecastAge depuis V2.0-L) sont calculés ; les facteurs non traçables
+ * aujourd'hui (modelAgreement — un seul fournisseur météo, cf. doc technique
+ * §6 point 6 ; spatialInterpolationDistance — pas de distance d'interpolation
+ * calculée) sont explicitement signalés comme absents plutôt que fabriqués
+ * avec une valeur arbitraire.
+ *
+ * @param {Object} h - heure/jour météo tel que consommé par scoreDay()
+ * @param {Array|null} refractionLevels - h._refractionLevels
+ * @param {number|null} aodColumn
+ * @returns {Object} { value, factors, modelType, diagnostics }
+ */
+function computeConfidenceScoreV2(h, refractionLevels, aodColumn) {
+  const diagnostics = [];
+  const weights = [];
+  const factors = {};
+
+  // 1) Complétude météo horaire de base (champs structurants du score V1)
+  const weatherFields = ['rh', 'cloud_low', 'cloud_mid', 'cloud_high', 'wind', 'precip', 'slp'];
+  const presentCount = weatherFields.filter(f => h[f] !== null && h[f] !== undefined).length;
+  const weatherCompleteness = presentCount / weatherFields.length;
+  factors.weatherCompleteness = Math.round(weatherCompleteness * 100);
+  weights.push({ value: weatherCompleteness, weight: 30 });
+  if (weatherCompleteness < 1) diagnostics.push(vldDiag("CONFIDENCE_WEATHER_INCOMPLETE", "warning", VLD_MODEL_TYPES.PROXY,
+    `Météo horaire incomplète : ${presentCount}/${weatherFields.length} champs structurants disponibles.`));
+
+  // 2) Disponibilité AOD (conditionne extinction, transmission spectrale, IPR)
+  const aodAvailable = (aodColumn !== null && aodColumn !== undefined);
+  factors.aodAvailability = aodAvailable ? 100 : 0;
+  weights.push({ value: aodAvailable ? 1 : 0, weight: 25 });
+  if (!aodAvailable) diagnostics.push(vldDiag("CONFIDENCE_AOD_MISSING", "warning", VLD_MODEL_TYPES.PROXY,
+    "AOD indisponible : confiance réduite sur l'extinction, la transmission spectrale et l'IPR."));
+
+  // 3) Complétude du profil vertical (niveaux ERA5 utilisés pour K)
+  const levelsCount = refractionLevels ? refractionLevels.length : 0;
+  const verticalProfileCompleteness = Math.min(1, levelsCount / 8);
+  factors.verticalProfileCompleteness = Math.round(verticalProfileCompleteness * 100);
+  weights.push({ value: verticalProfileCompleteness, weight: 25 });
+  if (levelsCount < 4) diagnostics.push(vldDiag("CONFIDENCE_K_FALLBACK", "warning", VLD_MODEL_TYPES.EMPIRICAL,
+    "Profil vertical ERA5 insuffisant (<4 niveaux) : K basé sur le fallback Bislin 2-niveaux, confiance réduite sur la réfraction/K segmenté."));
+
+  // 4) forecastAge (§25/§27-28) — désormais traçable : provenance de fetch
+  //    conservée par fetchDataWithCache (V2.0-L) sur h._dataProvenanceWorst
+  //    / h._dataAgeMin. Réseau/cache frais → confiance pleine ; cache stale
+  //    (servi immédiatement par design SWR, §28) → confiance dégradée
+  //    progressivement avec l'âge ; source en erreur → confiance minimale.
+  const provWorst = h._dataProvenanceWorst ?? null;
+  const ageMin = h._dataAgeMin ?? null;
+  let forecastAgeValue = null;
+  if (provWorst === 'network' || provWorst === 'cache-fresh') {
+    forecastAgeValue = 1;
+  } else if (provWorst === 'cache-stale-revalidating' && ageMin != null) {
+    // Dégradation linéaire sur la fenêtre "stale acceptable" météo (12h, la plus longue
+    // des deux TTL §28) ; plancher à 0.3 (donnée encore utilisable mais signalée).
+    forecastAgeValue = Math.max(0.3, 1 - ageMin / (12 * 60));
+  } else if (provWorst === 'error') {
+    forecastAgeValue = 0.2;
+  }
+  if (forecastAgeValue !== null) {
+    factors.forecastAge = Math.round(forecastAgeValue * 100);
+    weights.push({ value: forecastAgeValue, weight: 20 });
+    if (provWorst === 'cache-stale-revalidating') diagnostics.push(vldDiag("CONFIDENCE_STALE_CACHE", "warning", VLD_MODEL_TYPES.PROXY,
+      `Au moins une source de données servie depuis un cache daté de ${ageMin} min (stale-while-revalidate, §28) — rafraîchissement en tâche de fond lancé, confiance réduite pour cette consultation.`));
+    if (provWorst === 'error') diagnostics.push(vldDiag("CONFIDENCE_FETCH_ERROR", "warning", VLD_MODEL_TYPES.PROXY,
+      "Au moins une source de données a échoué sans cache exploitable (§27) : confiance fortement réduite."));
+  } else {
+    factors.forecastAge = null;
+    diagnostics.push(vldDiag("CONFIDENCE_FORECAST_AGE_UNAVAILABLE", "info", VLD_MODEL_TYPES.PROXY,
+      "forecastAge non traçable pour ce point (donnée hors du flux fetchSpot V2.0-L, ex. hData reconstruit sans provenance) — exclu de la synthèse plutôt que fabriqué."));
+  }
+
+  // 5) Facteurs listés au cahier des charges §25 mais toujours non traçables
+  //    avec le modèle de données actuel — signalés explicitement plutôt que fabriqués.
+  factors.modelAgreement = null;
+  factors.spatialInterpolationDistance = null;
+  diagnostics.push(vldDiag("CONFIDENCE_UNTRACKED_FACTORS", "info", VLD_MODEL_TYPES.PROXY,
+    "modelAgreement et spatialInterpolationDistance ne sont pas encore traçables (un seul fournisseur météo — cf. doc technique §6 point 6 ; pas de distance d'interpolation spatiale calculée) — exclus de la synthèse plutôt que fabriqués. forecastAge est désormais traçable (V2.0-L, §27-28)."));
+
+  const totalWeight = weights.reduce((s, w) => s + w.weight, 0);
+  const weightedSum = weights.reduce((s, w) => s + w.value * w.weight, 0);
+  const value = totalWeight > 0 ? Math.round((weightedSum / totalWeight) * 100) : null;
+
+  return { value, factors, modelType: VLD_MODEL_TYPES.HEURISTIC, diagnostics };
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * PHASE V2.0-F — Renommage honnête de la turbulence (cahier des charges §17)
+ * ═══════════════════════════════════════════════════════════════════════
+ * calcCn2() (V1, fonction inchangée) ne calcule PAS un vrai Cn² physique
+ * (constante de structure de l'indice de réfraction, en m^(-2/3)). C'est un
+ * score heuristique 0-10 basé sur le cisaillement de vent et le gradient
+ * thermique. Le nom "Cn²" est réservé en physique à une véritable grandeur
+ * mesurée/modélisée — l'utiliser ici pour un score heuristique induit en
+ * erreur sur la nature réelle du calcul.
+ *
+ * estimateTurbulenceScore() est un ALIAS honnêtement nommé de calcCn2() —
+ * strictement le même calcul, aucune valeur numérique modifiée — étiqueté
+ * modelType: "heuristic", status: "legacy-compatible" (cahier des charges
+ * §17). calcCn2() elle-même N'EST NI renommée NI supprimée : elle reste
+ * utilisée telle quelle par le frontend (renderCn2Block, computeAngularResolution)
+ * — aucun risque de régression. Le nom "Cn²" sera réservé à une vraie
+ * estimation physique intégrée sur la ligne de visée en phase ultérieure (§18).
+ *
+ * @param {number} windShear
+ * @param {number} dTdh
+ * @param {number} [alt]
+ * @returns {Object} { score, modelType, status, diagnostic }
+ */
+function estimateTurbulenceScore(windShear, dTdh, alt) {
+  const score = calcCn2(windShear, dTdh, alt); // même calcul que V1 — aucune modification numérique
+  return {
+    score,
+    modelType: VLD_MODEL_TYPES.HEURISTIC,
+    status: "legacy-compatible",
+    diagnostic: vldDiag("TURBULENCE_HEURISTIC_RENAME", "info", VLD_MODEL_TYPES.HEURISTIC,
+      "estimateTurbulenceScore() est un renommage honnête de calcCn2() (V1) — même score 0-10, mais ce n'est PAS un vrai Cn² physique (m⁻²/³). Une estimation physique Cn²(z)→r0→seeing intégrée sur la ligne de visée est prévue en phase ultérieure (§18).")
   };
 }
 
@@ -6939,6 +7268,337 @@ function buildSightline(spot, options) {
 }
 
 /**
+ * Facteurs d'opacité par couche nuageuse (§12 cahier des charges). Grandeur
+ * calibrable — HEURISTIC tant qu'elle n'est pas recalée sur des sessions
+ * terrain réelles. Point de départ : plus une couche est basse, plus elle
+ * bloque le contraste pour une distance de trajet identique traversée
+ * (gouttelettes plus denses / stratus vs cirrus fins et diffus en altitude).
+ */
+const VLD_CLOUD_OPACITY_FACTORS = Object.freeze({
+  low:  1.00,
+  mid:  0.75,
+  high: 0.45
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * PHASE V2.0-H — Nuages par couches traversées (cahier des charges §12)
+ * ═══════════════════════════════════════════════════════════════════════
+ * Constat (§12) : le moteur V1 (scoreDay, wLow/wMid/wHigh) répond à « combien
+ * de nuages bas/moyens/hauts ? » avec des poids fixes dérivés d'une seule
+ * estimation grossière (altitude du rayon à mi-trajet, _rayAltAtMid). La
+ * question posée par le cahier est différente : « à quel endroit précis du
+ * trajet la lumière traverse ces nuages, et sur quelle distance ? ».
+ *
+ * Ce module réutilise la ligne de visée déjà construite (buildSightline,
+ * V2.0-D) : pour chaque segment, l'altitude géométrique du rayon est déjà
+ * interpolée point par point. On mesure simplement, pour chaque couche
+ * (basse <2000m / moyenne 2000-6000m / haute >6000m — mêmes seuils que le
+ * moteur legacy pour rester comparable), la fraction de la distance totale
+ * où le rayon traverse effectivement cette couche. Aucune nouvelle donnée
+ * météo n'est nécessaire : cloud_low/mid/high (couverture %, par jour)
+ * restent les entrées, seule la pondération géométrique change.
+ *
+ * Comme pour les autres modules V2, le résultat est un deuxième avis
+ * comparatif exposé via VLD_ENGINE_V2 — il ne remplace pas le score /100
+ * affiché (v1). Les trois couches restent séparées dans la sortie, comme
+ * l'exige le cahier (§12 : « le frontend doit conserver les trois catégories
+ * séparées afin de garder l'explicabilité »).
+ *
+ * @param {Object} sightline - retour de buildSightline(spot)
+ * @param {Object} h - heure/jour météo (cloud_low, cloud_mid, cloud_high en %)
+ * @returns {Object} { low, mid, high, cloudBlockPct, modelType, diagnostics }
+ */
+function computeCloudPathV2(sightline, h) {
+  const diagnostics = [];
+  const LOW_TOP = 2000, MID_TOP = 6000; // m, identiques aux seuils legacy (_rayAltAtMid)
+
+  if (!sightline || !sightline.points || sightline.points.length < 2) {
+    diagnostics.push(vldDiag("CLOUD_PATH_NO_SIGHTLINE", "warning", VLD_MODEL_TYPES.PHYSICAL,
+      "Ligne de visée indisponible : fraction de trajet par couche non calculable."));
+    return { low: null, mid: null, high: null, cloudBlockPct: null, modelType: VLD_MODEL_TYPES.HEURISTIC, diagnostics };
+  }
+
+  const covLow  = h.cloud_low  ?? 100;
+  const covMid  = h.cloud_mid  ?? 100;
+  const covHigh = h.cloud_high ?? 100;
+
+  // Fraction de la distance totale où le rayon (déjà interpolé linéairement
+  // obs→cible par buildSightline) traverse chaque couche d'altitude.
+  const points = sightline.points;
+  let lenLow = 0, lenMid = 0, lenHigh = 0, lenTotal = 0;
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i], b = points[i + 1];
+    const segLen = b.distanceKm - a.distanceKm;
+    if (segLen <= 0) continue;
+    lenTotal += segLen;
+    const altMid = (a.altitudeGeomM + b.altitudeGeomM) / 2;
+    if (altMid < LOW_TOP) lenLow += segLen;
+    else if (altMid < MID_TOP) lenMid += segLen;
+    else lenHigh += segLen;
+  }
+
+  const fracLow  = lenTotal > 0 ? lenLow  / lenTotal : 0;
+  const fracMid  = lenTotal > 0 ? lenMid  / lenTotal : 0;
+  const fracHigh = lenTotal > 0 ? lenHigh / lenTotal : 0;
+
+  // Impact = fraction du trajet traversant la couche × couverture nuageuse
+  // de cette couche × opacité relative de la couche (VLD_CLOUD_OPACITY_FACTORS).
+  // 0 = aucun impact, 1 = trajet entièrement bloqué par cette couche seule.
+  const blockLow  = fracLow  * (covLow  / 100) * VLD_CLOUD_OPACITY_FACTORS.low;
+  const blockMid  = fracMid  * (covMid  / 100) * VLD_CLOUD_OPACITY_FACTORS.mid;
+  const blockHigh = fracHigh * (covHigh / 100) * VLD_CLOUD_OPACITY_FACTORS.high;
+
+  // Combinaison façon transmissions indépendantes (chaque couche laisse
+  // passer 1-block, on multiplie) plutôt qu'une simple somme : évite qu'une
+  // couche déjà quasi-opaque à elle seule pousse le blocage total au-delà de 100%.
+  const transmissionPath = (1 - blockLow) * (1 - blockMid) * (1 - blockHigh);
+  const cloudBlockPct = Math.round((1 - Math.max(0, Math.min(1, transmissionPath))) * 100);
+
+  diagnostics.push(vldDiag("CLOUD_PATH_FRACTIONS", "info", VLD_MODEL_TYPES.PHYSICAL,
+    `Rayon traverse : couche basse sur ${(fracLow * 100).toFixed(0)}% du trajet, moyenne sur ${(fracMid * 100).toFixed(0)}%, haute sur ${(fracHigh * 100).toFixed(0)}% (ligne de visée V2.0-D, ${lenTotal.toFixed(0)} km).`));
+  diagnostics.push(vldDiag("CLOUD_OPACITY_HEURISTIC", "warning", VLD_MODEL_TYPES.HEURISTIC,
+    "Facteurs d'opacité relative par couche (VLD_CLOUD_OPACITY_FACTORS) non calibrés sur données terrain — valeurs de départ."));
+
+  return {
+    low:  { coveragePct: covLow,  pathFraction: fracLow,  blockPct: Math.round(blockLow * 100) },
+    mid:  { coveragePct: covMid,  pathFraction: fracMid,  blockPct: Math.round(blockMid * 100) },
+    high: { coveragePct: covHigh, pathFraction: fracHigh, blockPct: Math.round(blockHigh * 100) },
+    cloudBlockPct, // 0-100, "quelle part du trajet est effectivement bloquée par les nuages"
+    modelType: VLD_MODEL_TYPES.HEURISTIC, // physique pour la géométrie, heuristique pour l'opacité → bloc global heuristic
+    diagnostics
+  };
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * PHASE V2.0-I — Résolution optique combinée (cahier des charges §19-20)
+ * ═══════════════════════════════════════════════════════════════════════
+ * Constat (§19) : la carte "Résolution angulaire" existante (computeAngularResolution)
+ * combine diffraction et seeing, mais pas l'échantillonnage pixel du capteur —
+ * la troisième limite explicitement demandée par le cahier. De plus, elle
+ * calcule la taille angulaire de la cible avec la hauteur TOTALE (obs↔cible),
+ * alors que le §19 demande d'utiliser la hauteur RÉELLEMENT VISIBLE si la
+ * cible est partiellement cachée. Cette phase réutilise le calcul Bislin déjà
+ * existant (_calcBislin, hauteur visible déjà utilisée par l'overlay courbure)
+ * pour corriger ce point sans nouveau calcul géométrique.
+ *
+ * Combinaison V2.0 (cahier §19) : theta_eff ≈ max(diffraction, seeing, pixel)
+ * — "conservative limiting resolution", explicitement la formule prescrite
+ * pour cette phase. La vraie combinaison MTF/quadrature est prévue en V2.1
+ * (cahier : "V2.1 : combinaison MTF / quadrature selon modèle choisi"), une
+ * fois validée sur plusieurs sessions terrain réelles.
+ *
+ * Grossissement volontairement absent d'ici : le cahier (§20) est explicite,
+ * "le grossissement ne crée pas de détail que l'atmosphère ou l'optique n'a
+ * pas transmis" — il ne doit donc jamais améliorer theta_eff ni N.
+ *
+ * @param {Object} spot
+ * @param {number} k - coefficient de réfraction (pour la hauteur visible réelle)
+ * @param {number|null} apertureMm
+ * @param {number|null} focalMm
+ * @param {number|null} pixelUm
+ * @param {number|null} seeingArcsec - seeing physique (V2.1) ou repli heuristique fourni par l'appelant
+ * @returns {Object} { thetaTargetArcsec, diffractionArcsec, pixelScaleArcsec, seeingArcsec, effectiveResolutionArcsec, limitingFactor, N, modelType, diagnostics }
+ */
+function computeOpticalResolutionV2(spot, k, apertureMm, focalMm, pixelUm, seeingArcsec) {
+  const diagnostics = [];
+  const distanceKm = spot?.dist_km ?? null;
+
+  if (!distanceKm || distanceKm <= 0 || k == null) {
+    diagnostics.push(vldDiag("OPTICAL_MISSING_INPUT", "warning", VLD_MODEL_TYPES.PHYSICAL,
+      "Distance ou coefficient de réfraction manquant : résolution optique V2 non calculable."));
+    return { thetaTargetArcsec: null, diffractionArcsec: null, pixelScaleArcsec: null, seeingArcsec: seeingArcsec ?? null,
+      effectiveResolutionArcsec: null, limitingFactor: null, N: null, modelType: VLD_MODEL_TYPES.HEURISTIC, diagnostics };
+  }
+
+  // Hauteur réellement visible (§19) — pas la hauteur totale obs↔cible —
+  // même calcul Bislin que l'overlay courbure existant (_calcBislin).
+  const bislin = _calcBislin(spot, k);
+  // IMPORTANT (cf. §22 révisé) : la courbure terrestre ne doit JAMAIS peser dans
+  // la note globale. On utilise donc la hauteur RÉELLE totale de la cible pour
+  // dimensionner l'angle, pas bislin.visible (qui dépend du modèle de courbure et
+  // peut tomber à 0 même par ciel parfaitement clair, zérotant silencieusement ce
+  // sous-score sans passer par un éliminateur explicite). bislin.visible/hidden
+  // restent calculés et affichés ailleurs (overlay courbure), juste plus utilisés ici.
+  const targetHeightM = spot?.tgt?.alt ?? null;
+
+  if (!targetHeightM || targetHeightM <= 0) {
+    diagnostics.push(vldDiag("OPTICAL_TARGET_HIDDEN", "warning", VLD_MODEL_TYPES.PHYSICAL,
+      "Hauteur de cible non renseignée : résolution angulaire non calculable."));
+    return { thetaTargetArcsec: 0, diffractionArcsec: null, pixelScaleArcsec: null, seeingArcsec: seeingArcsec ?? null,
+      effectiveResolutionArcsec: null, limitingFactor: null, N: 0, modelType: VLD_MODEL_TYPES.PHYSICAL, diagnostics };
+  }
+
+  const thetaTargetArcsec = Math.atan(targetHeightM / (distanceKm * 1000)) * 206265;
+
+  // 1. Diffraction (Dawes, arcsec)
+  const diffractionArcsec = apertureMm ? (116 / apertureMm) : null;
+  if (!apertureMm) diagnostics.push(vldDiag("OPTICAL_NO_APERTURE", "warning", VLD_MODEL_TYPES.PHYSICAL,
+    "Ouverture non renseignée : limite de diffraction non calculable."));
+
+  // 2. Seeing — physique si dispo (V2.1), sinon repli heuristique fourni par l'appelant
+  const seeingRes = seeingArcsec ?? null;
+  if (seeingRes == null) diagnostics.push(vldDiag("OPTICAL_NO_SEEING", "warning", VLD_MODEL_TYPES.PROXY,
+    "Seeing non disponible : limite de turbulence non calculable."));
+
+  // 3. Échantillonnage pixel (arcsec/pixel) = 206265 × taille pixel(m) / focale(m) — absent avant cette phase
+  let pixelScaleArcsec = null;
+  if (focalMm && pixelUm) {
+    pixelScaleArcsec = 206265 * (pixelUm * 1e-6) / (focalMm * 1e-3);
+  } else {
+    diagnostics.push(vldDiag("OPTICAL_NO_PIXEL_SCALE", "info", VLD_MODEL_TYPES.PHYSICAL,
+      "Focale et/ou taille de pixel non renseignées pour ce profil : échantillonnage capteur absent de la combinaison (§19)."));
+  }
+
+  const candidates = [
+    { name: 'diffraction', value: diffractionArcsec },
+    { name: 'seeing', value: seeingRes },
+    { name: 'pixel', value: pixelScaleArcsec }
+  ].filter(c => c.value != null && isFinite(c.value));
+
+  if (candidates.length === 0) {
+    diagnostics.push(vldDiag("OPTICAL_NO_LIMIT_AVAILABLE", "error", VLD_MODEL_TYPES.HEURISTIC,
+      "Aucune des trois limites (diffraction/seeing/pixel) n'est calculable : résolution effective indéterminée."));
+    return { thetaTargetArcsec, diffractionArcsec, pixelScaleArcsec, seeingArcsec: seeingRes,
+      effectiveResolutionArcsec: null, limitingFactor: null, N: null, modelType: VLD_MODEL_TYPES.HEURISTIC, diagnostics };
+  }
+
+  // V2.0 : combinaison conservative prescrite par le cahier = pire des limites disponibles.
+  const worst = candidates.reduce((a, b) => (b.value > a.value ? b : a));
+  const effectiveResolutionArcsec = worst.value;
+  const limitingFactor = worst.name;
+  const N = thetaTargetArcsec / effectiveResolutionArcsec;
+
+  diagnostics.push(vldDiag("OPTICAL_TARGET_HEIGHT_NO_CURVATURE", "info", VLD_MODEL_TYPES.PHYSICAL,
+    `Taille angulaire calculée sur la hauteur réelle totale de la cible (${Math.round(targetHeightM)} m) — pas la hauteur "visible" selon le modèle de courbure Bislin (${Math.round(bislin.visible)} m), volontairement exclue de ce calcul (§22 révisé).`));
+  diagnostics.push(vldDiag("OPTICAL_MAX_COMBINATION", "info", VLD_MODEL_TYPES.HEURISTIC,
+    `Résolution effective = pire des limites disponibles (${limitingFactor}) — combinaison conservative V2.0 ; vraie combinaison MTF/quadrature prévue en V2.1 (§19).`));
+
+  return {
+    thetaTargetArcsec, diffractionArcsec, pixelScaleArcsec, seeingArcsec: seeingRes,
+    effectiveResolutionArcsec, limitingFactor, N,
+    modelType: VLD_MODEL_TYPES.HEURISTIC, // combinaison max() heuristique tant que la quadrature V2.1 n'est pas branchée
+    diagnostics
+  };
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * PHASE V2.1 — Vrai Cn²(z) → r0 → seeing physique (cahier des charges §18)
+ * ═══════════════════════════════════════════════════════════════════════
+ * Constat (§17/§18) : calcCn2()/estimateTurbulenceScore() (V1, V2.0-F) ne
+ * sont PAS un vrai Cn² physique — juste un score heuristique 0-10. Cette
+ * phase introduit une vraie estimation de la constante de structure de
+ * l'indice de réfraction Cn²(h), intégrée le long de la ligne de visée
+ * (buildSightline(), V2.0-D) plutôt qu'au zénith comme en astronomie
+ * classique — nuance explicitement demandée par le cahier des charges pour
+ * une visée VLD quasi horizontale.
+ *
+ * Modèle utilisé : Hufnagel-Valley (variante 5/7), modèle empirique de
+ * référence en optique atmosphérique/adaptative — cité explicitement par le
+ * cahier des charges comme point de départ acceptable, à condition que ses
+ * paramètres soient étiquetés honnêtement comme empiriques/proxy (§18) :
+ *
+ *   Cn²(h) = 0.00594·(v/27)²·(1e-5·h)¹⁰·exp(-h/1000)
+ *          + 2.7e-16·exp(-h/1500)
+ *          + A·exp(-h/100)
+ *
+ * où h = altitude (m), v = vent RMS en haute altitude (m/s, défaut 27 — la
+ * valeur standard HV-5/7, non mesurée localement pour VLD Hub aujourd'hui),
+ * A = turbulence de surface (m^-2/3, défaut 1.7e-14 — site "moyen" standard).
+ *
+ * Intégration sur le trajet réel (pas au zénith) :
+ *   J = Σ Cn²(h_i) · longueur_segment_i (mètres)
+ *   r0 = [0.423 · k² · J]^(-3/5),  k = 2π/λ
+ *   seeing ≈ 0.98 · λ / r0  (radians → arcsec ×206265)
+ *
+ * IMPORTANT : v et A sont des constantes empiriques par défaut, PAS des
+ * mesures locales — modelType "proxy" sur l'ensemble du résultat. Aucun
+ * appel API supplémentaire (réutilise buildSightline(), V2.0-D).
+ */
+
+const VLD_HV_DEFAULT_PARAMS = Object.freeze({
+  windRms: 27,        // m/s — vent RMS haute altitude, valeur standard HV-5/7 (non mesurée localement)
+  groundCn2: 1.7e-14,  // m^-2/3 — turbulence de surface, valeur standard "site moyen"
+  wavelengthNm: 550    // nm — bande visible par défaut (850nm calculable séparément, cf. V2.0-C)
+});
+
+/** Cn²(h) — modèle Hufnagel-Valley 5/7, h en mètres. */
+function _vldHufnagelValleyCn2(h, windRms, groundCn2) {
+  const hv = Math.max(0, h); // altitude négative non physique ici, clamp à 0
+  const term1 = 0.00594 * Math.pow(windRms / 27, 2) * Math.pow(1e-5 * hv, 10) * Math.exp(-hv / 1000);
+  const term2 = 2.7e-16 * Math.exp(-hv / 1500);
+  const term3 = groundCn2 * Math.exp(-hv / 100);
+  return term1 + term2 + term3; // m^-2/3
+}
+
+/**
+ * Calcule un profil Cn²(z) réel le long de la ligne de visée et en dérive
+ * r0 (paramètre de Fried) et le seeing, intégrés sur le trajet horizontal
+ * réel plutôt qu'au zénith (cahier des charges §18).
+ *
+ * @param {Object} sightline - résultat de buildSightline(spot, options)
+ * @param {Object} [options]
+ * @param {number} [options.windRms] - vent RMS haute altitude (m/s), défaut 27
+ * @param {number} [options.groundCn2] - turbulence de surface (m^-2/3), défaut 1.7e-14
+ * @param {number} [options.wavelengthNm] - longueur d'onde (nm), défaut 550
+ * @returns {Object} { cn2Profile, r0, seeingArcsec, wavelengthNm, modelType, diagnostics }
+ */
+function computeCn2ProfileV2(sightline, options) {
+  const diagnostics = [];
+  const opts = options || {};
+  const windRms = opts.windRms ?? VLD_HV_DEFAULT_PARAMS.windRms;
+  const groundCn2 = opts.groundCn2 ?? VLD_HV_DEFAULT_PARAMS.groundCn2;
+  const wavelengthNm = opts.wavelengthNm ?? VLD_HV_DEFAULT_PARAMS.wavelengthNm;
+
+  if (!sightline || !sightline.points || sightline.points.length < 2) {
+    diagnostics.push(vldDiag("CN2_SIGHTLINE_MISSING", "error", VLD_MODEL_TYPES.PROXY,
+      "Ligne de visée indisponible ou insuffisante : profil Cn² non calculable."));
+    return { cn2Profile: [], r0: null, seeingArcsec: null, wavelengthNm, modelType: VLD_MODEL_TYPES.PROXY, diagnostics };
+  }
+
+  // Cn²(h) à chaque point de la ligne de visée (altitude interpolée, V2.0-D)
+  const cn2Profile = sightline.points.map(p => ({
+    distanceKm: p.distanceKm,
+    altitudeM: p.altitudeGeomM,
+    cn2: _vldHufnagelValleyCn2(p.altitudeGeomM, windRms, groundCn2)
+  }));
+
+  // Intégration sur le trajet réel (mètres), pas au zénith — somme des rectangles
+  // (Cn² au début de segment × longueur de segment), suffisant pour un premier
+  // modèle V2.1 ; une intégration trapézoïdale plus fine viendra si nécessaire.
+  let J = 0;
+  for (let i = 0; i < sightline.points.length - 1; i++) {
+    const segLengthM = sightline.points[i].segmentLengthKm * 1000;
+    J += cn2Profile[i].cn2 * segLengthM;
+  }
+
+  const lambdaM = wavelengthNm * 1e-9;
+  const k = 2 * Math.PI / lambdaM;
+  let r0 = null, seeingArcsec = null;
+  if (J > 0) {
+    r0 = Math.pow(0.423 * k * k * J, -3 / 5); // mètres
+    const seeingRad = 0.98 * lambdaM / r0;
+    seeingArcsec = seeingRad * 206265;
+  }
+
+  diagnostics.push(vldDiag("CN2_HUFNAGEL_VALLEY_PROXY", "info", VLD_MODEL_TYPES.PROXY,
+    `Cn²(z) estimé par le modèle Hufnagel-Valley 5/7 (v=${windRms} m/s, A=${groundCn2.toExponential(1)} m^-2/3 — valeurs standard non mesurées localement), intégré sur ${sightline.points.length - 1} segments du trajet réel (pas au zénith).`));
+
+  // Altitude des spots VLD (souvent 1000-3000m) : le terme de surface A·exp(-h/100)
+  // du modèle HV devient rapidement négligeable au-dessus de ~500-800m — la turbulence
+  // near-ground classique n'est donc plus le facteur dominant pour la plupart des trajets VLD.
+  const avgAlt = sightline.points.reduce((s, p) => s + p.altitudeGeomM, 0) / sightline.points.length;
+  if (avgAlt > 800) {
+    diagnostics.push(vldDiag("CN2_SURFACE_TERM_NEGLIGIBLE", "info", VLD_MODEL_TYPES.PROXY,
+      `Altitude moyenne du trajet (${Math.round(avgAlt)}m) : le terme de turbulence de surface du modèle HV est fortement atténué à cette altitude — la turbulence en haute couche (terme vent RMS) domine le résultat.`));
+  }
+
+  return { cn2Profile, r0, seeingArcsec, wavelengthNm, modelType: VLD_MODEL_TYPES.PROXY, diagnostics };
+}
+
+/**
  * ═══════════════════════════════════════════════════════════════════════
  * PHASE V2.0-C — AOD basse couche via BLH (proxy) + transmission spectrale
  * 550/850 nm (cahier des charges §8, §9, §10)
@@ -6960,6 +7620,72 @@ const VLD_AOD_BLH_PROXY_PARAMS = Object.freeze({
 
 /** Exposant d'Angström par défaut (aérosol continental typique) — proxy tant que non mesuré localement. */
 const VLD_ANGSTROM_ALPHA_DEFAULT = 1.3;
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * PHASE V2.0-E — K segmenté par altitude (cahier des charges §13)
+ * ═══════════════════════════════════════════════════════════════════════
+ * Constat documenté (doc technique §4.1, cahier des charges §13) : V1
+ * calcule UN SEUL coefficient K pour toute la colonne verticale (régression
+ * OLS sur les 8 niveaux de pression 1000-300 hPa), alors qu'un rayon VLD à
+ * faible élévation est dominé par les premières centaines de mètres — un K
+ * moyen masque une réfraction potentiellement bien plus forte près du sol
+ * qu'en altitude.
+ *
+ * V2.0-E réutilise le MÊME profil {altitude, N} par niveau de pression déjà
+ * calculé pour le K global ERA5 (aucun nouvel appel API — cf. h._refractionLevels,
+ * ajouté en V2.0-E dans le bâtisseur de forecast), mais calcule un gradient
+ * LOCAL entre niveaux consécutifs plutôt qu'une régression globale — donnant
+ * un K par tranche d'altitude au lieu d'un K unique moyenné.
+ * "V2.0 : 3-4 segments avec K local. V2.1 : profil plus fin." (§13)
+ *
+ * @param {Array|null} refractionLevels - h._refractionLevels : [{alt,N,P}, ...] (8 niveaux ERA5)
+ * @param {number|null} kGlobalFallback - K global déjà calculé (ERA5 régression ou Bislin 2-niveaux)
+ * @returns {Object} { profile, kGlobalFallback, modelType, diagnostics }
+ */
+function computeRefractionProfileV2(refractionLevels, kGlobalFallback) {
+  const diagnostics = [];
+  const R_EARTH = 6371000;
+  const K_MIN = -0.05, K_MAX = 0.45;
+
+  if (!refractionLevels || refractionLevels.length < 4) {
+    diagnostics.push(vldDiag("K_LEGACY_FALLBACK", "warning", VLD_MODEL_TYPES.EMPIRICAL,
+      "Profil de niveaux de pression indisponible ou insuffisant (<4 niveaux) : fallback sur le K global unique (ERA5 régression ou Bislin 2-niveaux)."));
+    return {
+      profile: (kGlobalFallback !== null && kGlobalFallback !== undefined)
+        ? [{ altFromM: 0, altToM: null, kLocal: kGlobalFallback, source: 'global_fallback' }]
+        : [],
+      kGlobalFallback, modelType: VLD_MODEL_TYPES.EMPIRICAL, diagnostics
+    };
+  }
+
+  // Tri par altitude croissante — ne dépend pas de l'ordre d'arrivée des niveaux hPa.
+  const sorted = [...refractionLevels].sort((a, b) => a.alt - b.alt);
+
+  const profile = [];
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const a = sorted[i], b = sorted[i + 1];
+    if (b.alt - a.alt < 10) continue; // segments trop fins (bruit numérique) ignorés
+    const dNdh = (b.N - a.N) / (b.alt - a.alt); // N-units/m — gradient LOCAL, pas régression globale
+    let kLocal = -R_EARTH * dNdh * 1e-6;
+    kLocal = Math.round(Math.max(K_MIN, Math.min(K_MAX, kLocal)) * 1000) / 1000;
+    profile.push({
+      altFromM: Math.round(a.alt), altToM: Math.round(b.alt), kLocal,
+      pressureHpaFrom: a.P ?? null, pressureHpaTo: b.P ?? null
+    });
+  }
+
+  const kNearSurface = profile.length ? profile[0].kLocal : kGlobalFallback;
+  diagnostics.push(vldDiag("K_SEGMENTED_ALTITUDE", "info", VLD_MODEL_TYPES.PHYSICAL,
+    `K segmenté sur ${profile.length} tranches d'altitude (gradient local N, pas de régression globale). K près du sol (${profile[0]?.altFromM ?? '?'}-${profile[0]?.altToM ?? '?'}m) = ${kNearSurface} vs K global régressé = ${kGlobalFallback}.`));
+
+  if (kNearSurface !== null && kGlobalFallback !== null && kGlobalFallback !== undefined && Math.abs(kNearSurface - kGlobalFallback) > 0.05) {
+    diagnostics.push(vldDiag("K_NEAR_SURFACE_DIVERGES", "warning", VLD_MODEL_TYPES.PHYSICAL,
+      `Le K près du sol (${kNearSurface}) diverge significativement du K global moyenné (${kGlobalFallback}) — confirme la limite documentée du K unique pour un rayon VLD à faible élévation.`));
+  }
+
+  return { profile, kGlobalFallback, modelType: VLD_MODEL_TYPES.PHYSICAL, diagnostics };
+}
 
 /**
  * Estime l'AOD "basse couche" effective à partir de l'AOD colonne totale et
@@ -7169,6 +7895,257 @@ function computeAtmosphereSubscoreV2(spot, h, aodResPrecomputed) {
 }
 
 /**
+ * V2.0-K — Sous-score géométrie solaire (barème 0-100), branché dans la
+ * synthèse pondérée du deuxième avis. Réutilise h._lightingType / h._sunTargetDiffDeg
+ * / h._sunAltDeg déjà calculés par solarGeometryAdvanced (Meeus, azimut orthodromique)
+ * — aucun recalcul, aucune nouvelle dépendance.
+ *
+ * Contrairement à la géométrie de courbure terrestre (Bislin, exclue de la
+ * synthèse — cf. §22 révisé), la géométrie solaire fait explicitement partie
+ * de la philosophie du projet : contre-jour/rasant/face changent réellement
+ * la lisibilité d'une cible VLD d'une heure sur l'autre sur le terrain, et
+ * n'ont rien à voir avec un modèle de courbure.
+ *
+ * Barème provisoire (HEURISTIC, non calibré terrain — §30) : à ajuster une
+ * fois des sessions réelles disponibles.
+ * @param {Object} h - heure/jour météo (déjà passé par scoreDay())
+ * @returns {Object} { scorePct, lightingType, diffDeg, sunAltDeg, modelType, diagnostics }
+ */
+function computeSolarGeometrySubscoreV2(h) {
+  const diagnostics = [];
+  const lt = h._lightingType ?? null;
+  const diff = h._sunTargetDiffDeg ?? null;
+  const sunAlt = h._sunAltDeg ?? null;
+
+  if (!lt || lt === 'NO_SUN') {
+    diagnostics.push(vldDiag("SOLAR_NO_DATA", "info", VLD_MODEL_TYPES.HEURISTIC,
+      "Soleil sous l'horizon (nuit / avant aube nautique) à cet horaire : sous-score géométrie solaire non calculable, exclu de la synthèse (moyenne renormalisée sur les sous-scores disponibles)."));
+    return { scorePct: null, lightingType: lt, diffDeg: diff, sunAltDeg: sunAlt, modelType: VLD_MODEL_TYPES.HEURISTIC, diagnostics };
+  }
+
+  let scorePct, label;
+  switch (lt) {
+    case 'BACKLIGHT_PERFECT':
+      scorePct = 100; label = "rétroéclairage parfait — ombre chinoise"; break;
+    case 'BACKLIGHT_GOOD':
+      scorePct = 90; label = "contre-jour favorable"; break;
+    case 'LATERAL_GRAZING':
+      scorePct = 85; label = "lumière rasante latérale — reliefs détachés"; break;
+    case 'FRONT_LIGHT':
+      if (diff !== null && diff <= 20) { scorePct = 20; label = "soleil quasi face — diffusion Mie maximale"; }
+      else if (diff !== null && diff <= 45) { scorePct = 50; label = "éclairage face partiel"; }
+      else { scorePct = 75; label = "soleil dos/latéral — neutre"; }
+      break;
+    default:
+      scorePct = null; label = "type d'éclairage non reconnu";
+  }
+
+  diagnostics.push(vldDiag("SOLAR_GEOMETRY_SUBSCORE", "info", VLD_MODEL_TYPES.HEURISTIC,
+    `Sous-score géométrie solaire = ${scorePct}/100 (${lt}${diff !== null ? ', Δazimut soleil/cible=' + Math.round(diff) + '°' : ''}) — ${label}. Barème provisoire, non calibré sur sessions terrain.`));
+
+  return { scorePct, lightingType: lt, diffDeg: diff, sunAltDeg: sunAlt, modelType: VLD_MODEL_TYPES.HEURISTIC, diagnostics };
+}
+
+/**
+ * Poids de la synthèse pondérée (§22). Somme = 1.0. Valeurs de départ —
+ * HEURISTIC tant qu'elles n'ont pas été calibrées sur des sessions terrain
+ * réelles (§30 : calibration seulement après stabilisation). Versionné ici
+ * pour que toute future recalibration soit traçable dans un seul endroit.
+ */
+const VLD_SYNTHESIS_WEIGHTS_V1 = Object.freeze({
+  version: "synthesis-weights-2026-08-heuristic-v3-solar",
+  // §22 révisé : la géométrie de courbure (Bislin/globe) reste volontairement EXCLUE
+  // de la note globale — philosophie du projet : le score porte sur la clarté
+  // atmosphérique + l'optique de propagation de la lumière (mirage inférieur,
+  // Rayleigh, Koschmieder, géométrie SOLAIRE...), jamais sur un modèle de courbure
+  // terrestre. v2.score.geometry / v2.geometry.* restent calculés à titre
+  // purement informatif (cf. overlay courbure existant) mais ne pèsent plus ici.
+  // La géométrie solaire (contre-jour/rasant/face), en revanche, entre bien dans
+  // la synthèse (V2.0-K) : elle change réellement la lisibilité terrain d'une
+  // heure à l'autre et n'a rien à voir avec la courbure.
+  atmosphere: 0.30,
+  cloud:      0.18,
+  refraction: 0.15,
+  turbulence: 0.12,
+  optical:    0.10,
+  solar:      0.15
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * PHASE V2.0-J — Synthèse pondérée, régimes continus, hard eliminators (§21-24)
+ * ═══════════════════════════════════════════════════════════════════════
+ * Constat (§21) : le score V1 (scoreDay) additionne des points dont plusieurs
+ * dépendent des mêmes variables sous-jacentes (RH intervient dans transparence,
+ * humidité, brume, gradient RH ET Koschmieder — cf. audit ATM_RH_CONSOLIDATION
+ * en V2.0-B), ce qui peut rendre le résultat artificiellement pessimiste ou
+ * optimiste selon les cas. Les modules V2 précédents (atmosphere, cloud,
+ * refraction, turbulence, optical, geometry) sont déjà des sous-scores
+ * indépendants — cette phase les combine correctement au lieu de les
+ * additionner point par point.
+ *
+ * §23 : le bonus régime favorable passe de +5 binaire à un bonus continu —
+ * un anticyclone à 1023 hPa et un à 1035 hPa n'ont pas le même impact, deux
+ * régimes favorables simultanés ne valent pas mécaniquement la même chose
+ * qu'un seul (plafonné, pas juste sommé, pour éviter l'inflation).
+ *
+ * §24 : les hard eliminators restent des exclusions FORTES, séparées du
+ * score — pas un simple malus de plus qui se perd dans la moyenne pondérée.
+ * V1 n'avait qu'un seul eliminator (pluie > 70%). §24 en ajoute trois,
+ * rendus possibles par les modules V2 déjà construits : couverture nuageuse
+ * traversant directement le rayon (V2.0-H), transmission extrêmement faible
+ * (V2.0-C). L'éliminateur géométrie/courbure (Bislin, §15) initialement prévu
+ * ici a été retiré : la note globale ne doit dépendre que de la clarté
+ * atmosphérique et de l'optique de propagation, jamais d'un modèle de
+ * courbure terrestre (choix de fond du projet, pas un oubli).
+ *
+ * IMPORTANT — comme tous les modules V2 précédents, ceci est un DEUXIÈME
+ * AVIS comparatif (v2.score.synthesis), pas le score affiché sur les cards
+ * (v2.score.final reste v1.score, cf. wrapLegacyResult). Rien ne change
+ * pour l'utilisateur tant que ce n'est pas validé sur plusieurs sessions
+ * réelles et sciemment basculé.
+ */
+
+/**
+ * §24 — Hard eliminators. Retournés séparément du score (jamais fondus dans
+ * la moyenne pondérée), comme demandé par le cahier.
+ * @returns {Object} { eliminated, reasons: [{key,label,modelType}], diagnostics }
+ */
+function computeHardEliminatorsV2(precipPct, cloudBlockPct, transmission550) {
+  const diagnostics = [];
+  const reasons = [];
+
+  if (precipPct != null && precipPct > 70) {
+    reasons.push({ key: 'heavy_precip', label: `Précipitations fortes (${Math.round(precipPct)}%)`, modelType: VLD_MODEL_TYPES.HEURISTIC });
+  }
+  if (cloudBlockPct != null && cloudBlockPct >= 90) {
+    reasons.push({ key: 'cloud_path_blocked', label: `Trajet quasi-totalement bloqué par les nuages (${Math.round(cloudBlockPct)}%, V2.0-H)`, modelType: VLD_MODEL_TYPES.HEURISTIC });
+  }
+  if (transmission550 != null && transmission550 < 0.05) {
+    reasons.push({ key: 'transmission_near_zero', label: `Transmission 550nm quasi nulle (${(transmission550 * 100).toFixed(1)}%)`, modelType: VLD_MODEL_TYPES.PROXY });
+  }
+  // Pas d'éliminateur "géométrie/courbure" ici (retiré volontairement) : la
+  // hauteur visible réfractée (Bislin) reste affichée à titre informatif dans
+  // v2.geometry, mais n'élimine jamais et ne pèse jamais dans la note globale.
+
+  if (reasons.length > 0) {
+    diagnostics.push(vldDiag("HARD_ELIMINATOR_TRIGGERED", "warning", VLD_MODEL_TYPES.HEURISTIC,
+      `${reasons.length} éliminateur(s) déclenché(s) : ${reasons.map(r => r.key).join(', ')} — plafonne la synthèse V2 indépendamment de la moyenne pondérée.`));
+  }
+
+  return { eliminated: reasons.length > 0, reasons, diagnostics };
+}
+
+/**
+ * §23 — Bonus régime continu (remplace le +5 binaire legacy). Réutilise les
+ * mêmes déclencheurs que scoreDay (mêmes seuils, pour rester comparable),
+ * mais l'intensité au-delà du seuil devient continue. Plafonné pour éviter
+ * qu'un cumul de régimes gonfle artificiellement le score.
+ * @returns {Object} { bonusPct, breakdown, diagnostics }
+ */
+function computeRegimeBonusV2(h, spot) {
+  const diagnostics = [];
+  const breakdown = [];
+  const CAP_TOTAL = 12; // vs +5 fixe en V1 — plafond global, pas juste par régime
+
+  const slpVal = h.slp ?? 0;
+  const windDir = h.wind_dir ?? null;
+  const windSpd = h.wind ?? 0;
+  const rh = h.rh ?? 100;
+
+  // 🔵 Anticyclone : intensité continue au-delà de 1022 hPa (plafond +6 à 1037hPa+)
+  if (slpVal >= 1022) {
+    const intensity = Math.min(1, (slpVal - 1022) / 15);
+    const pts = intensity * 6;
+    breakdown.push({ key: 'anticyclone', pts, detail: `${Math.round(slpVal)} hPa` });
+  }
+
+  // ❄️ Post-front froid : intensité = moyenne (force du vent N/NW, sécheresse de l'air)
+  const isNorthWind = windDir !== null && ((windDir >= 300 && windDir <= 360) || (windDir >= 0 && windDir <= 45));
+  if (slpVal >= 1018 && isNorthWind && rh < 65) {
+    const windFactor = Math.min(1, windSpd / 40);
+    const dryFactor = Math.min(1, Math.max(0, 65 - rh) / 65);
+    const intensity = (windFactor + dryFactor) / 2;
+    const pts = intensity * 5;
+    breakdown.push({ key: 'postfront', pts, detail: `${Math.round(windSpd)} km/h, RH ${Math.round(rh)}%` });
+  }
+
+  // 💨 Mistral : intensité continue au-delà de 28 km/h (mêmes conditions spot que legacy)
+  const isMistralSpot = spot.type === 'montagne_pyrenees' || spot.type === 'mediterranee_corse' || spot.particularites?.mistral === true;
+  const isMistralWind = windDir !== null && windDir >= 280 && windDir <= 360 && windSpd >= 28;
+  if (isMistralSpot && isMistralWind) {
+    const intensity = Math.min(1, (windSpd - 28) / 40);
+    const pts = intensity * 5;
+    breakdown.push({ key: 'mistral', pts, detail: `${Math.round(windSpd)} km/h` });
+  }
+
+  const rawTotal = breakdown.reduce((sum, r) => sum + r.pts, 0);
+  const bonusPct = Math.min(CAP_TOTAL, rawTotal);
+
+  if (breakdown.length > 0) {
+    diagnostics.push(vldDiag("REGIME_BONUS_CONTINUOUS", "info", VLD_MODEL_TYPES.HEURISTIC,
+      `Bonus régime continu : ${breakdown.map(r => `${r.key} +${r.pts.toFixed(1)} (${r.detail})`).join(', ')} → ${bonusPct.toFixed(1)}/${CAP_TOTAL} (plafonné, vs +5 fixe en V1).`));
+  }
+
+  return { bonusPct, breakdown, diagnostics };
+}
+
+/**
+ * §22 — Synthèse pondérée des sous-scores V2 déjà calculés. Moyenne
+ * pondérée sur les seuls sous-scores disponibles (poids renormalisés si
+ * certains manquent), puis bonus régime continu, puis plafond si hard
+ * eliminator. Comparatif uniquement (v2.score.synthesis) — ne touche
+ * jamais v2.score.final.
+ * @param {Object} subscores - { atmosphere, cloud, refraction, turbulence, optical, geometry } (0-100 ou null)
+ * @param {Object} regimeRes - retour de computeRegimeBonusV2
+ * @param {Object} elimRes - retour de computeHardEliminatorsV2
+ * @returns {Object} { scorePct, weightsUsed, modelType, diagnostics }
+ */
+function computeWeightedSynthesisV2(subscores, regimeRes, elimRes) {
+  const diagnostics = [];
+  const weights = VLD_SYNTHESIS_WEIGHTS_V1;
+  // geometry (courbure/Bislin) volontairement absent : cf. §22 révisé ci-dessus.
+  // solar (géométrie solaire) inclus depuis V2.0-K : cf. commentaire des poids.
+  const keys = ['atmosphere', 'cloud', 'refraction', 'turbulence', 'optical', 'solar'];
+
+  const available = keys.filter(k => subscores[k] != null && isFinite(subscores[k]));
+  if (available.length === 0) {
+    diagnostics.push(vldDiag("SYNTHESIS_NO_SUBSCORE", "error", VLD_MODEL_TYPES.HEURISTIC,
+      "Aucun sous-score V2 disponible : synthèse pondérée non calculable."));
+    return { scorePct: null, weightsUsed: {}, modelType: VLD_MODEL_TYPES.HEURISTIC, diagnostics };
+  }
+
+  const weightSum = available.reduce((s, k) => s + weights[k], 0);
+  const weightsUsed = {};
+  let weighted = 0;
+  available.forEach(k => {
+    const wNorm = weights[k] / weightSum; // renormalisé sur les sous-scores dispo
+    weightsUsed[k] = wNorm;
+    weighted += subscores[k] * wNorm;
+  });
+
+  if (available.length < keys.length) {
+    const missing = keys.filter(k => !available.includes(k));
+    diagnostics.push(vldDiag("SYNTHESIS_PARTIAL_SUBSCORES", "warning", VLD_MODEL_TYPES.HEURISTIC,
+      `Sous-score(s) manquant(s) : ${missing.join(', ')} — poids renormalisés sur ${available.length}/${keys.length} disponibles (${VLD_SYNTHESIS_WEIGHTS_V1.version}).`));
+  }
+
+  let scorePct = Math.min(100, weighted + regimeRes.bonusPct);
+
+  if (elimRes.eliminated) {
+    scorePct = Math.min(scorePct, 20); // même plafond que le hardElim legacy (precip>70 → cap 20)
+    diagnostics.push(vldDiag("SYNTHESIS_ELIMINATOR_CAP", "warning", VLD_MODEL_TYPES.HEURISTIC,
+      `Synthèse plafonnée à 20/100 par hard eliminator(s) (§24), indépendamment de la moyenne pondérée (${Math.round(weighted)}/100).`));
+  }
+
+  scorePct = Math.round(Math.max(0, scorePct));
+  diagnostics.push(vldDiag("SYNTHESIS_COMPUTED", "info", VLD_MODEL_TYPES.HEURISTIC,
+    `Synthèse V2 = ${Math.round(weighted)}/100 (moyenne pondérée sur ${available.length} sous-scores) + ${regimeRes.bonusPct.toFixed(1)} bonus régime = ${scorePct}/100 (${VLD_SYNTHESIS_WEIGHTS_V1.version}).`));
+
+  return { scorePct, weightsUsed, modelType: VLD_MODEL_TYPES.HEURISTIC, diagnostics };
+}
+
+/**
  * Enveloppe le résultat V1 existant (scoreDay + calcIPR) dans le schéma V2,
  * sans recalculer ni modifier le score /100 affiché sur les cards.
  * - V2.0-A : structure JSON + diagnostics + adapter, passthrough legacy pur.
@@ -7177,15 +8154,24 @@ function computeAtmosphereSubscoreV2(spot, h, aodResPrecomputed) {
  * - V2.0-C : v2.atmosphere porte en plus l'AOD effective basse couche (proxy
  *   BLH) et la transmission spectrale 550/850nm (computeSpectralTransmissionV2),
  *   utile pour évaluer l'intérêt du filtre IR 850nm par session.
+ * - V2.0-E : v2.refraction.profile porte un K segmenté par altitude
+ *   (computeRefractionProfileV2), réutilisant le profil ERA5 déjà calculé
+ *   pour le K global (h._refractionLevels), sans nouvel appel API.
  * Dans tous les cas, v2.score.final reste strictement égal au score V1
  * affiché — AUCUN impact frontend à ce stade.
  *
  * @param {Object} spot
  * @param {Object} h - heure/jour météo tel que consommé par scoreDay()
  * @param {number} k - coefficient de réfraction (ERA5 ou fallback Bislin)
+ * @param {Array} [refractionLevelsOverride] - h._refractionLevels à utiliser explicitement
+ *   (utile quand h est un hData horaire sans ce champ ; K/profil restent des grandeurs
+ *   journalières, cf. renderDayRow où k = h.k_bislin est aussi pris sur l'objet jour).
+ * @param {Object} [turbulenceOverride] - { windShear, dTdh } à utiliser explicitement
+ *   (mêmes raisons que refractionLevelsOverride : wind_shear/dTdh ne sont calculés que
+ *   sur l'objet jour, jamais recopiés sur les hData horaires par créneau).
  * @returns {Object} VLDEngineResult
  */
-function wrapLegacyResult(spot, h, k) {
+function wrapLegacyResult(spot, h, k, refractionLevelsOverride, turbulenceOverride) {
   const v2 = createEmptyV2Result(spot);
   const v1 = scoreDay(spot, h);
   const ipr = calcIPR(spot, k, h);
@@ -7199,10 +8185,50 @@ function wrapLegacyResult(spot, h, k) {
   const atmSub = computeAtmosphereSubscoreV2(spot, h, aodRes);
   const spectral = computeSpectralTransmissionV2(spot, h, aodRes);
 
+  const refractionLevels = refractionLevelsOverride !== undefined ? refractionLevelsOverride : (h._refractionLevels ?? null);
+  const refProfile = computeRefractionProfileV2(refractionLevels, k);
+
+  // V2.0-F : renommage honnête (calcCn2 n'est pas un vrai Cn² physique).
+  // wind_shear/dTdh sont journaliers (cf. turbulenceOverride ci-dessus) — fallback sur h
+  // uniquement si aucun override n'est fourni (compatible avec l'usage direct sur l'objet jour).
+  const windShear = turbulenceOverride ? turbulenceOverride.windShear : h.wind_shear;
+  const dTdhForTurb = turbulenceOverride ? turbulenceOverride.dTdh : h.dTdh;
+  const turbulenceRes = estimateTurbulenceScore(windShear, dTdhForTurb, spot.obs?.alt ?? 0);
+  const legacySeeingArcsec = (typeof cn2ScoreToSeeing === 'function') ? cn2ScoreToSeeing(turbulenceRes.score) : null;
+
+  // V2.1 : vrai Cn²(z) → r0 → seeing physique, intégré sur la ligne de visée réelle
+  // (buildSightline, V2.0-D) — remplace le score heuristique comme source de v2.turbulence.
+  const sightlineRes = buildSightline(spot);
+  const cn2Res = computeCn2ProfileV2(sightlineRes);
+
+  // V2.0-H : nuages par couches traversées, réutilise la même sightline (§12)
+  const cloudRes = computeCloudPathV2(sightlineRes, h);
+
+  // V2.0-I : résolution optique combinée diffraction/seeing/pixel (§19-20).
+  // Préfère le seeing physique V2.1 (cn2Res) au repli heuristique legacy s'il est disponible.
+  const opticalSeeingArcsec = cn2Res.seeingArcsec ?? legacySeeingArcsec;
+  const opticalRes = computeOpticalResolutionV2(spot, k, getApertureMm(), getFocalMm(), getCameraPixelUm(), opticalSeeingArcsec);
+
+  // V2.0-J : géométrie (hauteur visible réelle, §15) — même calcul Bislin que
+  // l'overlay courbure et que computeOpticalResolutionV2, réutilisé ici pour
+  // peupler v2.geometry et servir d'entrée aux hard eliminators (§24).
+  const bislinRes = _calcBislin(spot, k);
+
+  // V2.0-G : Confidence Score, indépendant du score /100, ne le modifie jamais
+  const confidenceRes = computeConfidenceScoreV2(h, refractionLevels, aodColumn);
+
   v2.legacy = { score: v1.score, rawScore: v1.rawScore, items: v1.items, regimes: v1.regimes, hasElim: v1.hasElim };
 
   v2.refraction.kEffective = k;
-  v2.refraction.modelType = VLD_MODEL_TYPES.PHYSICAL; // ERA5 multi-niveaux / fallback Bislin = physique établie
+  v2.refraction.profile = refProfile.profile;
+  v2.refraction.modelType = refProfile.modelType;
+
+  v2.turbulence.cn2Profile = cn2Res.cn2Profile; // vrai Cn²(z) le long du trajet (V2.1)
+  v2.turbulence.r0 = cn2Res.r0;
+  v2.turbulence.seeingArcsec = cn2Res.seeingArcsec; // désormais un seeing physique, plus un mapping heuristique
+  v2.turbulence.modelType = cn2Res.modelType; // "proxy" (Hufnagel-Valley, paramètres non mesurés localement)
+  v2.turbulence.legacyHeuristicScore = turbulenceRes.score; // 0-10, conservé pour comparaison (V2.0-F)
+  v2.turbulence.legacySeeingArcsec = legacySeeingArcsec; // ancien mapping par paliers, pour comparaison
 
   v2.atmosphere.modelType = spectral.modelType;
   v2.atmosphere.transmission550 = spectral.transmission550;
@@ -7211,12 +8237,90 @@ function wrapLegacyResult(spot, h, k) {
   v2.atmosphere.opticalDepth850 = spectral.opticalDepth850;
   v2.atmosphere.aod = spectral.aod; // { aodColumn, aodEffective, fractionBL, blhM }
 
+  v2.clouds.low = cloudRes.low;
+  v2.clouds.mid = cloudRes.mid;
+  v2.clouds.high = cloudRes.high;
+  v2.clouds.modelType = cloudRes.modelType;
+
+  v2.optical.thetaTargetArcsec = opticalRes.thetaTargetArcsec;
+  v2.optical.diffractionArcsec = opticalRes.diffractionArcsec;
+  v2.optical.pixelScaleArcsec = opticalRes.pixelScaleArcsec;
+  v2.optical.effectiveResolutionArcsec = opticalRes.effectiveResolutionArcsec;
+  v2.optical.limitingFactor = opticalRes.limitingFactor; // 'diffraction' | 'seeing' | 'pixel'
+  v2.optical.N = opticalRes.N; // nb d'éléments résolus sur la hauteur visible
+  v2.optical.modelType = opticalRes.modelType;
+
+  // V2.0-J : géométrie (§15) — même calcul Bislin déjà utilisé ailleurs, exposé ici pour la première fois dans le schéma V2.
+  v2.geometry.hiddenHeightM = bislinRes.hidden;
+  v2.geometry.visibleHeightM = bislinRes.visible;
+  v2.geometry.refractionLiftM = bislinRes.lift;
+  v2.geometry.modelType = VLD_MODEL_TYPES.PHYSICAL; // Bislin exact (§15 : "peut rester la référence du modèle globiste")
+
   if (ipr) {
     v2.score.refraction = ipr.fracRefraction * 100;
   }
   v2.score.atmosphere = atmSub.scorePct; // sous-score V2.0-B, comparatif uniquement
+  v2.score.cloud = cloudRes.cloudBlockPct != null ? (100 - cloudRes.cloudBlockPct) : null; // 100 = trajet dégagé, comparatif uniquement (V2.0-H)
+  // Mapping indicatif N (nb d'éléments résolus) → /100, mêmes paliers que le niveau
+  // affiché sur la carte legacy (N<1 invisible, <3 point, <10 silhouette, ≥10 détail).
+  // Comparatif uniquement (V2.0-I), comme les autres sous-scores V2.
+  v2.score.optical = opticalRes.N == null ? null
+    : opticalRes.N < 1  ? Math.max(0, opticalRes.N * 30)
+    : opticalRes.N < 3  ? 30 + ((opticalRes.N - 1) / 2) * 30
+    : opticalRes.N < 10 ? 60 + ((opticalRes.N - 3) / 7) * 40
+    : 100;
+  // Sous-score turbulence (§22) — basé sur le seeing physique V2.1 quand dispo,
+  // sinon repli sur le score heuristique legacy (0-10) ramené sur 100.
+  // Barème de départ (heuristique, à calibrer) : 1" → 100, dégradation ensuite.
+  v2.score.turbulence = opticalSeeingArcsec != null
+    ? Math.max(0, Math.min(100, 100 - (opticalSeeingArcsec - 1) * 12))
+    : (turbulenceRes.score != null ? Math.max(0, 100 - turbulenceRes.score * 10) : null);
+  // Sous-score géométrie (§22) — fraction de la hauteur cible réellement visible.
+  const targetTotalHeightM = spot.tgt?.alt ?? null;
+  v2.score.geometry = (targetTotalHeightM && targetTotalHeightM > 0)
+    ? Math.round(100 * Math.min(1, Math.max(0, bislinRes.visible) / targetTotalHeightM))
+    : (bislinRes.visible > 0 ? 100 : 0);
+
+  // V2.0-K : sous-score géométrie solaire (§22 révisé) — réutilise h._lightingType
+  // déjà posé par solarGeometryAdvanced() lors de l'appel scoreDay() ci-dessus.
+  const solarRes = computeSolarGeometrySubscoreV2(h);
+  v2.solar.lightingType = solarRes.lightingType;
+  v2.solar.diffDeg = solarRes.diffDeg;
+  v2.solar.sunAltDeg = solarRes.sunAltDeg;
+  v2.solar.modelType = solarRes.modelType;
+  v2.score.solar = solarRes.scorePct;
+
   v2.score.final = v1.score; // ← toujours le score legacy, seul affiché sur les cards
+  v2.score.confidence = confidenceRes.value; // ne modifie JAMAIS score.final (§25)
   v2.score.modelType = VLD_MODEL_TYPES.HEURISTIC; // synthèse /100 additive V1, poids non calibrés
+
+  // V2.0-J : hard eliminators (§24) — séparés du score, jamais fondus dans la moyenne pondérée.
+  // Géométrie/courbure volontairement exclue des critères d'élimination (cf. §22 révisé).
+  const elimRes = computeHardEliminatorsV2(h.precip, cloudRes.cloudBlockPct, spectral.transmission550);
+  v2.eliminators.eliminated = elimRes.eliminated;
+  v2.eliminators.reasons = elimRes.reasons;
+
+  // V2.0-J : bonus régime continu (§23), remplace le +5 binaire.
+  const regimeRes = computeRegimeBonusV2(h, spot);
+  v2.regimeBonus.pct = regimeRes.bonusPct;
+  v2.regimeBonus.breakdown = regimeRes.breakdown;
+
+  // V2.0-J/K : synthèse pondérée (§22) — deuxième avis comparatif, v2.score.final reste inchangé.
+  // geometry (courbure Bislin) volontairement absent : v2.score.geometry reste
+  // calculé plus haut et reste consultable, mais n'entre jamais dans la note globale.
+  // solar (géométrie solaire) inclus depuis V2.0-K.
+  const synthesisRes = computeWeightedSynthesisV2({
+    atmosphere: v2.score.atmosphere,
+    cloud: v2.score.cloud,
+    refraction: v2.score.refraction,
+    turbulence: v2.score.turbulence,
+    optical: v2.score.optical,
+    solar: v2.score.solar
+  }, regimeRes, elimRes);
+  v2.score.synthesis = synthesisRes.scorePct;
+
+  v2.confidence.value = confidenceRes.value;
+  v2.confidence.factors = confidenceRes.factors;
 
   v2.diagnostics.push(
     vldDiag("V1_PASSTHROUGH", "info", VLD_MODEL_TYPES.HEURISTIC,
@@ -7225,7 +8329,18 @@ function wrapLegacyResult(spot, h, k) {
       "Extinction dérivée de la constante de calibration historique 0.20, non recalée sur données terrain (voir VLD_LEGACY_KOSCH_CALIBRATION)."),
     aodRes.diagnostic,
     ...atmSub.diagnostics,
-    ...spectral.diagnostics
+    ...spectral.diagnostics,
+    ...refProfile.diagnostics,
+    turbulenceRes.diagnostic,
+    ...sightlineRes.diagnostics,
+    ...cn2Res.diagnostics,
+    ...cloudRes.diagnostics,
+    ...opticalRes.diagnostics,
+    ...solarRes.diagnostics,
+    ...elimRes.diagnostics,
+    ...regimeRes.diagnostics,
+    ...synthesisRes.diagnostics,
+    ...confidenceRes.diagnostics
   );
 
   return v2;
@@ -7251,6 +8366,7 @@ window.VLD_ENGINE_V2 = {
   AOD_BLH_PROXY_PARAMS: VLD_AOD_BLH_PROXY_PARAMS,
   ANGSTROM_ALPHA_DEFAULT: VLD_ANGSTROM_ALPHA_DEFAULT,
   SIGHTLINE_DEFAULT_SEGMENTS: VLD_SIGHTLINE_DEFAULT_SEGMENTS,
+  HV_DEFAULT_PARAMS: VLD_HV_DEFAULT_PARAMS,
   createEmptyV2Result,
   wrapLegacyResult,
   adaptV2ToLegacyUI,
@@ -7258,6 +8374,19 @@ window.VLD_ENGINE_V2 = {
   computeAodEffectiveV2,
   computeSpectralTransmissionV2,
   buildSightline,
+  computeRefractionProfileV2,
+  estimateTurbulenceScore,
+  computeConfidenceScoreV2,
+  computeCn2ProfileV2,
+  computeCloudPathV2,
+  computeOpticalResolutionV2,
+  computeHardEliminatorsV2,
+  computeRegimeBonusV2,
+  computeWeightedSynthesisV2,
+  SYNTHESIS_WEIGHTS: VLD_SYNTHESIS_WEIGHTS_V1,
+  CLOUD_OPACITY_FACTORS: VLD_CLOUD_OPACITY_FACTORS,
+  CAMERA_PROFILES: VLD_CAMERA_PROFILES,
+  OPTIC_FOCAL_MM: VLD_OPTIC_FOCAL_MM,
   diag: vldDiag
 };
 
