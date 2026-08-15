@@ -4770,9 +4770,35 @@ function _vldCacheRead(kind, spotId, pastDays, suffix) {
     return { data, ts, ageMin: Math.round(age / 60000), freshness: age <= policy.freshMs ? 'fresh' : 'stale' };
   } catch(e) { return null; }
 }
+function _vldCacheEvictOldest(n = 5) {
+  // Quota localStorage dépassé : purge les n entrées vld_cache_v2_* les plus
+  // anciennes (par ts) pour libérer de la place plutôt que d'échouer en boucle.
+  try {
+    const entries = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith('vld_cache_v2_')) continue;
+      try {
+        const { ts } = JSON.parse(localStorage.getItem(k));
+        entries.push({ k, ts: ts || 0 });
+      } catch(e) { entries.push({ k, ts: 0 }); } // entrée corrompue → prioritaire à la purge
+    }
+    entries.sort((a, b) => a.ts - b.ts).slice(0, n).forEach(e => localStorage.removeItem(e.k));
+    return entries.length > 0;
+  } catch(e) { return false; }
+}
 function _vldCacheWrite(kind, spotId, pastDays, suffix, data) {
-  try { localStorage.setItem(_vldCacheKey(kind, spotId, pastDays, suffix), JSON.stringify({ ts: Date.now(), data })); }
-  catch(e) { console.warn('Cache write error:', e); }
+  const key = _vldCacheKey(kind, spotId, pastDays, suffix);
+  const payload = JSON.stringify({ ts: Date.now(), data });
+  try {
+    localStorage.setItem(key, payload);
+  } catch(e) {
+    if (e && e.name === 'QuotaExceededError' && _vldCacheEvictOldest(5)) {
+      try { localStorage.setItem(key, payload); return; }
+      catch(e2) { console.warn('Cache write error (après purge):', e2); return; }
+    }
+    console.warn('Cache write error:', e);
+  }
 }
 
 /**
@@ -4793,8 +4819,19 @@ async function fetchWithRetryV2(url, opts = {}) {
   const onRetry = opts.onRetry || (() => {});
   let lastErr;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const timeoutMs = baseTimeoutMs + attempt * 3000;
     try {
-      const r = await fetch(url, { signal: AbortSignal.timeout(baseTimeoutMs + attempt * 3000) });
+      // Timeout manuel via Promise.race plutôt que AbortSignal.timeout() :
+      // certains environnements d'aperçu (sandbox) relaient fetch() via
+      // postMessage vers la fenêtre parente, et un AbortSignal ne peut pas
+      // traverser l'algorithme de clonage structuré de postMessage
+      // ("AbortSignal object could not be cloned"). Promise.race évite tout
+      // objet non sérialisable dans les options de fetch, sans changer le
+      // comportement en production (site déployé, fetch natif direct).
+      const r = await Promise.race([
+        fetch(url),
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout ${timeoutMs}ms`)), timeoutMs))
+      ]);
       if (r.ok) return r;
       lastErr = new Error(`HTTP ${r.status}`);
     } catch(e) { lastErr = e; }
@@ -4892,9 +4929,9 @@ async function fetchSpot(spot, pastDays = 0) {
   const _aqPast = pastDays > 0 ? `&past_days=${pastDays}` : '';
   // aod550nm = AOD total colonne à 550 nm (meilleur proxy dispo via Open-Meteo air-quality)
   // aod550nm_bc (basse couche 0-3km) n'est pas exposé séparément — on utilise aod550nm comme proxy
-  const urlDustObs = `${_aqBase}?latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=dust,pm10,aod550nm&timezone=auto${_aqPast}`;
-  const urlDust    = `${_aqBase}?latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=dust,pm10,aod550nm&timezone=auto${_aqPast}`;
-  const urlDustTgt = `${_aqBase}?latitude=${spot.tgt.lat}&longitude=${spot.tgt.lon}&hourly=dust,pm10,aod550nm&timezone=auto${_aqPast}`;
+  const urlDustObs = `${_aqBase}?latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=dust,pm10,aerosol_optical_depth&timezone=auto${_aqPast}`;
+  const urlDust    = `${_aqBase}?latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=dust,pm10,aerosol_optical_depth&timezone=auto${_aqPast}`;
+  const urlDustTgt = `${_aqBase}?latitude=${spot.tgt.lat}&longitude=${spot.tgt.lon}&hourly=dust,pm10,aerosol_optical_depth&timezone=auto${_aqPast}`;
   // U2 — ERA5 pressure levels pour calcul κ ITU-R P.453
   const urlPres = `https://api.open-meteo.com/v1/forecast?latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=temperature_1000hPa,temperature_925hPa,temperature_850hPa,temperature_700hPa,temperature_600hPa,temperature_500hPa,temperature_400hPa,temperature_300hPa,relative_humidity_1000hPa,relative_humidity_925hPa,relative_humidity_850hPa,relative_humidity_700hPa,relative_humidity_600hPa,relative_humidity_500hPa,relative_humidity_400hPa,relative_humidity_300hPa,geopotential_height_1000hPa,geopotential_height_925hPa,geopotential_height_850hPa,geopotential_height_700hPa,geopotential_height_600hPa,geopotential_height_500hPa,geopotential_height_400hPa,geopotential_height_300hPa&forecast_days=7${pastDays > 0 ? `&past_days=${pastDays}` : ''}&timezone=auto`;
 
@@ -4906,7 +4943,7 @@ async function fetchSpot(spot, pastDays = 0) {
     fetchDataWithCache('aod', 'dust_tgt', urlDustTgt, { timeoutMs: 10000 }),
     fetchDataWithCache('weather', 'pres', urlPres, { timeoutMs: 10000 }),
   ]);
-  const d1 = rObs.json, d2 = rMid.json, d3 = rDustMid.json, d3b = rDustObs.json, d3c = rDustTgt.json, d4 = rPres.json;
+  const d1 = rObs.json, d2 = rMid.json ?? {}, d3 = rDustMid.json ?? {}, d3b = rDustObs.json ?? {}, d3c = rDustTgt.json ?? {}, d4 = rPres.json;
   if(!d1||d1.error) throw new Error(`urlObs: ${d1?.reason||'réponse invalide'}`);
   if(d2?.error) console.warn(`urlMid: ${d2.reason}`);
   if(d4?.error) console.warn('urlPres ERA5:', d4.reason);
@@ -5034,7 +5071,7 @@ wind: avg(d1.hourly?.wind_speed_10m),
       rh_alt, // RH interpolée à l'altitude réelle du point d'observation (spot.obs.alt)
       // aod_bc : AOD 550 nm worst-case sur les 3 points (obs, mid, tgt) — proxy basse couche
       // Open-Meteo air-quality fournit aod550nm (colonne totale) ; aod550nm_bc n'est pas exposé séparément
-      aod_bc: (()=>{ const v=[avg(d3b?.hourly?.aod550nm),avg(d3?.hourly?.aod550nm),avg(d3c?.hourly?.aod550nm)].filter(x=>x!==null&&x!==undefined); return v.length?Math.max(...v):null; })(),
+      aod_bc: (()=>{ const v=[avg(d3b?.hourly?.aerosol_optical_depth),avg(d3?.hourly?.aerosol_optical_depth),avg(d3c?.hourly?.aerosol_optical_depth)].filter(x=>x!==null&&x!==undefined); return v.length?Math.max(...v):null; })(),
       _day: day,
     };
     const dt=new Date(); dt.setDate(dt.getDate()+day);
