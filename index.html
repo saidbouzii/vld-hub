@@ -144,11 +144,12 @@ window._loadSpotsFromFirestore = async () => {
   if (!currentUser || typeof SPOTS === 'undefined') return;
   try {
     const snap = await getDocs(collection(db, 'users', currentUser.uid, 'spots'));
-    let added = 0, rejected = 0;
+    let added = 0, updated = 0, rejected = 0;
     const isNum = v => typeof v === 'number' && Number.isFinite(v);
     const validCoords = spot => spot && spot.obs && spot.tgt &&
       isNum(spot.obs.lat) && isNum(spot.obs.lon) &&
       isNum(spot.tgt.lat) && isNum(spot.tgt.lon);
+    const cloudIds = new Set();
     snap.forEach(d => {
       const spot = d.data();
       if (!validCoords(spot)) {
@@ -156,20 +157,31 @@ window._loadSpotsFromFirestore = async () => {
         console.warn(`[Firestore] Spot "${spot && spot.name || d.id}" ignoré : coordonnées invalides`, spot);
         return;
       }
-      if (!SPOTS.find(s => s.id === spot.id)) {
-        if (typeof normalizeCountry === 'function') spot.country = normalizeCountry(spot.country);
-        SPOTS.push(spot); added++;
-      }
+      if (typeof normalizeCountry === 'function') spot.country = normalizeCountry(spot.country);
+      cloudIds.add(spot.id);
+      const idx = SPOTS.findIndex(s => s.id === spot.id);
+      if (idx >= 0) { SPOTS[idx] = spot; updated++; }
+      else { SPOTS.push(spot); added++; }
     });
+    // Firestore fait autorité pour un compte connecté :
+    // on retire localement les spots custom absents du cloud (suppressions distantes)
+    for (let i = SPOTS.length - 1; i >= 0; i--) {
+      const s = SPOTS[i];
+      if (s.custom && !cloudIds.has(s.id)) SPOTS.splice(i, 1);
+    }
+    // Resynchronise le cache localStorage sur l'état cloud faisant autorité
+    try {
+      localStorage.setItem('vld_custom_spots', JSON.stringify(SPOTS.filter(s => s.custom)));
+    } catch(e) {}
     if (rejected > 0 && typeof setStatus === 'function') {
       setStatus(`⚠️ ${rejected} spot(s) ignoré(s) — coordonnées invalides (voir console)`);
     }
-    if (added > 0 && typeof renderMatrix === 'function') {
+    if (typeof renderMatrix === 'function') {
       renderMatrix(false); renderCards(false);
       if (typeof renderCustomSpotsList === 'function') renderCustomSpotsList();
       if (typeof renderGererSpots === 'function') renderGererSpots();
-      if (typeof setStatus === 'function') setStatus(`☁️ ${snap.size} spot(s) chargés depuis Firestore`);
     }
+    if (typeof setStatus === 'function') setStatus(`☁️ ${snap.size} spot(s) chargés depuis Firestore`);
   } catch(e) { console.warn('Firestore load error:', e); }
 };
 
