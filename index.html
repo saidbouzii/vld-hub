@@ -5067,6 +5067,16 @@ async function fetchSpot(spot, pastDays = 0) {
 wind_shear: (()=>{const w80=avg(d2.hourly?.wind_speed_80m);const w120=avg(d2.hourly?.wind_speed_120m);return(w80!==null&&w120!==null)?Math.abs(w120-w80)/40:null;})(),
 dust: (()=>{ const v=[avg(d3.hourly?.dust),avg(d3b?.hourly?.dust),avg(d3c?.hourly?.dust)].filter(x=>x!==null&&x!==undefined); return v.length?Math.max(...v):null; })(),
 pm10: (()=>{ const v=[avg(d3.hourly?.pm10),avg(d3b?.hourly?.pm10),avg(d3c?.hourly?.pm10)].filter(x=>x!==null&&x!==undefined); return v.length?Math.max(...v):null; })(),
+// Valeurs PAR POINT (obs/mid/tgt) conservées séparément — jusqu'ici seul le
+// max (worst-case, ci-dessus) était gardé. sampleWeatherProfile() (V2.0-D,
+// §7) a besoin des 3 valeurs distinctes pour interpoler une vraie variation
+// spatiale le long du trajet plutôt que d'assimiler tout le trajet au pire cas.
+aod_obs: avg(d3b?.hourly?.aerosol_optical_depth),
+aod_mid: avg(d3?.hourly?.aerosol_optical_depth),
+aod_tgt: avg(d3c?.hourly?.aerosol_optical_depth),
+dust_obs: avg(d3b?.hourly?.dust),
+dust_mid: avg(d3?.hourly?.dust),
+dust_tgt: avg(d3c?.hourly?.dust),
 rh_mid: avg(d2?.hourly?.relative_humidity_2m),
 spread_mid: (()=>{ const t=avg(d2?.hourly?.temperature_2m); const d=avg(d2?.hourly?.dew_point_2m); return (t!==null&&d!==null)?t-d:null; })(),
 wind: avg(d1.hourly?.wind_speed_10m),
@@ -6355,6 +6365,10 @@ function renderNewCurveBlock(spot, k_default) {
     ${isVisible && d.lift > 10 ? `<line x1="112" y1="26" x2="112" y2="18" stroke="#4ade80" stroke-width="1" marker-end="url(#arr)" opacity="0.5"/>` : ''}
   </svg>`;
 
+  const R_FLAT = 6371000;
+  const dist_m_flat = spot.dist_km*1000;
+  const flatLiftM = (k*dist_m_flat*dist_m_flat)/(2*R_FLAT);
+  const flatAngleDeg = (k*dist_m_flat)/(2*R_FLAT)*180/Math.PI;
   return `<div class="dr-curve">
     <img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/bandeau1svdcourbure.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;margin-bottom:.75rem;">
     <div class="dr-curve-title">🌍 ${spot.name} → ${spot.target}</div>
@@ -6384,6 +6398,31 @@ function renderNewCurveBlock(spot, k_default) {
     <div class="dr-curve-info">
       <div class="dr-ci"><span class="dr-ci-lbl">h1 obs.</span><span class="dr-ci-val">${d.h1.toLocaleString()} m</span></div>
       <div class="dr-ci"><span class="dr-ci-lbl">h2 cible</span><span class="dr-ci-val">${d.h2.toLocaleString()} m</span></div>
+    </div>
+  </div>
+  <div class="curve-section">
+    <div class="curve-title">📐 Profil réfraction · sans courbure terrestre <span>${spot.name} ${spot.target}</span></div>
+    <div class="curve-svg-wrap" style="cursor:default">
+      ${renderFlatModelSVG(spot, k)}
+    </div>
+    <div class="dr-cta-badge" style="color:#4ade80">✅ Jamais masquée (aucune courbure)</div>
+    <div class="dr-cta-stats">
+      <div class="dr-cta-stat" style="border-color:rgba(74,222,128,.25);background:rgba(74,222,128,.06)">
+        <span class="dr-cta-lbl">✅ Visible</span>
+        <span class="dr-cta-val" style="color:#4ade80">${Math.round(d.h2).toLocaleString()} m</span>
+      </div>
+      <div class="dr-cta-stat">
+        <span class="dr-cta-lbl">❌ Caché</span>
+        <span class="dr-cta-val" style="color:#4ade80">0 m</span>
+      </div>
+      <div class="dr-cta-stat" style="border-color:rgba(56,189,248,.2);background:rgba(56,189,248,.05)">
+        <span class="dr-cta-lbl">↑ Déviation réfractive</span>
+        <span class="dr-cta-val" style="color:#38bdf8">${flatLiftM>=0?'+':''}${Math.round(flatLiftM).toLocaleString()} m</span>
+      </div>
+      <div class="dr-cta-stat">
+        <span class="dr-cta-lbl">∠ Angle de déviation</span>
+        <span class="dr-cta-val" style="color:#38bdf8">${flatAngleDeg.toFixed(3)}°</span>
+      </div>
     </div>
   </div>`;
 }
@@ -6932,6 +6971,101 @@ function _calcBislin(spot, k) {
   };
 }
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * V2.0-M — Interface géométrique interchangeable (cahier des charges §15)
+ * ═══════════════════════════════════════════════════════════════════════
+ * Principe fondateur (§4) : la géométrie Terre-modèle est une couche
+ * indépendante. Le pipeline atmosphérique/optique (transmission, nuages,
+ * turbulence, résolution) ne dépend JAMAIS du modèle choisi ici — seule la
+ * hauteur cachée/visible de la cible en dépend. Contrat de sortie identique
+ * quel que soit `model` :
+ *
+ *   computeGeometry({model, spot, k}) -> {
+ *     hiddenHeightM, visibleHeightM, geometricDropM, refractiveLiftM,
+ *     apparentRadiusM, refractionAngleDeg, modelType, diagnostics
+ *   }
+ *
+ * "globe" route vers _calcBislin(), conservé tel quel comme référence
+ * (§15 : "le calcul exact actuel... peut rester la référence de V2.0").
+ * "alternative" implémente une géométrie de Terre plate.
+ *
+ * @param {Object} options - { model: "globe"|"alternative", spot, k }
+ * @returns {Object} GeometryResult
+ */
+function computeGeometry(options) {
+  const { model, spot, k } = options || {};
+  if (model === 'alternative') return computeGeometryFlatEarthV2(spot, k);
+  return computeGeometryGlobeV2(spot, k);
+}
+
+/** Modèle "globe" — encapsule _calcBislin() derrière le contrat GeometryResult commun. */
+function computeGeometryGlobeV2(spot, k) {
+  const diagnostics = [];
+  const b = _calcBislin(spot, k);
+  diagnostics.push(vldDiag("GEOMETRY_MODEL_GLOBE", "info", VLD_MODEL_TYPES.PHYSICAL,
+    "Modèle géométrique : globe (Bislin, rayon réfracté équivalent) — référence V2.0 (§15)."));
+  return {
+    hiddenHeightM: b.hidden,
+    visibleHeightM: b.visible,
+    geometricDropM: b.hiddenGeo,   // drop de courbure sans réfraction (k=0), pour référence
+    refractiveLiftM: b.lift,
+    apparentRadiusM: b.apparentRadius,
+    refractionAngleDeg: b.rho_deg,
+    modelType: VLD_MODEL_TYPES.PHYSICAL,
+    diagnostics
+  };
+}
+
+/**
+ * Modèle "alternative" — Terre plate (§15, cahier explicitement platiste/
+ * globiste-safe, §4). Sur un plan infini, aucune courbure ne masque
+ * géométriquement la cible : hiddenHeightM = 0 quelle que soit la distance,
+ * visibleHeightM = hauteur totale de la cible.
+ *
+ * refractiveLiftM / refractionAngleDeg sont calculés à partir de K seul
+ * (courbure du rayon lumineux, indépendante du modèle géométrique — §4),
+ * SANS référence à la courbure terrestre de _calcBislin(). Dérivation :
+ * sous gradient K constant, la trajectoire du rayon issu de l'observateur
+ * s'écarte de la ligne droite de référence (tangente horizontale à
+ * l'observateur) d'une hauteur y(x) = (K/R)·x²/2 — même formule que la
+ * "correction de réfraction" classique du nivellement trigonométrique
+ * (établie, cf. Kd²/2R en géodésie). L'angle correspondant est simplement
+ * cette hauteur exprimée en angle (petit angle, tan θ≈θ) à la distance d :
+ * θ = lift/d = Kd/(2R). Le R utilisé ici (6 371 000 m) N'EST PAS une
+ * hypothèse de courbure terrestre injectée dans le modèle plat : c'est le
+ * facteur de conversion déjà contenu dans la définition même de K
+ * (K = -R·dN/dh×10⁻⁶), le même R que celui déjà utilisé par _calcBislin()
+ * pour calculer K localement — donc aucune violation du §4.
+ * Hypothèses : K constant sur le trajet (fallback global — cf. §13, K
+ * segmenté prévu en V2.1 via l'intégrale L(d) = (1/R)∫(d-s)K(s)ds) ;
+ * approximation petit angle (valide ici : lift ≪ d sur tout le domaine VLD).
+ * Cas limites : K=0 → lift=0, angle=0 ; K<0 → signe inversé (mirage
+ * inférieur), cohérent avec la convention de signe déjà utilisée ailleurs.
+ */
+function computeGeometryFlatEarthV2(spot, k) {
+  const diagnostics = [];
+  const targetHeightM = spot?.tgt?.alt ?? 0;
+  const dist_m = (spot?.dist_km ?? 0) * 1000;
+  const R = 6371000; // même constante que _calcBislin() — facteur de conversion de K, pas une courbure du modèle plat
+  const refractiveLiftM = (k * dist_m * dist_m) / (2 * R);
+  const refractionAngleDeg = (k * dist_m) / (2 * R) * 180 / Math.PI;
+  diagnostics.push(vldDiag("GEOMETRY_MODEL_FLAT", "info", VLD_MODEL_TYPES.PHYSICAL,
+    "Modèle géométrique : alternative (Terre plate) — aucune courbure, la cible n'est jamais géométriquement masquée par la distance (§15)."));
+  diagnostics.push(vldDiag("GEOMETRY_FLAT_REFRACTION_LIFT", "info", VLD_MODEL_TYPES.PHYSICAL,
+    "refractiveLiftM = K·d²/(2R) et refractionAngleDeg = lift/d : déviation du rayon due au gradient de réfraction K, formule établie (nivellement trigonométrique), indépendante de toute hypothèse de courbure terrestre."));
+  return {
+    hiddenHeightM: 0,
+    visibleHeightM: Math.max(0, targetHeightM),
+    geometricDropM: 0,
+    refractiveLiftM,
+    apparentRadiusM: Infinity,
+    refractionAngleDeg,
+    modelType: VLD_MODEL_TYPES.PHYSICAL,
+    diagnostics
+  };
+}
+
 // ── IPR — Indice de Perception Réelle ──────────────────────
 // Combine deux filtres appliqués en série (produit, pas moyenne) :
 // 1. Fraction de réfraction favorable : dérivée uniquement de K (gradient thermique réel, ERA5)
@@ -7042,7 +7176,7 @@ function createEmptyV2Result(spot) {
     geometry:    { hiddenHeightM: null, visibleHeightM: null, refractionLiftM: null, modelType: null },
     atmosphere:  { transmission550: null, transmission850: null, opticalDepth550: null, opticalDepth850: null, aod: {}, modelType: null },
     clouds:      { low: {}, mid: {}, high: {}, precipitation: {}, modelType: null },
-    refraction:  { profile: [], kEffective: null, mirageRisk: null, modelType: null },
+    refraction:  { profile: [], kEffective: null, mirageRisk: null, regime: null, regimeIntensity: null, modelType: null },
     turbulence:  { cn2Profile: [], r0: null, seeingArcsec: null, modelType: null },
     optical:     { thetaTargetArcsec: null, diffractionArcsec: null, pixelScaleArcsec: null, effectiveResolutionArcsec: null },
     solar:       { lightingType: null, diffDeg: null, sunAltDeg: null, modelType: null },
@@ -7050,6 +7184,10 @@ function createEmptyV2Result(spot) {
     confidence:  { value: null, factors: {} },
     eliminators: { eliminated: false, reasons: [] },
     regimeBonus: { pct: null, breakdown: [] },
+    // Profil météo interpolé le long de la ligne de visée (§7) — purement
+    // diagnostique pour l'instant, voir sampleWeatherProfile(). Ajout additif :
+    // ne modifie aucun champ consommé par adaptV2ToLegacyUI (§33).
+    weatherProfile: { points: [], modelType: null },
     diagnostics: [],
     legacy:      { score: null, rawScore: null, items: [], regimes: [], hasElim: false }
   };
@@ -7081,7 +7219,7 @@ function createEmptyV2Result(spot) {
  * @param {number|null} aodColumn
  * @returns {Object} { value, factors, modelType, diagnostics }
  */
-function computeConfidenceScoreV2(h, refractionLevels, aodColumn) {
+function computeConfidenceScoreV2(h, refractionLevels, aodColumn, spot) {
   const diagnostics = [];
   const weights = [];
   const factors = {};
@@ -7140,7 +7278,32 @@ function computeConfidenceScoreV2(h, refractionLevels, aodColumn) {
       "forecastAge non traçable pour ce point (donnée hors du flux fetchSpot V2.0-L, ex. hData reconstruit sans provenance) — exclu de la synthèse plutôt que fabriqué."));
   }
 
-  // 5) Facteurs listés au cahier des charges §25 mais toujours non traçables
+  // 5) Visée proche du niveau de la mer (symétrique du cas "altitude trop
+  //    haute pour le niveau 850hPa" déjà documenté pour Mont Mézenc/Lozère,
+  //    cf. cahier des charges §6/§25) : sous ~150m, le micro-gradient
+  //    thermique/hygrométrique dans les tout premiers mètres au-dessus de
+  //    l'eau ou du sol (susceptible de créer un duct/mirage) n'est
+  //    structurellement pas résolu par la résolution verticale d'ERA5 près
+  //    de la surface. Ne modifie ni K ni le score — réduit uniquement la
+  //    confidence affichée, avec diagnostic explicite (pas de calibration
+  //    terrain nécessaire : c'est une limite connue de résolution du
+  //    modèle météo, pas un seuil à ajuster empiriquement).
+  const SEA_LEVEL_THRESHOLD_M = 150;
+  const obsAlt = spot?.obs?.alt;
+  const tgtAlt = spot?.tgt?.alt;
+  if (obsAlt !== undefined && obsAlt !== null && tgtAlt !== undefined && tgtAlt !== null) {
+    const minSightlineAlt = Math.min(obsAlt, tgtAlt);
+    const grazesSeaLevel = minSightlineAlt < SEA_LEVEL_THRESHOLD_M;
+    const seaLevelValue = grazesSeaLevel ? Math.max(0.3, minSightlineAlt / SEA_LEVEL_THRESHOLD_M) : 1;
+    factors.seaLevelProximity = Math.round(seaLevelValue * 100);
+    weights.push({ value: seaLevelValue, weight: 15 });
+    if (grazesSeaLevel) diagnostics.push(vldDiag("CONFIDENCE_SEA_LEVEL_GRAZING", "warning", VLD_MODEL_TYPES.PHYSICAL,
+      `Visée proche du niveau de la mer (min. ${Math.round(minSightlineAlt)}m) : le micro-gradient thermique dans les premiers mètres au-dessus de l'eau/du sol n'est pas résolu par ERA5 (résolution verticale trop grossière près de la surface) — confiance réduite sur K pour ce spot, indépendamment de la qualité des données par ailleurs.`));
+  } else {
+    factors.seaLevelProximity = null;
+  }
+
+  // 6) Facteurs listés au cahier des charges §25 mais toujours non traçables
   //    avec le modèle de données actuel — signalés explicitement plutôt que fabriqués.
   factors.modelAgreement = null;
   factors.spatialInterpolationDistance = null;
@@ -7317,6 +7480,90 @@ function buildSightline(spot, options) {
 }
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════
+ * PHASE V2.0-D (suite) — sampleWeatherProfile() (cahier des charges §7)
+ * ═══════════════════════════════════════════════════════════════════════
+ * Complète buildSightline() : pour chaque point de la ligne de visée,
+ * interpole les champs météo entre les points de grille réellement
+ * disponibles. Le cahier (§7) exige de distinguer, par champ, la méthode
+ * d'interpolation, la source et l'âge de la donnée — et interdit (§6, dernier
+ * paragraphe) de simuler silencieusement une variable indisponible.
+ *
+ * Deux régimes honnêtes selon la variable :
+ *  - AOD colonne et poussières (dust) : mesurées séparément à 3 points réels
+ *    (obs/mid/tgt, cf. fetchSpot) → interpolation linéaire PAR MORCEAUX
+ *    (obs→mid puis mid→tgt) sur la fraction du trajet. C'est une vraie
+ *    variation spatiale, pas une invention.
+ *  - Le reste (température, RH, vent, nuages, BLH...) : aujourd'hui UNE seule
+ *    valeur mesurée/modélisée par jour, prise au point d'observation. Tant
+ *    qu'aucune deuxième mesure spatiale n'est disponible pour ces champs, ce
+ *    module NE FABRIQUE PAS de gradient : il reporte la même valeur sur tout
+ *    le trajet avec interpolation:"none", source:"single-point-obs" — pour
+ *    que l'appelant sache que ce n'est pas une vraie interpolation spatiale.
+ *
+ * @param {Object} sightline - retour de buildSightline(spot)
+ * @param {Object} h - objet météo du jour (fetchSpot), avec les champs *_obs/*_mid/*_tgt
+ * @returns {Object} { points, modelType, diagnostics }
+ */
+function sampleWeatherProfile(sightline, h) {
+  const diagnostics = [];
+  if (!sightline || !Array.isArray(sightline.points) || !sightline.points.length || !h) {
+    diagnostics.push(vldDiag("WEATHER_PROFILE_MISSING_INPUT", "warning", VLD_MODEL_TYPES.PHYSICAL,
+      "Ligne de visée ou données météo manquantes : profil météo par point non calculable."));
+    return { points: [], modelType: VLD_MODEL_TYPES.PROXY, diagnostics };
+  }
+
+  // Interpolation linéaire par morceaux obs(f=0) → mid(f=0.5) → tgt(f=1).
+  const piecewise = (vObs, vMid, vTgt) => (f) => {
+    if (vObs == null && vMid == null && vTgt == null) return null;
+    if (f <= 0.5) {
+      if (vObs != null && vMid != null) return vObs + (vMid - vObs) * (f / 0.5);
+      return vObs ?? vMid ?? vTgt ?? null;
+    } else {
+      if (vMid != null && vTgt != null) return vMid + (vTgt - vMid) * ((f - 0.5) / 0.5);
+      return vTgt ?? vMid ?? vObs ?? null;
+    }
+  };
+  const aodAt = piecewise(h.aod_obs, h.aod_mid, h.aod_tgt);
+  const dustAt = piecewise(h.dust_obs, h.dust_mid, h.dust_tgt);
+
+  const haveAodSpatial = [h.aod_obs, h.aod_mid, h.aod_tgt].filter(v => v != null).length >= 2;
+  const haveDustSpatial = [h.dust_obs, h.dust_mid, h.dust_tgt].filter(v => v != null).length >= 2;
+
+  const points = sightline.points.map(p => ({
+    distanceKm: p.distanceKm,
+    altitudeM: p.altitudeGeomM,
+    temperatureC: h.temp ?? null,
+    pressureHpa: h.slp ?? null,
+    rhPct: h.rh ?? null,
+    windSpeedMs: h.wind ?? null,
+    windDirDeg: h.wind_dir ?? null,
+    blhM: h.blh ?? null,
+    cloudLowPct: h.cloud_low ?? null,
+    cloudMidPct: h.cloud_mid ?? null,
+    cloudHighPct: h.cloud_high ?? null,
+    aod550: aodAt(p.fraction),
+    dustUgM3: dustAt(p.fraction),
+    source: haveAodSpatial || haveDustSpatial ? "open-meteo (3 points obs/mid/tgt + reste au point obs)" : "open-meteo (point obs uniquement)",
+    interpolation: (haveAodSpatial && p.fraction !== 0 && p.fraction !== 1) || (haveDustSpatial && p.fraction !== 0 && p.fraction !== 1) ? "linear-piecewise (aod/dust) + none (reste)" : "none",
+    modelType: VLD_MODEL_TYPES.PROXY
+  }));
+
+  if (haveAodSpatial) {
+    diagnostics.push(vldDiag("WEATHER_PROFILE_AOD_SPATIAL", "info", VLD_MODEL_TYPES.PROXY,
+      "AOD colonne interpolée linéairement par morceaux entre 3 points mesurés (obs/mid/tgt) — vraie variation spatiale le long du trajet."));
+  } else {
+    diagnostics.push(vldDiag("WEATHER_PROFILE_AOD_FLAT", "warning", VLD_MODEL_TYPES.PROXY,
+      "Moins de 2 points AOD disponibles : valeur reportée telle quelle sur tout le trajet, pas d'interpolation spatiale réelle."));
+  }
+  diagnostics.push(vldDiag("WEATHER_PROFILE_SINGLE_POINT_FIELDS", "info", VLD_MODEL_TYPES.PROXY,
+    "Température, RH, vent, nuages et BLH : une seule mesure/jour (point d'observation) — reportés identiques sur tout le trajet tant qu'une deuxième source spatiale n'est pas branchée (pas de gradient fabriqué, cf. §6)."));
+
+  return { points, modelType: VLD_MODEL_TYPES.PROXY, diagnostics };
+}
+
+
+/**
  * Facteurs d'opacité par couche nuageuse (§12 cahier des charges). Grandeur
  * calibrable — HEURISTIC tant qu'elle n'est pas recalée sur des sessions
  * terrain réelles. Point de départ : plus une couche est basse, plus elle
@@ -7433,10 +7680,17 @@ function computeCloudPathV2(sightline, h) {
  * pour corriger ce point sans nouveau calcul géométrique.
  *
  * Combinaison V2.0 (cahier §19) : theta_eff ≈ max(diffraction, seeing, pixel)
- * — "conservative limiting resolution", explicitement la formule prescrite
- * pour cette phase. La vraie combinaison MTF/quadrature est prévue en V2.1
- * (cahier : "V2.1 : combinaison MTF / quadrature selon modèle choisi"), une
- * fois validée sur plusieurs sessions terrain réelles.
+ * — "conservative limiting resolution", formule prescrite pour la phase
+ * initiale. Remplacée ici par la combinaison V2.1 (cahier : "V2.1 :
+ * combinaison MTF / quadrature selon modèle choisi") :
+ *   theta_eff = sqrt(theta_diff² + theta_seeing² + theta_pixel²)
+ * Approximation de sommation de flous indépendants, plus honnête que le
+ * max() (une deuxième limite proche de la première dégrade réellement la
+ * résolution) sans prétendre à une vraie convolution de MTF/PSF — la
+ * diffraction n'étant pas gaussienne, ce n'est pas une combinaison exacte.
+ * modelType passe donc de heuristic (max, V2.0) à empirical (quadrature,
+ * V2.1) : approximation physiquement motivée, mais toujours pas une loi
+ * physique établie tant qu'aucune calibration terrain ne l'a validée.
  *
  * Grossissement volontairement absent d'ici : le cahier (§20) est explicite,
  * "le grossissement ne crée pas de détail que l'atmosphère ou l'optique n'a
@@ -7447,7 +7701,7 @@ function computeCloudPathV2(sightline, h) {
  * @param {number|null} apertureMm
  * @param {number|null} focalMm
  * @param {number|null} pixelUm
- * @param {number|null} seeingArcsec - seeing physique (V2.1) ou repli heuristique fourni par l'appelant
+ * @param {number|null} seeingArcsec - seeing physique (V2.1, §18) ou repli heuristique fourni par l'appelant
  * @returns {Object} { thetaTargetArcsec, diffractionArcsec, pixelScaleArcsec, seeingArcsec, effectiveResolutionArcsec, limitingFactor, N, modelType, diagnostics }
  */
 function computeOpticalResolutionV2(spot, k, apertureMm, focalMm, pixelUm, seeingArcsec) {
@@ -7513,21 +7767,36 @@ function computeOpticalResolutionV2(spot, k, apertureMm, focalMm, pixelUm, seein
       effectiveResolutionArcsec: null, limitingFactor: null, N: null, modelType: VLD_MODEL_TYPES.HEURISTIC, diagnostics };
   }
 
-  // V2.0 : combinaison conservative prescrite par le cahier = pire des limites disponibles.
-  const worst = candidates.reduce((a, b) => (b.value > a.value ? b : a));
-  const effectiveResolutionArcsec = worst.value;
-  const limitingFactor = worst.name;
+  // V2.1 (§19) : combinaison en quadrature — chaque limite (diffraction, seeing,
+  // échantillonnage pixel) est traitée comme une contribution de flou indépendante
+  // dont les largeurs s'additionnent en somme quadratique, à l'image de la
+  // combinaison de FWHM de sources de flou décorrélées :
+  //   theta_eff = sqrt(theta_diff² + theta_seeing² + theta_pixel²)
+  // C'est une approximation (le lobe de diffraction n'est pas gaussien, ce n'est
+  // pas une vraie convolution de MTF) mais elle est physiquement plus honnête que
+  // le max() conservateur de V2.0 : elle traduit qu'une deuxième limite proche de
+  // la première dégrade réellement la résolution, ce que "pire des trois" ignorait.
+  // Une vraie combinaison MTF (intégration des fonctions de transfert) reste
+  // envisageable en V2.2/V3 si un modèle de PSF complet est introduit.
+  const sumSquares = candidates.reduce((sum, c) => sum + c.value * c.value, 0);
+  const effectiveResolutionArcsec = Math.sqrt(sumSquares);
+  const dominant = candidates.reduce((a, b) => (b.value > a.value ? b : a));
+  const limitingFactor = dominant.name;
   const N = thetaTargetArcsec / effectiveResolutionArcsec;
 
   diagnostics.push(vldDiag("OPTICAL_TARGET_HEIGHT_NO_CURVATURE", "info", VLD_MODEL_TYPES.PHYSICAL,
     `Taille angulaire calculée sur la hauteur réelle totale de la cible (${Math.round(targetHeightM)} m) — pas la hauteur "visible" selon le modèle de courbure Bislin (${Math.round(bislin.visible)} m), volontairement exclue de ce calcul (§22 révisé).`));
-  diagnostics.push(vldDiag("OPTICAL_MAX_COMBINATION", "info", VLD_MODEL_TYPES.HEURISTIC,
-    `Résolution effective = pire des limites disponibles (${limitingFactor}) — combinaison conservative V2.0 ; vraie combinaison MTF/quadrature prévue en V2.1 (§19).`));
+  diagnostics.push(vldDiag("OPTICAL_QUADRATURE_COMBINATION", "info", VLD_MODEL_TYPES.EMPIRICAL,
+    `Résolution effective = combinaison en quadrature de ${candidates.length} limite(s) disponible(s) (dominante : ${limitingFactor}) — approximation de sommation de flous indépendants (§19, V2.1) ; remplace le "pire des trois" de V2.0. Vraie combinaison MTF/PSF réservée à une phase ultérieure si un modèle de PSF complet est disponible.`));
+  if (candidates.length === 1) {
+    diagnostics.push(vldDiag("OPTICAL_SINGLE_LIMIT", "info", VLD_MODEL_TYPES.EMPIRICAL,
+      "Une seule limite disponible : la quadrature équivaut ici à cette limite seule, aucune combinaison réelle n'a eu lieu."));
+  }
 
   return {
     thetaTargetArcsec, diffractionArcsec, pixelScaleArcsec, seeingArcsec: seeingRes,
     effectiveResolutionArcsec, limitingFactor, N,
-    modelType: VLD_MODEL_TYPES.HEURISTIC, // combinaison max() heuristique tant que la quadrature V2.1 n'est pas branchée
+    modelType: VLD_MODEL_TYPES.EMPIRICAL, // quadrature = approximation empirique de combinaison de flous, pas une loi physique exacte
     diagnostics
   };
 }
@@ -7700,11 +7969,13 @@ function computeRefractionProfileV2(refractionLevels, kGlobalFallback) {
   if (!refractionLevels || refractionLevels.length < 4) {
     diagnostics.push(vldDiag("K_LEGACY_FALLBACK", "warning", VLD_MODEL_TYPES.EMPIRICAL,
       "Profil de niveaux de pression indisponible ou insuffisant (<4 niveaux) : fallback sur le K global unique (ERA5 régression ou Bislin 2-niveaux)."));
+    const mirageRegimeFallback = computeMirageRegimeV2(kGlobalFallback);
     return {
       profile: (kGlobalFallback !== null && kGlobalFallback !== undefined)
         ? [{ altFromM: 0, altToM: null, kLocal: kGlobalFallback, source: 'global_fallback' }]
         : [],
-      kGlobalFallback, modelType: VLD_MODEL_TYPES.EMPIRICAL, diagnostics
+      kGlobalFallback, mirageRegime: mirageRegimeFallback, modelType: VLD_MODEL_TYPES.EMPIRICAL,
+      diagnostics: [...diagnostics, ...mirageRegimeFallback.diagnostics]
     };
   }
 
@@ -7733,8 +8004,70 @@ function computeRefractionProfileV2(refractionLevels, kGlobalFallback) {
       `Le K près du sol (${kNearSurface}) diverge significativement du K global moyenné (${kGlobalFallback}) — confirme la limite documentée du K unique pour un rayon VLD à faible élévation.`));
   }
 
-  return { profile, kGlobalFallback, modelType: VLD_MODEL_TYPES.PHYSICAL, diagnostics };
+  const mirageRegime = computeMirageRegimeV2(kNearSurface ?? kGlobalFallback);
+  diagnostics.push(...mirageRegime.diagnostics);
+
+  return { profile, kGlobalFallback, mirageRegime, modelType: VLD_MODEL_TYPES.PHYSICAL, diagnostics };
 }
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * V2.0-E (suite) — Régime et risque de mirage (cahier des charges §14)
+ * ═══════════════════════════════════════════════════════════════════════
+ * §14 : "Le score ne doit pas traiter K < 0.10 comme un simple « mauvais
+ * temps ». La réfraction doit être rapportée séparément : régime, intensité,
+ * effet sur hauteur apparente et éventuel risque de mirage."
+ *
+ * Reprend les mêmes seuils que la pénalité "Mirage inférieur" déjà en place
+ * dans scoreDay() (K<0.10, sévérité clampée sur 0→0.15 de marge jusqu'à
+ * K_MIN=-0.05) pour rester cohérent avec ce que l'utilisateur voit déjà dans
+ * le score V1, mais expose ici le régime comme donnée structurée séparée du
+ * score plutôt que comme seule pénalité de points.
+ * K_STANDARD ≈ 0.15 : coefficient de réfraction atmosphérique "moyen" usuel
+ * (proche de la valeur terrestre classique ~1/7), utilisé seulement comme
+ * point de repère qualitatif pour distinguer régime standard / mirage
+ * supérieur — ce n'est pas une mesure, d'où modelType heuristic sur ce seuil.
+ *
+ * @param {number|null} k - K local près du sol si disponible, sinon K global
+ * @returns {Object} { regime, intensity, mirageRisk, modelType, diagnostics }
+ */
+function computeMirageRegimeV2(k) {
+  const diagnostics = [];
+  if (k === null || k === undefined) {
+    return { regime: null, intensity: null, mirageRisk: null, modelType: VLD_MODEL_TYPES.PHYSICAL, diagnostics };
+  }
+  const K_INFERIOR_THRESHOLD = 0.10; // même seuil que la pénalité V1 existante
+  const K_MIN = -0.05, K_STANDARD = 0.15, K_MAX = 0.45;
+
+  let regime, intensity;
+  if (k < K_INFERIOR_THRESHOLD) {
+    regime = 'mirage_inferieur';
+    intensity = Math.min(1, Math.max(0, (K_INFERIOR_THRESHOLD - k) / (K_INFERIOR_THRESHOLD - K_MIN)));
+  } else if (k > K_STANDARD) {
+    regime = 'mirage_superieur';
+    intensity = Math.min(1, Math.max(0, (k - K_STANDARD) / (K_MAX - K_STANDARD)));
+  } else {
+    regime = 'standard';
+    intensity = 0;
+  }
+
+  // mirageRisk : spécifiquement le risque de miroitement/instabilité d'image
+  // (mirage inférieur — sol surchauffé). Le mirage supérieur est en général
+  // favorable en VLD (élévation apparente de la cible) donc n'est pas
+  // rapporté comme un "risque" au même sens, juste comme un régime distinct.
+  const mirageRisk = regime === 'mirage_inferieur' ? intensity : 0;
+
+  diagnostics.push(vldDiag("MIRAGE_REGIME", "info", VLD_MODEL_TYPES.PHYSICAL,
+    `Régime de réfraction : ${regime} (K=${k.toFixed(2)}, intensité=${Math.round(intensity * 100)}%).`));
+  if (regime === 'mirage_inferieur') {
+    diagnostics.push(vldDiag("MIRAGE_INFERIOR_RISK", intensity > 0.6 ? "warning" : "info", VLD_MODEL_TYPES.HEURISTIC,
+      `Risque de miroitement thermique (mirage inférieur) : K=${k.toFixed(2)} sous le seuil de ${K_INFERIOR_THRESHOLD} — image potentiellement instable, distincte d'une simple dégradation atmosphérique.`));
+  }
+
+  return { regime, intensity, mirageRisk, modelType: VLD_MODEL_TYPES.PHYSICAL, diagnostics };
+}
+
+
 
 /**
  * Estime l'AOD "basse couche" effective à partir de l'AOD colonne totale et
@@ -8250,6 +8583,12 @@ function wrapLegacyResult(spot, h, k, refractionLevelsOverride, turbulenceOverri
   const sightlineRes = buildSightline(spot);
   const cn2Res = computeCn2ProfileV2(sightlineRes);
 
+  // V2.0-D (suite, §7) : profil météo interpolé le long de la ligne de visée —
+  // complète buildSightline() (géométrie seule). Purement diagnostique pour
+  // l'instant : n'alimente aucun sous-score existant, exposé pour traçabilité
+  // et comme base pour un futur calcul atmosphère/nuage résolu par segment.
+  const weatherProfileRes = sampleWeatherProfile(sightlineRes, h);
+
   // V2.0-H : nuages par couches traversées, réutilise la même sightline (§12)
   const cloudRes = computeCloudPathV2(sightlineRes, h);
 
@@ -8258,18 +8597,19 @@ function wrapLegacyResult(spot, h, k, refractionLevelsOverride, turbulenceOverri
   const opticalSeeingArcsec = cn2Res.seeingArcsec ?? legacySeeingArcsec;
   const opticalRes = computeOpticalResolutionV2(spot, k, getApertureMm(), getFocalMm(), getCameraPixelUm(), opticalSeeingArcsec);
 
-  // V2.0-J : géométrie (hauteur visible réelle, §15) — même calcul Bislin que
-  // l'overlay courbure et que computeOpticalResolutionV2, réutilisé ici pour
-  // peupler v2.geometry et servir d'entrée aux hard eliminators (§24).
-  const bislinRes = _calcBislin(spot, k);
+  // V2.0-M : géométrie encapsulée derrière computeGeometry() (§15) — calculée
+  // plus bas juste avant d'être consommée par v2.geometry / score.geometry.
 
   // V2.0-G : Confidence Score, indépendant du score /100, ne le modifie jamais
-  const confidenceRes = computeConfidenceScoreV2(h, refractionLevels, aodColumn);
+  const confidenceRes = computeConfidenceScoreV2(h, refractionLevels, aodColumn, spot);
 
   v2.legacy = { score: v1.score, rawScore: v1.rawScore, items: v1.items, regimes: v1.regimes, hasElim: v1.hasElim };
 
   v2.refraction.kEffective = k;
   v2.refraction.profile = refProfile.profile;
+  v2.refraction.mirageRisk = refProfile.mirageRegime?.mirageRisk ?? null;
+  v2.refraction.regime = refProfile.mirageRegime?.regime ?? null;
+  v2.refraction.regimeIntensity = refProfile.mirageRegime?.intensity ?? null;
   v2.refraction.modelType = refProfile.modelType;
 
   v2.turbulence.cn2Profile = cn2Res.cn2Profile; // vrai Cn²(z) le long du trajet (V2.1)
@@ -8299,11 +8639,18 @@ function wrapLegacyResult(spot, h, k, refractionLevelsOverride, turbulenceOverri
   v2.optical.N = opticalRes.N; // nb d'éléments résolus sur la hauteur visible
   v2.optical.modelType = opticalRes.modelType;
 
-  // V2.0-J : géométrie (§15) — même calcul Bislin déjà utilisé ailleurs, exposé ici pour la première fois dans le schéma V2.
-  v2.geometry.hiddenHeightM = bislinRes.hidden;
-  v2.geometry.visibleHeightM = bislinRes.visible;
-  v2.geometry.refractionLiftM = bislinRes.lift;
-  v2.geometry.modelType = VLD_MODEL_TYPES.PHYSICAL; // Bislin exact (§15 : "peut rester la référence du modèle globiste")
+  // V2.0-M : géométrie via l'interface computeGeometry() (§15) — route vers
+  // "globe" (Bislin) par défaut ; spot.geometryModel permet de basculer sur
+  // "alternative" (Terre plate) spot par spot sans toucher au reste du
+  // pipeline (§4 : atmosphère/optique indépendantes du modèle géométrique).
+  const geoRes = computeGeometry({ model: spot.geometryModel || 'globe', spot, k });
+  v2.weatherProfile.points = weatherProfileRes.points;
+  v2.weatherProfile.modelType = weatherProfileRes.modelType;
+  v2.engine.geometryModel = spot.geometryModel || 'globe';
+  v2.geometry.hiddenHeightM = geoRes.hiddenHeightM;
+  v2.geometry.visibleHeightM = geoRes.visibleHeightM;
+  v2.geometry.refractionLiftM = geoRes.refractiveLiftM;
+  v2.geometry.modelType = geoRes.modelType;
 
   if (ipr) {
     v2.score.refraction = ipr.fracRefraction * 100;
@@ -8327,8 +8674,8 @@ function wrapLegacyResult(spot, h, k, refractionLevelsOverride, turbulenceOverri
   // Sous-score géométrie (§22) — fraction de la hauteur cible réellement visible.
   const targetTotalHeightM = spot.tgt?.alt ?? null;
   v2.score.geometry = (targetTotalHeightM && targetTotalHeightM > 0)
-    ? Math.round(100 * Math.min(1, Math.max(0, bislinRes.visible) / targetTotalHeightM))
-    : (bislinRes.visible > 0 ? 100 : 0);
+    ? Math.round(100 * Math.min(1, Math.max(0, geoRes.visibleHeightM) / targetTotalHeightM))
+    : (geoRes.visibleHeightM > 0 ? 100 : 0);
 
   // V2.0-K : sous-score géométrie solaire (§22 révisé) — réutilise h._lightingType
   // déjà posé par solarGeometryAdvanced() lors de l'appel scoreDay() ci-dessus.
@@ -8382,6 +8729,7 @@ function wrapLegacyResult(spot, h, k, refractionLevelsOverride, turbulenceOverri
     ...refProfile.diagnostics,
     turbulenceRes.diagnostic,
     ...sightlineRes.diagnostics,
+    ...weatherProfileRes.diagnostics,
     ...cn2Res.diagnostics,
     ...cloudRes.diagnostics,
     ...opticalRes.diagnostics,
@@ -8423,7 +8771,12 @@ window.VLD_ENGINE_V2 = {
   computeAodEffectiveV2,
   computeSpectralTransmissionV2,
   buildSightline,
+  sampleWeatherProfile,
   computeRefractionProfileV2,
+  computeMirageRegimeV2,
+  computeGeometry,
+  computeGeometryGlobeV2,
+  computeGeometryFlatEarthV2,
   estimateTurbulenceScore,
   computeConfidenceScoreV2,
   computeCn2ProfileV2,
@@ -8476,6 +8829,73 @@ function _updateOverlayStats(k) {
       </div>
     </div>
     <div class="bsl-verdict" style="color:${visCol};border-color:${visCol};margin-top:.75rem">${visLabel}</div>`;
+}
+
+/**
+ * Graphique "modèle alternative" (Terre plate) — §15/§4. Aucune courbure
+ * terrestre dessinée : une ligne droite de référence (visée géométrique
+ * observateur→cible) et le rayon réellement reçu, qui s'en écarte
+ * progressivement à cause du gradient de réfraction K. Utilise exactement
+ * refractiveLiftM = K·d²/(2R) calculé par computeGeometryFlatEarthV2() —
+ * mêmes chiffres que la carte de résultats, juste visualisés.
+ */
+function renderFlatModelSVG(spot, k){
+  const R = 6371000;
+  const dist_m = spot.dist_km*1000;
+  const obsAlt = spot.obs.alt||0, tgtAlt = spot.tgt.alt||0;
+  const totalLift = (k*dist_m*dist_m)/(2*R); // refractiveLiftM
+  const angleDeg = (k*dist_m)/(2*R)*180/Math.PI; // refractionAngleDeg
+  const W=560,H=150,PAD_L=58,PAD_R=58,PAD_T=26,PAD_B=26;
+  const plotW=W-PAD_L-PAD_R, plotH=H-PAD_T-PAD_B;
+  const span=Math.max(Math.abs(totalLift)*1.6, Math.abs(tgtAlt-obsAlt)*0.6, 50);
+  const midAlt=(obsAlt+tgtAlt)/2;
+  const maxAlt=Math.max(obsAlt,tgtAlt)+span*0.6;
+  const minAlt=Math.min(obsAlt,tgtAlt)-span*0.6;
+  const altRange=(maxAlt-minAlt)||1;
+  const toX=f=>PAD_L+f*plotW;
+  const toY=a=>PAD_T+plotH-((a-minAlt)/altRange)*plotH;
+  const N=40;
+  // Ligne droite de référence (visée géométrique, sans réfraction)
+  const refX1=toX(0), refY1=toY(obsAlt), refX2=toX(1), refY2=toY(tgtAlt);
+  // Rayon réellement reçu : ligne droite + déviation quadratique K·x²/(2R)
+  const rayPts=[];
+  for(let i=0;i<=N;i++){
+    const f=i/N; const x=f*dist_m;
+    const chordAlt=obsAlt+(tgtAlt-obsAlt)*f;
+    const dev=(k*x*x)/(2*R);
+    rayPts.push(`${toX(f).toFixed(1)},${toY(chordAlt+dev).toFixed(1)}`);
+  }
+  const rayPath='M '+rayPts.join(' L ');
+  let kCol='#9ca3af';
+  if(k>0.4)kCol='#22d3ee';else if(k>0.2)kCol='#4ade80';else if(k>0.1)kCol='#fbbf24';else if(k<0)kCol='#f87171';
+  const liftLabel=`${totalLift>=0?'+':''}${Math.round(totalLift)} m déviation réfractive`;
+  const gridLines=[0,0.25,0.5,0.75,1].map(f=>{const a=minAlt+f*altRange;const y=toY(a);return`<line x1="${PAD_L}" y1="${y.toFixed(1)}" x2="${W-PAD_R}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,0.04)" stroke-width="1"/><text x="${(PAD_L-5).toFixed(1)}" y="${(y+3).toFixed(1)}" text-anchor="end" fill="#374151" font-size="8">${Math.round(a)}m</text>`;}).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="fg${spot.id}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0c1a2e"/><stop offset="100%" stop-color="#020609"/>
+    </linearGradient>
+    <marker id="afg${spot.id}" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="${kCol}"/>
+    </marker>
+  </defs>
+  <rect width="${W}" height="${H}" fill="url(#fg${spot.id})"/>
+  ${gridLines}
+  <line x1="${refX1.toFixed(1)}" y1="${refY1.toFixed(1)}" x2="${refX2.toFixed(1)}" y2="${refY2.toFixed(1)}" stroke="rgba(56,189,248,0.35)" stroke-width="1.25" stroke-dasharray="5,4"/>
+  <path d="${rayPath}" fill="none" stroke="${kCol}" stroke-width="2.5" opacity="0.95"/>
+  ${Math.abs(totalLift)>3?`<line x1="${toX(1).toFixed(1)}" y1="${refY2.toFixed(1)}" x2="${toX(1).toFixed(1)}" y2="${toY(tgtAlt+totalLift).toFixed(1)}" stroke="${kCol}" stroke-width="2.5" marker-end="url(#afg${spot.id})"/>`:''}
+  <circle cx="${refX1.toFixed(1)}" cy="${refY1.toFixed(1)}" r="5" fill="#38bdf8"/>
+  <text x="${(refX1+9).toFixed(1)}" y="${(refY1-9).toFixed(1)}" fill="#38bdf8" font-size="9" font-weight="bold">${spot.name.split(' ').slice(-1)[0]}</text>
+  <text x="${(refX1+9).toFixed(1)}" y="${(refY1+2).toFixed(1)}" fill="#38bdf8" font-size="8">${obsAlt}m</text>
+  <circle cx="${refX2.toFixed(1)}" cy="${refY2.toFixed(1)}" r="5" fill="${spot.color}"/>
+  <text x="${(refX2-9).toFixed(1)}" y="${(refY2-9).toFixed(1)}" text-anchor="end" fill="${spot.color}" font-size="9" font-weight="bold">${spot.target.replace('→ ','').split('·')[0].trim()}</text>
+  <text x="${(refX2-9).toFixed(1)}" y="${(refY2+2).toFixed(1)}" text-anchor="end" fill="${spot.color}" font-size="8">${tgtAlt}m</text>
+  <text x="${(W/2).toFixed(1)}" y="${(H-6).toFixed(1)}" text-anchor="middle" fill="${kCol}" font-size="9" font-weight="bold">${liftLabel} · angle ${angleDeg.toFixed(3)}° · ${spot.dist_km} km</text>
+  <line x1="${PAD_L}" y1="${PAD_T-12}" x2="${PAD_L+18}" y2="${PAD_T-12}" stroke="rgba(56,189,248,0.35)" stroke-dasharray="4,3" stroke-width="1"/>
+  <text x="${PAD_L+22}" y="${PAD_T-8}" fill="rgba(56,189,248,0.5)" font-size="8">Ligne droite (visée géométrique)</text>
+  <line x1="${PAD_L+165}" y1="${PAD_T-12}" x2="${PAD_L+183}" y2="${PAD_T-12}" stroke="${kCol}" stroke-width="2"/>
+  <text x="${PAD_L+187}" y="${PAD_T-8}" fill="${kCol}" font-size="8">Rayon reçu (k=${k.toFixed(2)})</text>
+</svg>`;
 }
 
 function renderCurveBlock(spot, k_default){
