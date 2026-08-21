@@ -72,7 +72,7 @@ if ('serviceWorker' in navigator) {
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-import { getFirestore, doc, setDoc, getDocs, deleteDoc, collection }
+import { getFirestore, doc, setDoc, getDocs, deleteDoc, collection, addDoc, updateDoc, query, orderBy, increment }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -90,10 +90,16 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
+// Exposition globale pour les scripts non-module (forum communauté, §"Communauté publique")
+// — window.currentUser est tenu à jour dans onAuthStateChanged ci-dessous (les deux branches).
+window.db = db;
+window.fbFn = { doc, setDoc, getDocs, deleteDoc, collection, addDoc, updateDoc, query, orderBy, increment };
+
 let currentUser = null;
 
 onAuthStateChanged(auth, async user => {
   currentUser = user;
+  window.currentUser = user;
   const btn    = document.getElementById('auth-btn');
   const status = document.getElementById('auth-status');
   if (user) {
@@ -113,6 +119,8 @@ onAuthStateChanged(auth, async user => {
     status.textContent = t('auth.status.local');
     status.style.color = 'var(--text-dim, #4a6a8a)';
   }
+  // Rafraîchit la vue Communauté active (bouton Publier / Supprimer dépend du login)
+  if (typeof window._refreshActiveCommView === 'function') window._refreshActiveCommView();
 });
 
 window.authToggle = async () => {
@@ -10334,16 +10342,46 @@ function updateBetaPanel() {
 
 // ── Switch vue interne ────────────────────────────
 // ══════════════════════════════════════════════════════════════════════════
-// FORUM — localStorage + éditeur d'articles
+// FORUM — Firestore partagé entre bêta-testeurs (collection "community_posts")
 // ══════════════════════════════════════════════════════════════════════════
-const FORUM_KEY = 'vld_forum_posts';
+// IMPORTANT (à faire côté console Firebase, pas dans ce fichier) : configurer
+// des Security Rules sur "community_posts" pour que les vérifications
+// authorUid ci-dessous soient réellement appliquées côté serveur, pas
+// seulement côté client (n'importe qui avec la config Firebase publique
+// pourrait sinon contourner les checks JS). Suggestion de règles :
+//   match /community_posts/{postId} {
+//     allow read: if request.auth != null;
+//     allow create: if request.auth != null
+//                   && request.resource.data.authorUid == request.auth.uid;
+//     allow update: if request.auth != null
+//                   && (resource.data.authorUid == request.auth.uid
+//                       || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']));
+//     allow delete: if request.auth != null
+//                   && resource.data.authorUid == request.auth.uid;
+//   }
+const COMMUNITY_COLLECTION = 'community_posts';
+let _forumPostsCache = [];
+let _forumLoaded = false;
+let _forumLastActiveView = null;
 
-function forumGetPosts() {
-  try { return JSON.parse(localStorage.getItem(FORUM_KEY) || '[]'); } catch(e) { return []; }
+async function forumLoadPosts(forceReload) {
+  if (_forumLoaded && !forceReload) return _forumPostsCache;
+  if (!window.db || !window.fbFn) return _forumPostsCache; // module Firebase pas encore chargé
+  try {
+    const fb = window.fbFn;
+    const snap = await fb.getDocs(fb.query(fb.collection(window.db, COMMUNITY_COLLECTION), fb.orderBy('timestamp', 'desc')));
+    _forumPostsCache = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+    _forumLoaded = true;
+  } catch (e) {
+    console.warn('Firestore community load error:', e);
+  }
+  return _forumPostsCache;
 }
-function forumSavePosts(posts) {
-  try { localStorage.setItem(FORUM_KEY, JSON.stringify(posts)); } catch(e) {}
-}
+
+window._refreshActiveCommView = function() {
+  const main = document.getElementById('comm-main');
+  if (main && _forumLastActiveView) window.switchCommView(_forumLastActiveView);
+};
 
 const FORUM_RUBRIQUES = {
   conditions: { label: '🌤️ Conditions du jour',     icon: '🌤️', color: '#60a5fa', tags: ['Conditions','Météo','Anticyclone','Front froid','Alerte'] },
@@ -10353,13 +10391,19 @@ const FORUM_RUBRIQUES = {
 };
 
 // ── Rendu liste des posts ─────────────────────────────────────────────────
-function forumRenderPosts(rubrique, container) {
+async function forumRenderPosts(rubrique, container) {
   const rub = FORUM_RUBRIQUES[rubrique];
-  const all = forumGetPosts().filter(function(p) { return p.rubrique === rubrique; });
+  container.innerHTML = '<div class="comm-empty-state"><div style="font-size:13px;color:var(--text2);">Chargement des articles…</div></div>';
+  const all = (await forumLoadPosts()).filter(function(p) { return p.rubrique === rubrique; });
+  const myUid = window.currentUser ? window.currentUser.uid : null;
+
+  const composeBtn = window.currentUser
+    ? '<button class="forum-new-btn" onclick="forumOpenEditor(&apos;' + rubrique + '&apos;, null)">✏️ Rédiger un article</button>'
+    : '<button class="forum-new-btn" onclick="alert(&apos;Connecte-toi (bouton en haut) pour publier un article.&apos;)" style="opacity:.6;">🔒 Connecte-toi pour publier</button>';
 
   let html = '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem;">'
     + '<div style="font-family:var(--display);font-size:.75rem;letter-spacing:.1em;color:' + rub.color + ';">' + rub.label.toUpperCase() + '</div>'
-    + '<button class="forum-new-btn" onclick="forumOpenEditor(&apos;' + rubrique + '&apos;, null)">✏️ Rédiger un article</button>'
+    + composeBtn
     + '</div>';
 
   if (all.length === 0) {
@@ -10374,6 +10418,7 @@ function forumRenderPosts(rubrique, container) {
       const d = new Date(p.timestamp);
       const dateStr = d.toLocaleDateString('fr-FR', { day:'2-digit', month:'short', year:'numeric' });
       const preview = p.body.replace(/<[^>]*>/g, '').substring(0, 120) + (p.body.length > 120 ? '…' : '');
+      const canDelete = myUid && p.authorUid === myUid;
 
       html += '<div class="forum-card" onclick="forumOpenReader(&apos;' + p.id + '&apos;)">'
         + '<div class="forum-card-header">'
@@ -10387,7 +10432,7 @@ function forumRenderPosts(rubrique, container) {
         + '<div class="forum-card-footer" onclick="event.stopPropagation()">'
         + '<span onclick="forumLike(&apos;' + p.id + '&apos;,this,&apos;' + rubrique + '&apos;)">👍 ' + (p.likes || 0) + '</span>'
         + '<span>💬 ' + (p.replies || 0) + ' réponses</span>'
-        + '<span style="margin-left:auto;color:#f87171;" onclick="forumDelete(&apos;' + p.id + '&apos;,&apos;' + rubrique + '&apos;)">🗑️</span>'
+        + (canDelete ? '<span style="margin-left:auto;color:#f87171;" onclick="forumDelete(&apos;' + p.id + '&apos;,&apos;' + rubrique + '&apos;)">🗑️</span>' : '')
         + '</div>'
         + '</div>';
     });
@@ -10400,24 +10445,40 @@ function escHtml(s) {
 }
 
 // ── Like / Delete ─────────────────────────────────────────────────────────
-window.forumLike = function(postId, el, rubrique) {
-  const posts = forumGetPosts();
-  const p = posts.find(function(x) { return x.id === postId; });
-  if (p) { p.likes = (p.likes || 0) + 1; forumSavePosts(posts); el.textContent = '👍 ' + p.likes; }
+// NB : les likes ne sont pas dédupliqués par utilisateur (comme avant, en
+// local) — un testeur qui rafraîchit peut reliker le même article. Limitation
+// connue, à améliorer plus tard si besoin (stocker un tableau d'uid sur le doc).
+window.forumLike = async function(postId, el, rubrique) {
+  const p = _forumPostsCache.find(function(x) { return x.id === postId; });
+  if (!p) return;
+  p.likes = (p.likes || 0) + 1;
+  el.textContent = '👍 ' + p.likes;
+  try {
+    const fb = window.fbFn;
+    await fb.updateDoc(fb.doc(window.db, COMMUNITY_COLLECTION, postId), { likes: fb.increment(1) });
+  } catch (e) { console.warn('Firestore like error:', e); }
 };
 
-window.forumDelete = function(postId, rubrique) {
+window.forumDelete = async function(postId, rubrique) {
+  const p = _forumPostsCache.find(function(x) { return x.id === postId; });
+  const myUid = window.currentUser ? window.currentUser.uid : null;
+  if (!p || !myUid || p.authorUid !== myUid) { alert('Tu ne peux supprimer que tes propres articles.'); return; }
   if (!confirm('Supprimer cet article ?')) return;
-  let posts = forumGetPosts().filter(function(p) { return p.id !== postId; });
-  forumSavePosts(posts);
-  const main = document.getElementById('comm-main');
-  if (main) forumRenderPosts(rubrique, main);
+  try {
+    const fb = window.fbFn;
+    await fb.deleteDoc(fb.doc(window.db, COMMUNITY_COLLECTION, postId));
+    _forumPostsCache = _forumPostsCache.filter(function(x) { return x.id !== postId; });
+    const main = document.getElementById('comm-main');
+    if (main) forumRenderPosts(rubrique, main);
+  } catch (e) { alert('Erreur lors de la suppression : ' + e.message); }
 };
 
 // ── Éditeur d'article (création) ─────────────────────────────────────────
 window.forumOpenEditor = function(rubrique, postId) {
+  if (!window.currentUser) { alert('Connecte-toi (bouton en haut) pour publier un article — ça permet de savoir qui a écrit quoi dans le forum partagé.'); return; }
+  const existing = postId ? _forumPostsCache.find(function(p) { return p.id === postId; }) : null;
+  if (postId && (!existing || existing.authorUid !== window.currentUser.uid)) { alert('Tu ne peux modifier que tes propres articles.'); return; }
   const rub = FORUM_RUBRIQUES[rubrique];
-  const existing = postId ? forumGetPosts().find(function(p) { return p.id === postId; }) : null;
 
   const tagsHtml = rub.tags.map(function(t) {
     const checked = existing && (existing.tags || []).indexOf(t) !== -1 ? ' checked' : '';
@@ -10440,7 +10501,7 @@ window.forumOpenEditor = function(rubrique, postId) {
     // Pseudo + Titre
     + '<div style="display:grid;grid-template-columns:1fr 2fr;gap:.7rem;margin-bottom:.8rem;">'
     + '<div><label style="font-size:9px;color:rgba(150,180,210,.6);font-family:var(--display);letter-spacing:.08em;display:block;margin-bottom:.3rem;">TON PSEUDO</label>'
-    + '<input id="fc-author" type="text" value="' + escHtml((existing && existing.author) || '') + '" placeholder="Ton pseudo…" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(0,212,255,.15);border-radius:8px;color:#e0eeff;font-size:12px;padding:.45rem .7rem;box-sizing:border-box;"></div>'
+    + '<input id="fc-author" type="text" value="' + escHtml((existing && existing.author) || (window.currentUser && window.currentUser.displayName) || '') + '" placeholder="Ton pseudo…" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(0,212,255,.15);border-radius:8px;color:#e0eeff;font-size:12px;padding:.45rem .7rem;box-sizing:border-box;"></div>'
     + '<div><label style="font-size:9px;color:rgba(150,180,210,.6);font-family:var(--display);letter-spacing:.08em;display:block;margin-bottom:.3rem;">TITRE DE L\'ARTICLE</label>'
     + '<input id="fc-title" type="text" value="' + escHtml((existing && existing.title) || '') + '" placeholder="Titre accrocheur…" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(0,212,255,.15);border-radius:8px;color:#e0eeff;font-size:12px;padding:.45rem .7rem;box-sizing:border-box;"></div>'
     + '</div>'
@@ -10493,7 +10554,8 @@ window.forumCloseEditor = function() {
   if (el) el.remove();
 };
 
-window.forumSubmitPost = function(rubrique, postId) {
+window.forumSubmitPost = async function(rubrique, postId) {
+  if (!window.currentUser) { alert('Connecte-toi pour publier.'); return; }
   const author = (document.getElementById('fc-author').value.trim()) || 'Observateur';
   const title  = document.getElementById('fc-title').value.trim();
   const body   = document.getElementById('fc-body').innerHTML.trim();
@@ -10501,28 +10563,38 @@ window.forumSubmitPost = function(rubrique, postId) {
   if (!body || body === '<br>') { alert('Le contenu est requis.'); return; }
   const tags = Array.from(document.querySelectorAll('input[name="ftag"]:checked')).map(function(i) { return i.value; });
 
-  const posts = forumGetPosts();
-  if (postId) {
-    const p = posts.find(function(x) { return x.id === postId; });
-    if (p) { p.author = author; p.title = title; p.body = body; p.tags = tags; p.edited = Date.now(); }
-  } else {
-    posts.unshift({ id:'p_'+Date.now(), rubrique:rubrique, author:author, title:title, body:body, tags:tags, likes:0, replies:0, timestamp:Date.now() });
-  }
-  forumSavePosts(posts);
-  forumCloseEditor();
+  const submitBtn = document.querySelector('#forum-editor-overlay button[onclick^="forumSubmitPost"]');
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '💾 Publication…'; }
 
-  const main = document.getElementById('comm-main');
-  if (main) forumRenderPosts(rubrique, main);
+  try {
+    const fb = window.fbFn;
+    if (postId) {
+      await fb.updateDoc(fb.doc(window.db, COMMUNITY_COLLECTION, postId), { author: author, title: title, body: body, tags: tags, edited: Date.now() });
+    } else {
+      await fb.addDoc(fb.collection(window.db, COMMUNITY_COLLECTION), {
+        rubrique: rubrique, author: author, authorUid: window.currentUser.uid,
+        title: title, body: body, tags: tags, likes: 0, replies: 0, timestamp: Date.now()
+      });
+    }
+    await forumLoadPosts(true);
+    forumCloseEditor();
+    const main = document.getElementById('comm-main');
+    if (main) forumRenderPosts(rubrique, main);
+  } catch (e) {
+    alert('Erreur lors de la publication : ' + e.message);
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '💾 Publier'; }
+  }
 };
 
 // ── Lecteur d'article ─────────────────────────────────────────────────────
 window.forumOpenReader = function(postId) {
-  const posts = forumGetPosts();
-  const p = posts.find(function(x) { return x.id === postId; });
+  const p = _forumPostsCache.find(function(x) { return x.id === postId; });
   if (!p) return;
   const rub = FORUM_RUBRIQUES[p.rubrique];
   const d = new Date(p.timestamp).toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
   const tags = (p.tags || []).map(function(t) { return '<span class="forum-tag">' + escHtml(t) + '</span>'; }).join('');
+  const myUid = window.currentUser ? window.currentUser.uid : null;
+  const canDelete = myUid && p.authorUid === myUid;
 
   const overlay = document.createElement('div');
   overlay.id = 'forum-reader-overlay';
@@ -10541,7 +10613,7 @@ window.forumOpenReader = function(postId) {
     + (tags ? '<div style="margin-top:1rem;display:flex;gap:.4rem;flex-wrap:wrap;">' + tags + '</div>' : '')
     + '<div style="display:flex;gap:1rem;margin-top:1.2rem;padding-top:.8rem;border-top:1px solid rgba(255,255,255,.06);font-size:11px;color:rgba(150,180,210,.5);">'
     + '<span style="cursor:pointer;" onclick="forumLikeReader(&apos;' + p.id + '&apos;,this)">👍 ' + (p.likes||0) + ' j\'aime</span>'
-    + '<span style="margin-left:auto;cursor:pointer;color:#f87171;" onclick="forumDelete(&apos;' + p.id + '&apos;,&apos;' + p.rubrique + '&apos;);forumCloseReader()">🗑️ Supprimer</span>'
+    + (canDelete ? '<span style="margin-left:auto;cursor:pointer;color:#f87171;" onclick="forumDelete(&apos;' + p.id + '&apos;,&apos;' + p.rubrique + '&apos;);forumCloseReader()">🗑️ Supprimer</span>' : '')
     + '</div>'
     + '</div>';
 
@@ -10554,13 +10626,18 @@ window.forumCloseReader = function() {
   if (el) el.remove();
 };
 
-window.forumLikeReader = function(postId, el) {
-  const posts = forumGetPosts();
-  const p = posts.find(function(x) { return x.id === postId; });
-  if (p) { p.likes = (p.likes || 0) + 1; forumSavePosts(posts); el.textContent = '👍 ' + p.likes + ' j\'aime'; }
+window.forumLikeReader = async function(postId, el) {
+  const p = _forumPostsCache.find(function(x) { return x.id === postId; });
+  if (!p) return;
+  p.likes = (p.likes || 0) + 1;
+  el.textContent = '👍 ' + p.likes + ' j\'aime';
+  try {
+    const fb = window.fbFn;
+    await fb.updateDoc(fb.doc(window.db, COMMUNITY_COLLECTION, postId), { likes: fb.increment(1) });
+  } catch (e) { console.warn('Firestore like error:', e); }
 };
 
-window.switchCommView = function(view) {
+window.switchCommView = async function(view) {
   document.querySelectorAll('.comm-nav-btn').forEach(function(b){ b.classList.remove('active'); });
   const activeBtn = document.getElementById('comm-btn-' + view);
   if (activeBtn) activeBtn.classList.add('active');
@@ -10570,11 +10647,14 @@ window.switchCommView = function(view) {
 
   const FORUM_VIEWS = ['conditions','captures','materiel','spots'];
   if (view === 'journal') {
+    _forumLastActiveView = null; // vue privée, pas concernée par le refresh Firestore
     renderJournalView(main);
   } else if (FORUM_VIEWS.indexOf(view) !== -1) {
-    forumRenderPosts(view, main);
+    _forumLastActiveView = view;
+    await forumRenderPosts(view, main);
   } else {
-    renderFilView(main);
+    _forumLastActiveView = 'fil';
+    await renderFilView(main);
   }
 };
 
@@ -10830,7 +10910,8 @@ window.journalPostToForum = function(entryId) {
   picker.addEventListener('click', function(ev){ if (ev.target === picker) picker.remove(); });
 };
 
-window.journalConfirmPost = function(entryId) {
+window.journalConfirmPost = async function(entryId) {
+  if (!window.currentUser) { alert('Connecte-toi (bouton en haut) pour publier dans la communauté.'); return; }
   var entries = journalGetLocal();
   var e = entries.find(function(x){ return x.id === entryId; });
   if (!e) return;
@@ -10849,20 +10930,19 @@ window.journalConfirmPost = function(entryId) {
     + escHtml(e.comment||'')
     + photoHtml;
 
-  var posts = forumGetPosts();
-  posts.unshift({
-    id: 'j_' + Date.now(),
-    rubrique: rubrique,
-    author: author,
-    title: escHtml(e.spotName||'Observation') + ' — ' + escHtml(e.dateLabel||''),
-    body: body,
-    tags: ['Journal','VLD', e.spotName||''],
-    likes: 0,
-    replies: 0,
-    timestamp: Date.now(),
-    fromJournal: entryId,
-  });
-  forumSavePosts(posts);
+  try {
+    var fb = window.fbFn;
+    await fb.addDoc(fb.collection(window.db, COMMUNITY_COLLECTION), {
+      rubrique: rubrique, author: author, authorUid: window.currentUser.uid,
+      title: escHtml(e.spotName||'Observation') + ' — ' + escHtml(e.dateLabel||''),
+      body: body, tags: ['Journal','VLD', e.spotName||''],
+      likes: 0, replies: 0, timestamp: Date.now(), fromJournal: entryId
+    });
+    await forumLoadPosts(true);
+  } catch (err) {
+    alert('Erreur lors de la publication : ' + err.message);
+    return;
+  }
 
   // Mark entry as posted
   e.postedToForum = true;
@@ -10886,14 +10966,15 @@ window.journalConfirmPost = function(entryId) {
 };
 
 // ── Vue Fil ───────────────────────────────────────
-function renderFilView(container) {
-  var posts = forumGetPosts();
+async function renderFilView(container) {
+  container.innerHTML = '<div class="comm-empty-state"><div style="font-size:13px;color:var(--text2);">Chargement…</div></div>';
+  var posts = await forumLoadPosts();
   if (posts.length === 0) {
     container.innerHTML = '<div class="comm-empty-state"><div class="comm-empty-icon">🌐</div><div style="font-size:13px;color:var(--text2);">Fil communautaire</div><div>Les observations de la communauté SKY-RANGE apparaîtront ici — publie ton premier rapport depuis ton journal !</div></div>';
     return;
   }
-  // Show all posts across all rubriques in reverse chrono order
-  var sorted = posts.slice().sort(function(a,b){ return b.timestamp - a.timestamp; });
+  // Déjà trié par timestamp desc via la requête Firestore (orderBy)
+  var sorted = posts;
   var html = '<div style="font-family:var(--display);font-size:.75rem;letter-spacing:.1em;color:#00d8ff;margin-bottom:1rem;">FIL COMMUNAUTAIRE</div>';
   sorted.forEach(function(p) {
     var rub = FORUM_RUBRIQUES[p.rubrique] || { label: p.rubrique, icon: '📝', color: '#00d8ff' };
