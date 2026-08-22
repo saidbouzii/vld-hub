@@ -4941,35 +4941,81 @@ async function fetchSpot(spot, pastDays = 0) {
 
   try {
    const base = `https://api.open-meteo.com/v1/forecast?forecast_days=7${pastDays > 0 ? `&past_days=${pastDays}` : ''}&daily=sunrise,sunset&timezone=auto`;
-  // NOTE : spot.mid est désormais un tableau (norme V2.1, cf normalizeMidPoints()).
-  // Le moteur météo n'utilise encore qu'un point milieu de référence par requête API
-  // (getPrimaryMidPoint = point central du tableau) — l'agrégation pondérée sur TOUS
-  // les points milieux est prévue en phase suivante, pas encore câblée ici.
-  const _midRef = getPrimaryMidPoint(spot) || { lat: (spot.obs.lat+spot.tgt.lat)/2, lon: (spot.obs.lon+spot.tgt.lon)/2 };
+  // NOTE V2.1 : spot.mid est un tableau de N points milieux (normalizeMidPoints()).
+  // Le moteur météo interroge désormais TOUS les points et agrège :
+  //  - visibility → MIN (worst-case) : la loi de Beer-Lambert est multiplicative le long
+  //    du trajet, donc le segment le plus mauvais domine la transmission optique réelle.
+  //  - dust/pm10/aerosol_optical_depth → MAX (worst-case), cohérent avec le traitement
+  //    déjà appliqué entre obs/mid/tgt plus bas.
+  //  - le reste (nuages, humidité, cape, vent, RH 850hPa) → MOYENNE, ce sont des
+  //    variables contextuelles et non directement extinctives.
+  const midPoints = normalizeMidPoints(spot);
   const urlObs = `${base}&latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=${params}`;
-  const urlMid = `${base}&latitude=${_midRef.lat}&longitude=${_midRef.lon}&hourly=visibility,cloud_cover_low,relative_humidity_2m,dew_point_2m,cape,wind_speed_80m,wind_speed_120m,relative_humidity_850hPa`;
- // AOD — 3 points : obs, mid, tgt (worst-case)
+  const urlsMid = midPoints.map(p => `${base}&latitude=${p.lat}&longitude=${p.lon}&hourly=visibility,cloud_cover_low,relative_humidity_2m,dew_point_2m,cape,wind_speed_80m,wind_speed_120m,relative_humidity_850hPa`);
+ // AOD — N+2 points : obs, tous les points milieux, tgt (worst-case)
   const _aqBase = 'https://air-quality-api.open-meteo.com/v1/air-quality';
   const _aqPast = pastDays > 0 ? `&past_days=${pastDays}` : '';
   // aod550nm = AOD total colonne à 550 nm (meilleur proxy dispo via Open-Meteo air-quality)
   // aod550nm_bc (basse couche 0-3km) n'est pas exposé séparément — on utilise aod550nm comme proxy
   const urlDustObs = `${_aqBase}?latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=dust,pm10,aerosol_optical_depth&timezone=auto${_aqPast}`;
-  const urlDust    = `${_aqBase}?latitude=${_midRef.lat}&longitude=${_midRef.lon}&hourly=dust,pm10,aerosol_optical_depth&timezone=auto${_aqPast}`;
+  const urlsDustMid = midPoints.map(p => `${_aqBase}?latitude=${p.lat}&longitude=${p.lon}&hourly=dust,pm10,aerosol_optical_depth&timezone=auto${_aqPast}`);
   const urlDustTgt = `${_aqBase}?latitude=${spot.tgt.lat}&longitude=${spot.tgt.lon}&hourly=dust,pm10,aerosol_optical_depth&timezone=auto${_aqPast}`;
   // U2 — ERA5 pressure levels pour calcul κ ITU-R P.453
   const urlPres = `https://api.open-meteo.com/v1/forecast?latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=temperature_1000hPa,temperature_925hPa,temperature_850hPa,temperature_700hPa,temperature_600hPa,temperature_500hPa,temperature_400hPa,temperature_300hPa,relative_humidity_1000hPa,relative_humidity_925hPa,relative_humidity_850hPa,relative_humidity_700hPa,relative_humidity_600hPa,relative_humidity_500hPa,relative_humidity_400hPa,relative_humidity_300hPa,geopotential_height_1000hPa,geopotential_height_925hPa,geopotential_height_850hPa,geopotential_height_700hPa,geopotential_height_600hPa,geopotential_height_500hPa,geopotential_height_400hPa,geopotential_height_300hPa&forecast_days=7${pastDays > 0 ? `&past_days=${pastDays}` : ''}&timezone=auto`;
 
-  const [rObs, rMid, rDustMid, rDustObs, rDustTgt, rPres] = await Promise.all([
+  const [rObs, rMidArr, rDustMidArr, rDustObs, rDustTgt, rPres] = await Promise.all([
     fetchDataWithCache('weather', 'obs', urlObs, { timeoutMs: 8000 }, true),
-    fetchDataWithCache('weather', 'mid', urlMid, { timeoutMs: 8000 }),
-    fetchDataWithCache('aod', 'dust_mid', urlDust, { timeoutMs: 10000 }),
+    Promise.all(urlsMid.map((u, i) => fetchDataWithCache('weather', `mid_${i}`, u, { timeoutMs: 8000 }))),
+    Promise.all(urlsDustMid.map((u, i) => fetchDataWithCache('aod', `dust_mid_${i}`, u, { timeoutMs: 10000 }))),
     fetchDataWithCache('aod', 'dust_obs', urlDustObs, { timeoutMs: 10000 }),
     fetchDataWithCache('aod', 'dust_tgt', urlDustTgt, { timeoutMs: 10000 }),
     fetchDataWithCache('weather', 'pres', urlPres, { timeoutMs: 10000 }),
   ]);
-  const d1 = rObs.json, d2 = rMid.json ?? {}, d3 = rDustMid.json ?? {}, d3b = rDustObs.json ?? {}, d3c = rDustTgt.json ?? {}, d4 = rPres.json;
+
+  /** Combine N tableaux hourly (un par point milieu) index par index selon un mode. */
+  function _vldAggregateHourly(jsons, field, mode) {
+    const arrs = jsons.map(j => j?.hourly?.[field]).filter(Array.isArray);
+    if (!arrs.length) return null;
+    const len = Math.max(...arrs.map(a => a.length));
+    const out = new Array(len);
+    for (let i = 0; i < len; i++) {
+      const vals = arrs.map(a => a[i]).filter(x => x !== null && x !== undefined && !isNaN(x) && x !== 999);
+      if (!vals.length) { out[i] = null; continue; }
+      out[i] = mode === 'min' ? Math.min(...vals)
+             : mode === 'max' ? Math.max(...vals)
+             : vals.reduce((a,b)=>a+b,0) / vals.length; // 'avg'
+    }
+    return out;
+  }
+
+  const _midJsons = (rMidArr || []).map(r => r.json).filter(Boolean);
+  const _dustMidJsons = (rDustMidArr || []).map(r => r.json).filter(Boolean);
+  // d2/d3 restent des objets { hourly: {...} } — même forme qu'avant la migration,
+  // donc tout le code en aval (avg(d2.hourly?.visibility) etc.) continue de fonctionner
+  // sans modification, mais lit désormais une agrégation sur N points au lieu d'1 seul.
+  const d1 = rObs.json;
+  const d2 = _midJsons.length ? {
+    hourly: {
+      visibility: _vldAggregateHourly(_midJsons, 'visibility', 'min'),
+      cloud_cover_low: _vldAggregateHourly(_midJsons, 'cloud_cover_low', 'avg'),
+      relative_humidity_2m: _vldAggregateHourly(_midJsons, 'relative_humidity_2m', 'avg'),
+      dew_point_2m: _vldAggregateHourly(_midJsons, 'dew_point_2m', 'avg'),
+      cape: _vldAggregateHourly(_midJsons, 'cape', 'avg'),
+      wind_speed_80m: _vldAggregateHourly(_midJsons, 'wind_speed_80m', 'avg'),
+      wind_speed_120m: _vldAggregateHourly(_midJsons, 'wind_speed_120m', 'avg'),
+      relative_humidity_850hPa: _vldAggregateHourly(_midJsons, 'relative_humidity_850hPa', 'avg'),
+    }
+  } : {};
+  const d3 = _dustMidJsons.length ? {
+    hourly: {
+      dust: _vldAggregateHourly(_dustMidJsons, 'dust', 'max'),
+      pm10: _vldAggregateHourly(_dustMidJsons, 'pm10', 'max'),
+      aerosol_optical_depth: _vldAggregateHourly(_dustMidJsons, 'aerosol_optical_depth', 'max'),
+    }
+  } : {};
+  const d3b = rDustObs.json ?? {}, d3c = rDustTgt.json ?? {}, d4 = rPres.json;
   if(!d1||d1.error) throw new Error(`urlObs: ${d1?.reason||'réponse invalide'}`);
-  if(d2?.error) console.warn(`urlMid: ${d2.reason}`);
+  if(!_midJsons.length) console.warn('urlsMid: aucun point milieu exploitable');
   if(d4?.error) console.warn('urlPres ERA5:', d4.reason);
 
   // Provenance/fraîcheur consolidée (§25+§27+§28) — pire cas parmi les sources
@@ -4977,7 +5023,7 @@ async function fetchSpot(spot, pastDays = 0) {
   // computeConfidenceScoreV2 puisse enfin tracer forecastAge (jusqu'ici listé
   // "non traçable" faute d'horodatage de fetch conservé — corrigé ici).
   const _provenanceRank = { 'network': 0, 'cache-fresh': 0, 'cache-stale-revalidating': 1, 'error': 2 };
-  const _allProv = [rObs, rMid, rDustMid, rDustObs, rDustTgt, rPres];
+  const _allProv = [rObs, ...(rMidArr||[]), ...(rDustMidArr||[]), rDustObs, rDustTgt, rPres];
   const _dataProvenanceWorst = _allProv.reduce((worst, p) => _provenanceRank[p.provenance] > _provenanceRank[worst] ? p.provenance : worst, 'network');
   const _dataAgeMin = Math.max(0, ..._allProv.map(p => p.ageMin ?? 0));
   if (_dataProvenanceWorst === 'cache-stale-revalidating') {
