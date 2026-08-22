@@ -3224,8 +3224,8 @@ tr.country-group-row td{border-bottom:1px solid rgba(255,255,255,.08);background
     <div class="creator-section">
       <div class="creator-section-title">👁️ POINT D'OBSERVATION</div>
       <div class="creator-grid cols3">
-        <div class="creator-field"><label>Latitude (°)<button type="button" class="dms-btn" onclick="openDMS('new-obs-lat')">DMS →°</button></label><input type="number" step="0.0001" id="new-obs-lat" placeholder="44.174"></div>
-        <div class="creator-field"><label>Longitude (°)<button type="button" class="dms-btn" onclick="openDMS('new-obs-lon')">DMS →°</button></label><input type="number" step="0.0001" id="new-obs-lon" placeholder="5.278"></div>
+        <div class="creator-field"><label>Latitude (°)<button type="button" class="dms-btn" onclick="openDMS('new-obs-lat')">DMS →°</button></label><input type="number" step="0.0001" id="new-obs-lat" placeholder="44.174" oninput="regenerateMidPoints()"></div>
+        <div class="creator-field"><label>Longitude (°)<button type="button" class="dms-btn" onclick="openDMS('new-obs-lon')">DMS →°</button></label><input type="number" step="0.0001" id="new-obs-lon" placeholder="5.278" oninput="regenerateMidPoints()"></div>
         <div class="creator-field"><label>Altitude (m)</label><input type="number" id="new-obs-alt" placeholder="1912"></div>
       </div>
     </div>
@@ -3233,24 +3233,23 @@ tr.country-group-row td{border-bottom:1px solid rgba(255,255,255,.08);background
     <div class="creator-section">
       <div class="creator-section-title">🎯 POINT CIBLE</div>
       <div class="creator-grid cols3">
-        <div class="creator-field"><label>Latitude (°)<button type="button" class="dms-btn" onclick="openDMS('new-tgt-lat')">DMS →°</button></label><input type="number" step="0.0001" id="new-tgt-lat" placeholder="42.655" oninput="runUX2Detection()"></div>
-        <div class="creator-field"><label>Longitude (°)<button type="button" class="dms-btn" onclick="openDMS('new-tgt-lon')">DMS →°</button></label><input type="number" step="0.0001" id="new-tgt-lon" placeholder="0.730" oninput="runUX2Detection()"></div>
+        <div class="creator-field"><label>Latitude (°)<button type="button" class="dms-btn" onclick="openDMS('new-tgt-lat')">DMS →°</button></label><input type="number" step="0.0001" id="new-tgt-lat" placeholder="42.655" oninput="runUX2Detection();regenerateMidPoints()"></div>
+        <div class="creator-field"><label>Longitude (°)<button type="button" class="dms-btn" onclick="openDMS('new-tgt-lon')">DMS →°</button></label><input type="number" step="0.0001" id="new-tgt-lon" placeholder="0.730" oninput="runUX2Detection();regenerateMidPoints()"></div>
         <div class="creator-field"><label>Altitude (m)</label><input type="number" id="new-tgt-alt" placeholder="3143" oninput="runUX2Detection()"></div>
       </div>
     </div>
 
     <div class="creator-section">
-      <div class="creator-section-title">📍 POINT MILIEU DE TRAJET</div>
-      <div class="creator-grid">
-        <div class="creator-field"><label>Latitude milieu (°)<button type="button" class="dms-btn" onclick="openDMS('new-mid-lat')">DMS →°</button></label><input type="number" step="0.0001" id="new-mid-lat" placeholder="44.02"></div>
-        <div class="creator-field"><label>Longitude milieu (°)<button type="button" class="dms-btn" onclick="openDMS('new-mid-lon')">DMS →°</button></label><input type="number" step="0.0001" id="new-mid-lon" placeholder="2.60"></div>
-      </div>
+      <div class="creator-section-title">📍 POINTS MILIEUX DE TRAJET</div>
+      <div class="creator-sub" style="margin:-.3rem 0 .7rem;">Générés automatiquement selon la distance (1 point tous les <span id="mid-step-label">100</span> km) — ajuste-les si besoin.</div>
+      <div id="mid-points-container"></div>
+      <button type="button" onclick="regenerateMidPoints(true)" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#cce0f0;border-radius:6px;padding:.4rem .8rem;font-size:11.5px;cursor:pointer;margin-top:.3rem;">↻ Régénérer sur la ligne géodésique</button>
     </div>
 
     <div class="creator-section">
       <div class="creator-section-title">📏 DISTANCE &amp; AZIMUT</div>
       <div class="creator-grid cols3">
-        <div class="creator-field"><label>Distance (km)</label><input type="number" step="0.1" id="new-dist" placeholder="395" oninput="runUX2Detection()"></div>
+        <div class="creator-field"><label>Distance (km)</label><input type="number" step="0.1" id="new-dist" placeholder="395" oninput="runUX2Detection();regenerateMidPoints()"></div>
         <div class="creator-field"><label>Azimut (°)</label><input type="text" id="new-azimut" placeholder="221°–236°"></div>
         <div class="creator-field"><label>Type de trajet</label><select id="new-type" onchange="runUX2Detection()"><option value="montagne_pyrenees">⛰️ Montagne</option><option value="mediterranee_corse">🌊 Maritime méditerranéen</option><option value="mediterranee_marin">⛵ Marin côtier (strict)</option></select></div>
       </div>
@@ -4093,7 +4092,7 @@ const SPOTS = [
   {
     id: 'cret', name: 'Crêt de la Perdrix', target: '→ Pyrénées', color: '#38bdf8', country: 'fr',
     obs: { lat: 45.4167, lon: 4.2167, alt: 1432 },
-    mid: { lat: 44.02, lon: 2.60 },
+    mid: [{ lat: 44.02, lon: 2.60 }],
     tgt: { lat: 42.655, lon: 0.730, alt: 3143 },
     dist_km: 395, azimut: '221°–236°', type: 'montagne_pyrenees',
     criteria: { wind_elim:30, wind_ok:20 }
@@ -4101,7 +4100,7 @@ const SPOTS = [
   {
     id: 'mezenc', name: 'Mont Mézenc', target: '→ Pyrénées', color: '#34d399', country: 'fr',
     obs: { lat: 44.9033, lon: 4.1875, alt: 1754 },
-    mid: { lat: 44.1, lon: 2.8 },
+    mid: [{ lat: 44.1, lon: 2.8 }],
     tgt: { lat: 42.655, lon: 0.730, alt: 3143 },
     dist_km: 390, azimut: '49°–57°', type: 'montagne_pyrenees',
     criteria: { wind_elim:30, wind_ok:20 }
@@ -4109,7 +4108,7 @@ const SPOTS = [
   {
     id: 'puydome', name: 'Puy de Dôme', target: '→ Pyrénées', color: '#c084fc', country: 'fr',
     obs: { lat: 45.7733, lon: 2.965, alt: 1465 },
-    mid: { lat: 43.5, lon: 1.8 },
+    mid: [{ lat: 43.5, lon: 1.8 }],
     tgt: { lat: 42.655, lon: 0.730, alt: 3143 },
     dist_km: 380, azimut: '~200°', type: 'montagne_pyrenees',
     criteria: { wind_elim:30, wind_ok:20 }
@@ -4117,7 +4116,7 @@ const SPOTS = [
   {
     id: 'lozere', name: 'Mont Lozère', target: '→ Corse · 479 km', color: '#fbbf24', country: 'fr',
     obs: { lat: 44.432, lon: 3.737, alt: 1699 },
-    mid: { lat: 42.5, lon: 6.5 },
+    mid: [{ lat: 42.5, lon: 6.5 }],
     tgt: { lat: 42.376, lon: 8.936, alt: 2706 },
     dist_km: 479, azimut: '116.61°', type: 'mediterranee_corse',
     criteria: { wind_elim:50, wind_ok:35, wind_min:15 }
@@ -4125,7 +4124,7 @@ const SPOTS = [
   {
     id: 'kelibia', name: 'Fort de Kelibia', target: '→ Monastir · 120 km', color: '#22d3ee', country: 'tn',
     obs: { lat: 36.85, lon: 11.10, alt: 152 },
-    mid: { lat: 36.9, lon: 11.5 },
+    mid: [{ lat: 36.9, lon: 11.5 }],
     tgt: { lat: 35.77, lon: 10.83, alt: 30 },
     dist_km: 120, azimut: '~195°', type: 'mediterranee_marin',
     criteria: { wind_elim:25, wind_ok:20 }
@@ -4133,7 +4132,7 @@ const SPOTS = [
   {
     id: 'zaghouan', name: 'Djebel Zaghouan', target: '→ Etna · 459 km', color: '#fb7185', country: 'tn',
     obs: { lat: 36.3986, lon: 10.1469, alt: 700 },
-    mid: { lat: 37.07, lon: 12.55 },
+    mid: [{ lat: 37.07, lon: 12.55 }],
     tgt: { lat: 37.748, lon: 14.999, alt: 3357 },
     dist_km: 459, azimut: '69°', type: 'mediterranee_marin',
     criteria: { wind_elim:25, wind_ok:20 }
@@ -4942,15 +4941,20 @@ async function fetchSpot(spot, pastDays = 0) {
 
   try {
    const base = `https://api.open-meteo.com/v1/forecast?forecast_days=7${pastDays > 0 ? `&past_days=${pastDays}` : ''}&daily=sunrise,sunset&timezone=auto`;
+  // NOTE : spot.mid est désormais un tableau (norme V2.1, cf normalizeMidPoints()).
+  // Le moteur météo n'utilise encore qu'un point milieu de référence par requête API
+  // (getPrimaryMidPoint = point central du tableau) — l'agrégation pondérée sur TOUS
+  // les points milieux est prévue en phase suivante, pas encore câblée ici.
+  const _midRef = getPrimaryMidPoint(spot) || { lat: (spot.obs.lat+spot.tgt.lat)/2, lon: (spot.obs.lon+spot.tgt.lon)/2 };
   const urlObs = `${base}&latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=${params}`;
-  const urlMid = `${base}&latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=visibility,cloud_cover_low,relative_humidity_2m,dew_point_2m,cape,wind_speed_80m,wind_speed_120m,relative_humidity_850hPa`;
+  const urlMid = `${base}&latitude=${_midRef.lat}&longitude=${_midRef.lon}&hourly=visibility,cloud_cover_low,relative_humidity_2m,dew_point_2m,cape,wind_speed_80m,wind_speed_120m,relative_humidity_850hPa`;
  // AOD — 3 points : obs, mid, tgt (worst-case)
   const _aqBase = 'https://air-quality-api.open-meteo.com/v1/air-quality';
   const _aqPast = pastDays > 0 ? `&past_days=${pastDays}` : '';
   // aod550nm = AOD total colonne à 550 nm (meilleur proxy dispo via Open-Meteo air-quality)
   // aod550nm_bc (basse couche 0-3km) n'est pas exposé séparément — on utilise aod550nm comme proxy
   const urlDustObs = `${_aqBase}?latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=dust,pm10,aerosol_optical_depth&timezone=auto${_aqPast}`;
-  const urlDust    = `${_aqBase}?latitude=${spot.mid.lat}&longitude=${spot.mid.lon}&hourly=dust,pm10,aerosol_optical_depth&timezone=auto${_aqPast}`;
+  const urlDust    = `${_aqBase}?latitude=${_midRef.lat}&longitude=${_midRef.lon}&hourly=dust,pm10,aerosol_optical_depth&timezone=auto${_aqPast}`;
   const urlDustTgt = `${_aqBase}?latitude=${spot.tgt.lat}&longitude=${spot.tgt.lon}&hourly=dust,pm10,aerosol_optical_depth&timezone=auto${_aqPast}`;
   // U2 — ERA5 pressure levels pour calcul κ ITU-R P.453
   const urlPres = `https://api.open-meteo.com/v1/forecast?latitude=${spot.obs.lat}&longitude=${spot.obs.lon}&hourly=temperature_1000hPa,temperature_925hPa,temperature_850hPa,temperature_700hPa,temperature_600hPa,temperature_500hPa,temperature_400hPa,temperature_300hPa,relative_humidity_1000hPa,relative_humidity_925hPa,relative_humidity_850hPa,relative_humidity_700hPa,relative_humidity_600hPa,relative_humidity_500hPa,relative_humidity_400hPa,relative_humidity_300hPa,geopotential_height_1000hPa,geopotential_height_925hPa,geopotential_height_850hPa,geopotential_height_700hPa,geopotential_height_600hPa,geopotential_height_500hPa,geopotential_height_400hPa,geopotential_height_300hPa&forecast_days=7${pastDays > 0 ? `&past_days=${pastDays}` : ''}&timezone=auto`;
@@ -7418,6 +7422,76 @@ function _vldBearingDeg(lat1, lon1, lat2, lon2) {
   return (toDeg(Math.atan2(y, x)) + 360) % 360;
 }
 
+/* ══════════════════════════════════════════════════════════════
+   POINTS MILIEUX MULTIPLES (norme V2.1)
+   spot.mid passe d'un objet unique {lat,lon} à un tableau
+   [{lat,lon}, ...]. Ces fonctions gèrent la génération auto
+   (1 point tous les VLD_MID_STEP_KM) et la migration transparente
+   des anciens spots (objet unique) vers le nouveau format.
+   ══════════════════════════════════════════════════════════════ */
+
+// Pas kilométrique entre deux points milieux consécutifs.
+// Ajustable selon retours terrain (transitions de masses d'air observées).
+const VLD_MID_STEP_KM = 100;
+
+/**
+ * Nombre de points milieux recommandé pour une distance donnée.
+ * Toujours au moins 1 point, +1 tous les VLD_MID_STEP_KM.
+ * Ex (step=100) : 50km→1, 120km→2, 250km→3, 380km→4, 480km→5
+ */
+function computeMidPointCount(distanceKm, stepKm) {
+  const step = stepKm || VLD_MID_STEP_KM;
+  if (!distanceKm || distanceKm <= 0) return 1;
+  return 1 + Math.floor(distanceKm / step);
+}
+
+/**
+ * Génère N points milieux répartis à intervalles réguliers sur la
+ * ligne géodésique obs → tgt (orthodromie), N déterminé par la distance.
+ * @returns {Array<{lat:number, lon:number}>}
+ */
+function generateMidPoints(obsLat, obsLon, tgtLat, tgtLon, distanceKm, stepKm) {
+  const n = computeMidPointCount(distanceKm, stepKm);
+  const points = [];
+  for (let i = 1; i <= n; i++) {
+    const f = i / (n + 1);
+    const { lat, lon } = _vldGreatCircleInterp(obsLat, obsLon, tgtLat, tgtLon, f);
+    points.push({ lat: Math.round(lat * 10000) / 10000, lon: Math.round(lon * 10000) / 10000 });
+  }
+  return points;
+}
+
+/**
+ * Normalise spot.mid vers le nouveau format tableau, quelle que soit
+ * la forme d'origine (ancien objet unique, tableau déjà conforme, ou
+ * absent). Ne mute jamais l'objet passé — retourne un nouveau tableau.
+ * C'est LE point d'entrée à utiliser partout où on lit les points milieux.
+ */
+function normalizeMidPoints(spot) {
+  if (!spot) return [];
+  const mid = spot.mid;
+  if (Array.isArray(mid)) {
+    return mid.filter(p => p && Number.isFinite(p.lat) && Number.isFinite(p.lon));
+  }
+  if (mid && Number.isFinite(mid.lat) && Number.isFinite(mid.lon)) {
+    // Ancien format objet unique → migration transparente en tableau à 1 point.
+    return [{ lat: mid.lat, lon: mid.lon }];
+  }
+  // Pas de mid du tout : fallback calculé à partir de obs/tgt si dispo.
+  if (spot.obs && spot.tgt && Number.isFinite(spot.obs.lat) && Number.isFinite(spot.tgt.lat)) {
+    const m = _vldGreatCircleInterp(spot.obs.lat, spot.obs.lon, spot.tgt.lat, spot.tgt.lon, 0.5);
+    return [{ lat: m.lat, lon: m.lon }];
+  }
+  return [];
+}
+
+/** Point milieu "de référence" (le plus central) — utilisé partout où une seule requête API est encore faite sur un point milieu unique (compat le temps de la migration du moteur météo). */
+function getPrimaryMidPoint(spot) {
+  const pts = normalizeMidPoints(spot);
+  if (!pts.length) return null;
+  return pts[Math.floor((pts.length - 1) / 2)];
+}
+
 /**
  * Construit la ligne de visée échantillonnée OBS → CIBLE (cahier des
  * charges §5). Retourne nSeg+1 points normalisés, chacun prêt à recevoir
@@ -9506,7 +9580,8 @@ function renderMapSpots() {
     const color = scoreColor(score);
     const obsLL  = [spot.obs.lat, spot.obs.lon];
     const tgtLL  = [spot.tgt.lat, spot.tgt.lon];
-    const midLL  = spot.mid ? [spot.mid.lat, spot.mid.lon]
+    const _midRefMap = getPrimaryMidPoint(spot);
+    const midLL  = _midRefMap ? [_midRefMap.lat, _midRefMap.lon]
                              : [(spot.obs.lat+spot.tgt.lat)/2, (spot.obs.lon+spot.tgt.lon)/2];
 
     bounds.push(obsLL);
@@ -9651,6 +9726,66 @@ function isMistralRelevant(obsLat, obsLon, type) {
   return obsLat > 42 && obsLon >= 3 && obsLon <= 9 && isMaritime;
 }
 
+// ═══════════════════════════════════════════════════
+// POINTS MILIEUX DYNAMIQUES — Créateur de Spot
+// ═══════════════════════════════════════════════════
+let _creatorMidPoints = []; // état courant des points milieux du formulaire
+
+/** Redessine les fenêtres lat/lon des points milieux dans le créateur. */
+function renderMidPointsUI() {
+  const container = document.getElementById('mid-points-container');
+  if (!container) return;
+  container.innerHTML = _creatorMidPoints.map((p, i) => `
+    <div class="creator-grid" style="margin-bottom:.5rem;">
+      <div class="creator-field"><label>Point milieu ${i + 1} — Latitude (°)</label>
+        <input type="number" step="0.0001" class="mid-pt-lat" data-idx="${i}" value="${p.lat ?? ''}" oninput="_creatorMidPoints[${i}].lat = parseFloat(this.value)">
+      </div>
+      <div class="creator-field"><label>Point milieu ${i + 1} — Longitude (°)</label>
+        <input type="number" step="0.0001" class="mid-pt-lon" data-idx="${i}" value="${p.lon ?? ''}" oninput="_creatorMidPoints[${i}].lon = parseFloat(this.value)">
+      </div>
+    </div>
+  `).join('');
+  const stepLabel = document.getElementById('mid-step-label');
+  if (stepLabel) stepLabel.textContent = VLD_MID_STEP_KM;
+}
+
+/**
+ * Recalcule le nombre de points milieux nécessaires selon la distance et
+ * régénère leurs positions par interpolation géodésique obs→tgt.
+ * @param {boolean} forceRegeneratePositions - si true, écrase aussi les valeurs
+ *   déjà saisies à la main (utilisé par le bouton "Régénérer"). Sinon, on
+ *   préserve les points existants et on n'ajoute/retire que ce qui manque,
+ *   pour ne pas effacer un ajustement manuel de l'utilisateur.
+ */
+function regenerateMidPoints(forceRegeneratePositions) {
+  const obsLat = parseFloat(document.getElementById('new-obs-lat').value);
+  const obsLon = parseFloat(document.getElementById('new-obs-lon').value);
+  const tgtLat = parseFloat(document.getElementById('new-tgt-lat').value);
+  const tgtLon = parseFloat(document.getElementById('new-tgt-lon').value);
+  let dist = parseFloat(document.getElementById('new-dist').value);
+
+  // Distance non saisie mais coords dispo → on la calcule pour déterminer N
+  if ((isNaN(dist) || dist <= 0) && !isNaN(obsLat) && !isNaN(obsLon) && !isNaN(tgtLat) && !isNaN(tgtLon)) {
+    dist = _vldHaversineKm(obsLat, obsLon, tgtLat, tgtLon);
+  }
+  if (isNaN(dist) || dist <= 0) return; // pas assez d'infos, on ne touche à rien
+
+  const targetCount = computeMidPointCount(dist);
+  const haveCoords = !isNaN(obsLat) && !isNaN(obsLon) && !isNaN(tgtLat) && !isNaN(tgtLon);
+  const autoPoints = haveCoords ? generateMidPoints(obsLat, obsLon, tgtLat, tgtLon, dist) : [];
+
+  if (forceRegeneratePositions || _creatorMidPoints.length === 0) {
+    _creatorMidPoints = autoPoints.length ? autoPoints : Array.from({ length: targetCount }, () => ({ lat: null, lon: null }));
+  } else {
+    // Ajuste juste le NOMBRE de points, en gardant les valeurs déjà saisies.
+    while (_creatorMidPoints.length < targetCount) {
+      _creatorMidPoints.push(autoPoints[_creatorMidPoints.length] || { lat: null, lon: null });
+    }
+    _creatorMidPoints.length = targetCount; // tronque si distance réduite
+  }
+  renderMidPointsUI();
+}
+
 function runUX2Detection() {
   const obsLat = parseFloat(document.getElementById('new-obs-lat').value);
   const obsLon = parseFloat(document.getElementById('new-obs-lon').value);
@@ -9769,9 +9904,6 @@ function createSpot() {
   const tgtLon = parseFloat(document.getElementById('new-tgt-lon').value);
   const tgtAlt = parseInt(document.getElementById('new-tgt-alt').value);
   
-  const midLat = parseFloat(document.getElementById('new-mid-lat').value);
-  const midLon = parseFloat(document.getElementById('new-mid-lon').value);
-  
   const distance = parseFloat(document.getElementById('new-dist').value);
   const azimut = document.getElementById('new-azimut').value.trim();
   const type = document.getElementById('new-type').value;
@@ -9781,11 +9913,14 @@ function createSpot() {
     dust:    document.getElementById('part-dust').checked,
   };
   
+  // Points milieux : lus depuis l'état dynamique du créateur (norme V2.1, tableau).
+  const midPoints = (_creatorMidPoints || []).filter(p => p && Number.isFinite(p.lat) && Number.isFinite(p.lon));
+  
   // Validation
   if (!name || !target || isNaN(obsLat) || isNaN(obsLon) || isNaN(obsAlt) || 
       isNaN(tgtLat) || isNaN(tgtLon) || isNaN(tgtAlt) || 
-      isNaN(midLat) || isNaN(midLon) || isNaN(distance) || !azimut) {
-    alert('⚠️ Remplis TOUS les champs obligatoires !');
+      midPoints.length === 0 || isNaN(distance) || !azimut) {
+    alert('⚠️ Remplis TOUS les champs obligatoires (au moins un point milieu valide) !');
     return;
   }
   
@@ -9794,7 +9929,7 @@ function createSpot() {
   const newSpot = {
     id, name, target, color, country,
     obs: { lat: obsLat, lon: obsLon, alt: obsAlt },
-    mid: { lat: midLat, lon: midLon },
+    mid: midPoints,
     tgt: { lat: tgtLat, lon: tgtLon, alt: tgtAlt },
     dist_km: distance,
     azimut: azimut,
@@ -10040,8 +10175,10 @@ function editCustomSpot(id) {
   document.getElementById('new-tgt-lat').value = s.tgt?.lat || '';
   document.getElementById('new-tgt-lon').value = s.tgt?.lon || '';
   document.getElementById('new-tgt-alt').value = s.tgt?.alt || '';
-  document.getElementById('new-mid-lat').value = s.mid?.lat || '';
-  document.getElementById('new-mid-lon').value = s.mid?.lon || '';
+  // Points milieux : normalise l'ancien format objet unique vers un tableau si besoin.
+  _creatorMidPoints = normalizeMidPoints(s).map(p => ({ lat: p.lat, lon: p.lon }));
+  if (_creatorMidPoints.length === 0) _creatorMidPoints = [{ lat: null, lon: null }];
+  renderMidPointsUI();
   document.getElementById('new-dist').value = s.dist_km || '';
   document.getElementById('new-azimut').value = s.azimut || '';
   if (s.type) document.getElementById('new-type').value = s.type;
@@ -10120,8 +10257,8 @@ function resetCreatorForm() {
   document.getElementById('new-tgt-lat').value = '';
   document.getElementById('new-tgt-lon').value = '';
   document.getElementById('new-tgt-alt').value = '';
-  document.getElementById('new-mid-lat').value = '';
-  document.getElementById('new-mid-lon').value = '';
+  _creatorMidPoints = [{ lat: null, lon: null }];
+  renderMidPointsUI();
   document.getElementById('new-dist').value = '';
   document.getElementById('new-azimut').value = '';
   document.querySelectorAll('.creator-checkbox input').forEach(c => c.checked = false);
