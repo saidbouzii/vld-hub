@@ -5427,7 +5427,18 @@ function getScore(fc, di) {
   return fc[di].hourlyScores?.[parseFloat(tw)] ?? fc[di].score;
 }
 
-function getIRScore(fc, di) {
+// Ratio de diffusion Rayleigh entre le visible (~550nm, référence du module
+// Koschmieder principal) et l'IR proche (~850nm, filtre de Saïd) : sigma ∝ λ^-4,
+// (850/550)^-4 ≈ 1/5.7 → valeur ronde par défaut, paramétrable. Cf. correction
+// "le module IR n'hérite pas de l'extinction Koschmieder du module principal" :
+// avant ce fix, le score IR ignorait totalement la portée optique calculée
+// ailleurs (§11d / h.kosch_sigma) et pouvait rester "FAVORABLE" sur une cible
+// que le module principal jugeait hors de portée.
+const IR_RATIO_RAYLEIGH_VS_VISIBLE = 5;
+// Seuil de détection de contraste — même valeur que KOSCH_EPSILON du module principal (§11d).
+const IR_KOSCH_EPSILON = 0.02;
+
+function getIRScore(fc, di, spot) {
   if (!fc || !fc[di]) return null;
   const h = fc[di].raw || {};
   // PWV — total_column_integrated_water_vapour (kg/m2 ≈ mm)
@@ -5453,18 +5464,56 @@ function getIRScore(fc, di) {
   const cloudPts = cl <= 5 ? 15
     : cl >= 60 ? 0
     : Math.round(15 * (1 - (cl - 5) / 55));
+
+  // ── Correction 1 : portée optique IR (hérite de l'extinction Koschmieder) ──
+  // sigma_ir dérivé de sigma_visible déjà calculé par le module principal
+  // (§11d, h.kosch_sigma), pas d'un calcul indépendant qui ignore la brume/AOD.
+  const distKm = spot?.dist_km ?? null;
+  let outOfRangeIr = false;
+  let dVisIr = null;
+  if (h.kosch_sigma !== null && h.kosch_sigma !== undefined && distKm !== null && distKm > 0) {
+    const sigmaIr = h.kosch_sigma / IR_RATIO_RAYLEIGH_VS_VISIBLE;
+    const C0 = h.kosch_C0 ?? 1.0;
+    dVisIr = -Math.log(IR_KOSCH_EPSILON / C0) / sigmaIr;
+    outOfRangeIr = distKm > dVisIr;
+  }
+
+  // ── Correction 2 : nuages moyens/hauts bloquent l'IR comme le visible ──
+  // La diffusion de Mie (gouttelettes d'eau d'un nuage opaque) est quasi
+  // indépendante de la longueur d'onde — contrairement à la diffusion Rayleigh
+  // (brume/aérosols fins) que l'IR traverse mieux. Avant ce fix, seule la
+  // nébulosité basse était scorée : un ciel à 40% de nuages moyens et 28% de
+  // nuages hauts (bloquant la ligne de visée dans le module principal) ne
+  // pénalisait pas du tout le score IR.
+  const cm = h.cloud_mid ?? 0;
+  const ch = h.cloud_high ?? 0;
+  const midHighMax = Math.max(cm, ch);
+  // Même barème (0-15 pts) et mêmes seuils que le critère nuages bas ci-dessus,
+  // partagé avec le module principal plutôt que réinventé.
+  const midHighCloudPts = midHighMax <= 5 ? 15
+    : midHighMax >= 60 ? 0
+    : Math.round(15 * (1 - (midHighMax - 5) / 55));
+
   // Filtre recommandé
   let filterReco = '720nm';
   if (pwv !== null && spread !== null) {
     if (pwv < 15 && spread > 12) filterReco = '920nm';
     else if (pwv < 25 && spread > 8) filterReco = '850nm';
   }
-  const total = Math.min(100, Math.max(0, pwvPts + spreadPts + visPts + cloudPts));
-  return { score: total, pwvPts, spreadPts, visPts, cloudPts, pwv, spread, vis, cl, filterReco };
+  // Barème étendu à 115 pts max (40+25+20+15+15) avec l'ajout du critère nuages
+  // moyens/hauts — rescale proportionnellement sur 100 plutôt qu'une soustraction
+  // fixe, pour ne pas fausser les scores bas.
+  const rawTotal = pwvPts + spreadPts + visPts + cloudPts + midHighCloudPts;
+  let total = Math.min(100, Math.max(0, Math.round(rawTotal * 100 / 115)));
+  if (outOfRangeIr) {
+    // Cible hors de portée même en IR : plafonne le score plutôt que de l'ignorer.
+    total = Math.min(total, 25);
+  }
+  return { score: total, pwvPts, spreadPts, visPts, cloudPts, midHighCloudPts, pwv, spread, vis, cl, cm, ch, filterReco, outOfRangeIr, dVisIr, distKm };
 }
 
-function getIRScoreVal(fc, di) {
-  const ir = getIRScore(fc, di);
+function getIRScoreVal(fc, di, spot) {
+  const ir = getIRScore(fc, di, spot);
   return ir ? ir.score : null;
 }
 
@@ -5609,7 +5658,7 @@ function renderMatrixGroupedRows(loading, days) {
           if(loading) return `<td><div class="dcell loading">…</div></td>`;
           if(!fc) return `<td><div class="dcell empty">—</div></td>`;
           const sc=getScore(fc,di), isBest=di===bestDay;
-          const irSc=getIRScoreVal(fc,di);
+          const irSc=getIRScoreVal(fc,di,s);
           const irDot=(sc<75 && irSc>=75)?'<span class="ir-dot"></span>':'';
           return `<td><div class="dcell ${cellClass(sc)} ${isBest?'best-day':''}">${irDot}${sc}</div></td>`;
         }).join('')}
@@ -5852,12 +5901,13 @@ function openScoreModal(dataB64) {
     ${v2Summary.cloud != null ? `<div class="sep-item">☁️ Nuages (trajet dégagé) : <strong>${Math.round(v2Summary.cloud)}/100</strong></div>` : ''}
     ${v2Summary.refraction != null ? `<div class="sep-item">📐 Trajet de la lumière (réfraction) : <strong>${Math.round(v2Summary.refraction)}/100</strong></div>` : ''}
     ${v2Summary.seeingArcsec != null ? `<div class="sep-item">🌀 Flou attendu (turbulence) : <strong>${v2Summary.seeingArcsec.toFixed(2)}″</strong>${v2Summary.legacySeeingArcsec != null ? ` <span style="color:var(--text3)">(ancienne estimation : ${v2Summary.legacySeeingArcsec.toFixed(2)}″)</span>` : ''}</div>` : ''}
-    ${v2Summary.optical != null ? `<div class="sep-item">🔭 Résolution optique (instrument) : <strong>${Math.round(v2Summary.optical)}/100</strong></div>` : ''}
+    ${v2Summary.resolutionEffective != null ? `<div class="sep-item">🔭 Résolution effective attendue (instrument + turbulence du jour) : <strong>${Math.round(v2Summary.resolutionEffective)}/100</strong>${v2Summary.effectiveResolutionArcsec != null ? ` <span style="color:var(--text3)">(${v2Summary.effectiveResolutionArcsec.toFixed(2)}″)</span>` : ''}</div>` : ''}
+    ${v2Summary.optical != null ? `<div class="sep-item" style="color:var(--text3)">🔭 Ancien score résolution instrument (statique, non pondéré) : ${Math.round(v2Summary.optical)}/100</div>` : ''}
     ${v2Summary.solar != null ? `<div class="sep-item">☀️ Géométrie solaire (contre-jour/rasant/face) : <strong>${Math.round(v2Summary.solar)}/100</strong></div>`
       : (v2Summary.solarLightingType === 'NO_SUN' ? `<div class="sep-item" style="color:var(--text3)">☀️ Géométrie solaire : soleil sous l'horizon à cet horaire — exclue de la note</div>` : '')}
     ${v2Summary.synthesis != null ? `<div class="sep-item">🧮 Note globale selon le nouveau calcul : <strong>${v2Summary.synthesis}/100</strong></div>
       <div style="font-size:11px;color:var(--text3);margin:.15rem 0 .5rem;line-height:1.5">
-        Combine, pondérés : Air 30% · Nuages 18% · Réfraction 15% · Turbulence 12% · Optique 10% · Géométrie solaire 15%
+        Combine, pondérés : Air 30% · Nuages 18% · Réfraction 15% · Résolution effective (turbulence + optique instrument) 22% · Géométrie solaire 15%
         (renormalisé si un critère manque ce jour-là). La courbure terrestre (Bislin/globe) n'entre volontairement
         <strong>jamais</strong> dans cette note — elle reste affichée séparément, à titre informatif uniquement.
         Pas encore la note affichée en haut.
@@ -5923,14 +5973,15 @@ function getCreneauBadge() {
 }
 
 function buildIRCard(fc, di, spot, dateLabel) {
-  const ir = getIRScore(fc, di);
+  const ir = getIRScore(fc, di, spot);
   if (!ir) return '';
-  const { score, pwvPts, spreadPts, visPts, cloudPts, pwv, spread, vis, cl, filterReco } = ir;
-  const color = score >= 70 ? '#4ade80' : score >= 45 ? '#fbbf24' : '#f87171';
-  const label = score >= 70 ? 'FAVORABLE' : score >= 45 ? 'CORRECT' : 'DÉFAVORABLE';
+  const { score, pwvPts, spreadPts, visPts, cloudPts, midHighCloudPts, pwv, spread, vis, cl, cm, ch, filterReco, outOfRangeIr, dVisIr, distKm } = ir;
+  const color = outOfRangeIr ? '#f87171' : score >= 70 ? '#4ade80' : score >= 45 ? '#fbbf24' : '#f87171';
+  const label = outOfRangeIr ? 'HORS DE PORTÉE' : score >= 70 ? 'FAVORABLE' : score >= 45 ? 'CORRECT' : 'DÉFAVORABLE';
   const filterColor = filterReco === '920nm' ? '#c084fc' : filterReco === '850nm' ? '#f97316' : '#fbbf24';
   const payload = btoa(unescape(encodeURIComponent(JSON.stringify({
-    score, pwvPts, spreadPts, visPts, cloudPts, pwv, spread, vis, cl, filterReco,
+    score, pwvPts, spreadPts, visPts, cloudPts, midHighCloudPts, pwv, spread, vis, cl, cm, ch, filterReco,
+    outOfRangeIr, dVisIr, distKm,
     spotName: spot.name, dateLabel
   }))));
   return `<div onclick="openIRModal('${payload}')" style="cursor:pointer;background:none;border:none;box-shadow:none;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;align-items:stretch;width:100%;">
@@ -6031,9 +6082,9 @@ function openIPRModal(dataB64) {
 
 function openIRModal(dataB64) {
   const d = JSON.parse(decodeURIComponent(escape(atob(dataB64))));
-  const { score, pwvPts, spreadPts, visPts, cloudPts, pwv, spread, vis, cl, filterReco, spotName, dateLabel } = d;
-  const scColor = score >= 70 ? '#4ade80' : score >= 45 ? '#fbbf24' : '#f87171';
-  const label = score >= 70 ? 'FAVORABLE' : score >= 45 ? 'CORRECT' : 'DÉFAVORABLE';
+  const { score, pwvPts, spreadPts, visPts, cloudPts, midHighCloudPts, pwv, spread, vis, cl, cm, ch, filterReco, outOfRangeIr, dVisIr, distKm, spotName, dateLabel } = d;
+  const scColor = outOfRangeIr ? '#f87171' : score >= 70 ? '#4ade80' : score >= 45 ? '#fbbf24' : '#f87171';
+  const label = outOfRangeIr ? 'HORS DE PORTÉE' : score >= 70 ? 'FAVORABLE' : score >= 45 ? 'CORRECT' : 'DÉFAVORABLE';
   const filterColor = filterReco === '920nm' ? '#c084fc' : filterReco === '850nm' ? '#f97316' : '#fbbf24';
 
   const fmtParam = (icon, name, val, unit, pts, max, verdict) => {
@@ -6053,8 +6104,15 @@ function openIRModal(dataB64) {
   const spreadVerdict = spread === null ? 'Donnée indisponible' : spread >= 15 ? 'Excellent — air très sec en surface' : spread >= 8 ? 'Correct — sécheresse partielle' : 'Faible — air humide en surface';
   const visVerdict = vis >= 40 ? 'Excellente visibilité' : vis >= 25 ? 'Bonne visibilité' : vis >= 15 ? 'Visibilité correcte' : 'Visibilité limitée';
   const cloudVerdict = cl <= 5 ? 'Ciel dégagé — idéal' : cl <= 20 ? 'Quelques nuages bas' : cl <= 40 ? 'Nuages bas modérés' : 'Nuages bas importants';
+  const midHighMax = Math.max(cm ?? 0, ch ?? 0);
+  const midHighVerdict = midHighMax <= 5 ? 'Trajet dégagé en altitude — idéal'
+    : midHighMax <= 20 ? 'Quelques nuages moyens/hauts'
+    : midHighMax <= 40 ? 'Nuages moyens/hauts modérés — coupent la ligne de visée par endroits'
+    : 'Nuages moyens/hauts importants — l\'IR ne les traverse pas (diffusion de Mie, comme le visible)';
 
-  const conseil = score >= 70
+  const conseil = outOfRangeIr
+    ? `Cible hors de portée même en infrarouge (portée IR estimée ≈ ${dVisIr != null ? Math.round(dVisIr) : '—'} km pour ${distKm != null ? Math.round(distKm) : '—'} km à parcourir). L'avantage Rayleigh de l'IR ne suffit pas à compenser l'extinction sur cette distance — inutile de tenter la session IR aujourd'hui.`
+    : score >= 70
     ? `Conditions excellentes pour la photo IR NIR. Filtre <strong style="color:${filterColor}">${filterReco}</strong> recommandé pour maximiser la pénétration atmosphérique.`
     : score >= 45
     ? `Conditions correctes. Préférez le filtre <strong style="color:${filterColor}">${filterReco}</strong> pour un bon compromis qualité/luminosité.`
@@ -6072,17 +6130,20 @@ function openIRModal(dataB64) {
       <span style="font-size:18px;letter-spacing:.1em;color:${scColor};font-weight:700">${label}</span>
       <span style="margin-left:16px;font-size:15px;color:${filterColor}">⬛ Filtre conseillé : <strong>${filterReco}</strong></span>
     </div>
+    ${outOfRangeIr ? `<div class="sep-item" style="background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.3);border-radius:8px;padding:.6rem .8rem;margin-bottom:.75rem;color:#f87171;font-weight:600;font-family:'Inter','Helvetica Neue',sans-serif;font-size:13px">⚠️ Cible hors de portée même en IR — portée IR estimée ≈ ${dVisIr != null ? Math.round(dVisIr) : '—'} km pour ${distKm != null ? Math.round(distKm) : '—'} km à parcourir.</div>` : ''}
     <div class="sep-section sep-good">📊 Paramètres atmosphériques IR</div>
     ${fmtParam('💧', 'Vapeur eau colonne (PWV)', pwv, ' mm', pwvPts, 40, pwvVerdict)}
     ${fmtParam('🌡️', 'Sécheresse T-Td (spread)', spread, '°C', spreadPts, 25, spreadVerdict)}
     ${fmtParam('👁️', 'Visibilité obs.', vis > 0 ? '' : '', '', visPts, 20, visVerdict)}
     ${fmtParam('☁️', 'Nébulosité basse', cl, '%', cloudPts, 15, cloudVerdict)}
+    ${fmtParam('⛅', 'Nuages moyens/hauts (bloquent l\'IR aussi)', midHighMax, '%', midHighCloudPts, 15, midHighVerdict)}
     <div class="sep-section sep-bad">💡 Conseil terrain</div>
     <div class="sep-item" style="color:var(--text2);line-height:1.6;font-size:14px;font-family:'Inter','Helvetica Neue',sans-serif">${conseil}</div>
     <div style="margin-top:.75rem;padding:.75rem;background:rgba(0,212,255,.05);border-radius:8px;border:1px solid rgba(0,212,255,.1)">
       <div style="font-size:11px;color:var(--text3);font-family:'Inter','Helvetica Neue',sans-serif;line-height:1.6">
-        ℹ️ Score basé sur : PWV colonne (40pts) · Spread T-Td (25pts) · Visibilité (20pts) · Nuages bas (15pts)<br>
-        Diffusion Rayleigh ~5× inférieure à 850nm vs 550nm — l'IR traverse la brume légère mieux que le visible.
+        ℹ️ Score basé sur : PWV colonne (40pts) · Spread T-Td (25pts) · Visibilité (20pts) · Nuages bas (15pts) · Nuages moyens/hauts (15pts, recalé sur 100)<br>
+        Diffusion Rayleigh ~5× inférieure à 850nm vs 550nm sur la brume/aérosols fins — mais les nuages moyens/hauts opaques (diffusion de Mie) bloquent l'IR quasi comme le visible.<br>
+        Portée optique IR recalculée à partir de l'extinction Koschmieder du module principal (σ_IR ≈ σ_visible / ${IR_RATIO_RAYLEIGH_VS_VISIBLE}) — le score est plafonné si la cible reste hors de portée même en IR.
       </div>
     </div>
   `;
@@ -6197,6 +6258,8 @@ function renderDayRow(dayData, date, spot) {
         cloud: v2.score.cloud,
         optical: v2.score.optical,
         turbulence: v2.score.turbulence,
+        resolutionEffective: v2.score.resolutionEffective,
+        effectiveResolutionArcsec: v2.optical.effectiveResolutionArcsec,
         solar: v2.score.solar,
         solarLightingType: v2.solar.lightingType,
         synthesis: v2.score.synthesis,
@@ -6250,7 +6313,7 @@ function renderDayRow(dayData, date, spot) {
     </div>
     <div class="drow-body" id="${did}">
       <div class="drow-left"><div class="mb-grid">${renderMeteoButtons(items)}</div>${explainRow}<img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/bandeau4communaute.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;">${communityBanner}</div>
-      <div class="drow-right">${renderNewCurveBlock(spot,k)}<img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/bandeau2optique.png" alt="" style="width:100%;height:66px;object-fit:cover;object-position:center;border-radius:10px;display:block;margin:.75rem 0;">${renderKMini(k,h,spot,getIRScore(forecasts[spot.id], day))}${renderAngularResolutionBlock(h, spot, getApertureMm())}<img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/bandeau3relief.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;margin:.75rem 0;">${renderHWTBlock(spot)}</div>
+      <div class="drow-right">${renderNewCurveBlock(spot,k)}<img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/bandeau2optique.png" alt="" style="width:100%;height:66px;object-fit:cover;object-position:center;border-radius:10px;display:block;margin:.75rem 0;">${renderKMini(k,h,spot,getIRScore(forecasts[spot.id], day, spot))}${renderAngularResolutionBlock(h, spot, getApertureMm())}<img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/bandeau3relief.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;margin:.75rem 0;">${renderHWTBlock(spot)}</div>
     </div>
   </div>`;
 }
@@ -8476,8 +8539,15 @@ const VLD_SYNTHESIS_WEIGHTS_V1 = Object.freeze({
   atmosphere: 0.30,
   cloud:      0.18,
   refraction: 0.15,
-  turbulence: 0.12,
-  optical:    0.10,
+  // "resolutionEffective" fusionne l'ancien couple turbulence (0.12) + optical (0.10) —
+  // cf. audit correction "résolution optique instrument toujours 100/100" : le critère
+  // optical seul saturait à 100 dès que N (nb d'éléments résolus) dépassait 10, ce qui
+  // arrive presque systématiquement sur des cibles VLD (montagnes) vs la résolution
+  // instrument+seeing — il n'apportait donc aucune variabilité journalière réelle.
+  // resolutionEffective score désormais directement sur effectiveResolutionArcsec
+  // (déjà combiné diffraction+seeing+pixel par computeOpticalResolutionV2), qui LUI
+  // varie chaque jour avec la turbulence. Poids combiné = 0.12 + 0.10 = 0.22.
+  resolutionEffective: 0.22,
   solar:      0.15
 });
 
@@ -8616,7 +8686,7 @@ function computeWeightedSynthesisV2(subscores, regimeRes, elimRes) {
   const weights = VLD_SYNTHESIS_WEIGHTS_V1;
   // geometry (courbure/Bislin) volontairement absent : cf. §22 révisé ci-dessus.
   // solar (géométrie solaire) inclus depuis V2.0-K : cf. commentaire des poids.
-  const keys = ['atmosphere', 'cloud', 'refraction', 'turbulence', 'optical', 'solar'];
+  const keys = ['atmosphere', 'cloud', 'refraction', 'resolutionEffective', 'solar'];
 
   const available = keys.filter(k => subscores[k] != null && isFinite(subscores[k]));
   if (available.length === 0) {
@@ -8787,18 +8857,32 @@ function wrapLegacyResult(spot, h, k, refractionLevelsOverride, turbulenceOverri
   v2.score.cloud = cloudRes.cloudBlockPct != null ? (100 - cloudRes.cloudBlockPct) : null; // 100 = trajet dégagé, comparatif uniquement (V2.0-H)
   // Mapping indicatif N (nb d'éléments résolus) → /100, mêmes paliers que le niveau
   // affiché sur la carte legacy (N<1 invisible, <3 point, <10 silhouette, ≥10 détail).
-  // Comparatif uniquement (V2.0-I), comme les autres sous-scores V2.
+  // INFORMATIF UNIQUEMENT désormais — cf. audit correction : ce mapping sature à 100
+  // dès que N≥10, ce qui arrive presque systématiquement sur des cibles VLD (grandes
+  // montagnes) et rendait ce sous-score quasi invariant jour après jour malgré son
+  // poids de 10% dans l'ancienne synthèse. Conservé pour affichage seul (plus utilisé
+  // dans VLD_SYNTHESIS_WEIGHTS_V1 / computeWeightedSynthesisV2).
   v2.score.optical = opticalRes.N == null ? null
     : opticalRes.N < 1  ? Math.max(0, opticalRes.N * 30)
     : opticalRes.N < 3  ? 30 + ((opticalRes.N - 1) / 2) * 30
     : opticalRes.N < 10 ? 60 + ((opticalRes.N - 3) / 7) * 40
     : 100;
-  // Sous-score turbulence (§22) — basé sur le seeing physique V2.1 quand dispo,
-  // sinon repli sur le score heuristique legacy (0-10) ramené sur 100.
-  // Barème de départ (heuristique, à calibrer) : 1" → 100, dégradation ensuite.
+  // Sous-score turbulence (§22) — conservé pour affichage/comparaison seul,
+  // n'entre plus dans la synthèse pondérée (remplacé par resolutionEffective ci-dessous).
   v2.score.turbulence = opticalSeeingArcsec != null
     ? Math.max(0, Math.min(100, 100 - (opticalSeeingArcsec - 1) * 12))
     : (turbulenceRes.score != null ? Math.max(0, 100 - turbulenceRes.score * 10) : null);
+  // "Résolution effective attendue" (§22 révisé, correction fusion optical+turbulence) :
+  // effectiveResolutionArcsec (computeOpticalResolutionV2, V2.0-I) combine déjà
+  // diffraction (fixe, instrument) ET seeing (variable, turbulence du jour) — c'est
+  // ce nombre en arcsec, pas le mapping N ci-dessus, qui doit porter le poids dans la
+  // synthèse : il varie réellement chaque jour avec les conditions atmosphériques,
+  // contrairement à v2.score.optical qui restait bloqué à 100/100. Même barème que
+  // l'ancien score turbulence (1" → 100, dégradation ensuite) pour rester cohérent
+  // avec les seuils déjà calibrés à l'oeil sur le terrain.
+  v2.score.resolutionEffective = opticalRes.effectiveResolutionArcsec != null
+    ? Math.max(0, Math.min(100, 100 - (opticalRes.effectiveResolutionArcsec - 1) * 12))
+    : v2.score.turbulence;
   // Sous-score géométrie (§22) — fraction de la hauteur cible réellement visible.
   const targetTotalHeightM = spot.tgt?.alt ?? null;
   v2.score.geometry = (targetTotalHeightM && targetTotalHeightM > 0)
