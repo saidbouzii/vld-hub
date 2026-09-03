@@ -6194,7 +6194,7 @@ function openIRModal(dataB64) {
 
 function renderDayRow(dayData, date, spot) {
   const {hasElim,day} = dayData;
-  const score = getScore(forecasts[spot.id], day);
+  const score = getDisplayScore(forecasts[spot.id], day, spot);
   const h = dayData.raw || {};
   const cls=cellClass(score), sc=scoreColor(score), isToday=day===0;
   const did=`dr-${spot.id}-${day}`;
