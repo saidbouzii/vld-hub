@@ -2540,6 +2540,9 @@ tr.country-group-row td{border-bottom:1px solid rgba(255,255,255,.08);background
     <button class="tnav-btn" id="tnav-m14" onclick="setDayOffset(-14)" title="J-14 à J-8 (passé)">◀◀ J-14</button>
     <button class="tnav-btn" id="tnav-m7"  onclick="setDayOffset(-7)"  title="J-7 à J-1 (passé)">◀ J-7</button>
     <button class="tnav-btn tnav-active" id="tnav-0" onclick="setDayOffset(0)" title="Aujourd'hui → J+6 (prévisions)">⚡ Maintenant</button>
+    <span style="width:1px;align-self:stretch;background:rgba(255,255,255,.12);margin:0 .1rem;"></span>
+    <button class="tnav-btn tnav-active" id="score-mode-classic" onclick="setScoreMode('classic')" title="Afficher le score classique (spectre visible)">☀️ Classique</button>
+    <button class="tnav-btn" id="score-mode-ir" onclick="setScoreMode('ir')" title="Afficher le score infrarouge (défiltré / filtre IR)">🔴 Infrarouge</button>
   </div>
   <div id="time-nav-hint" style="display:none;text-align:center;font-size:10px;font-family:var(--mono);color:var(--amber);padding:.2rem .6rem .3rem;background:rgba(251,146,60,.06);border-radius:8px;margin-bottom:.4rem;">
     🕐 Mode historique — données Open-Meteo réanalysées
@@ -2565,6 +2568,7 @@ tr.country-group-row td{border-bottom:1px solid rgba(255,255,255,.08);background
     ⊞ VUE SEMAINE — SCORE /100 PAR MATIN
     <span id="score-legend-chevron" style="font-size:14px;color:var(--cyan);margin-left:.5rem;transition:transform .3s;display:inline-block;">▼</span>
     <span style="font-size:13px;color:var(--cyan);margin-left:.5rem;">ℹ︎</span>
+    <span id="score-mode-badge" style="font-size:10px;font-family:var(--mono);letter-spacing:.05em;margin-left:.6rem;padding:.15rem .55rem;border-radius:20px;border:1px solid rgba(0,212,255,.25);background:rgba(0,212,255,.06);color:var(--cyan);vertical-align:middle;">☀️ SCORE CLASSIQUE</span>
   </div>
 
   <div id="score-legend-panel" style="display:none;background:rgba(5,11,18,.97);color:var(--text);border-radius:16px;padding:1.1rem 1.3rem;margin-bottom:.75rem;border:1px solid rgba(0,212,255,.15);box-shadow:0 8px 40px rgba(0,0,0,.7);font-family:var(--mono);font-size:12px;line-height:1.7;backdrop-filter:blur(20px);">
@@ -5374,6 +5378,40 @@ function dayLabel(d){ return d.toLocaleDateString('fr-FR',{weekday:'short',day:'
 // ── Navigation temporelle ──────────────────────────────────────────────────
 let _dayOffset = 0; // 0 = futur (prévisions), -7 = J-7, -14 = J-14, 7 = J+7
 
+// ── Mode de scoring affiché dans la matrice : 'classic' (défaut) ou 'ir' ────
+// Ne modifie aucune donnée : bascule juste quel score (getScore / getIRScoreVal)
+// alimente le tableau, pour ne jamais afficher les deux côte à côte.
+let _scoreMode = 'classic';
+
+function setScoreMode(mode) {
+  if (mode !== 'classic' && mode !== 'ir') return;
+  _scoreMode = mode;
+  document.getElementById('score-mode-classic')?.classList.toggle('tnav-active', mode === 'classic');
+  document.getElementById('score-mode-ir')?.classList.toggle('tnav-active', mode === 'ir');
+  const badge = document.getElementById('score-mode-badge');
+  if (badge) {
+    badge.textContent = mode === 'ir' ? '🔴 SCORE INFRAROUGE' : '☀️ SCORE CLASSIQUE';
+    badge.style.color = mode === 'ir' ? '#ff6b6b' : 'var(--cyan)';
+    badge.style.borderColor = mode === 'ir' ? 'rgba(255,107,107,.3)' : 'rgba(0,212,255,.25)';
+    badge.style.background = mode === 'ir' ? 'rgba(255,107,107,.08)' : 'rgba(0,212,255,.06)';
+  }
+  if (Object.keys(forecasts).length > 0) {
+    renderMatrix(false);
+    renderCards(false);
+  }
+}
+
+// Score affiché dans la matrice/cartes selon le mode actif — ne touche pas
+// getScore() ni la modale détail jour, qui continuent d'exposer les deux
+// scores explicitement l'un sous l'autre quand on ouvre le détail d'un jour.
+function getDisplayScore(fc, di, spot) {
+  if (_scoreMode === 'ir') {
+    const irSc = getIRScoreVal(fc, di, spot);
+    return irSc !== null ? irSc : getScore(fc, di);
+  }
+  return getScore(fc, di);
+}
+
 function setDayOffset(offset) {
   _dayOffset = offset;
 
@@ -5648,7 +5686,7 @@ function renderMatrixGroupedRows(loading, days) {
     const rows = !showRows ? '' : spots.map(s => {
       const fc=forecasts[s.id];
       let bestDay=-1,bestSc=-1;
-      if(fc) fc.forEach((d,i)=>{const sc=getScore(fc,i); if(sc>bestSc){bestSc=sc;bestDay=i;}});
+      if(fc) fc.forEach((d,i)=>{const sc=getDisplayScore(fc,i,s); if(sc>bestSc){bestSc=sc;bestDay=i;}});
       return `<tr>
         <td class="spot-nm">
           <span class="snm" style="color:${s.color}">${s.name}</span>
@@ -5657,9 +5695,12 @@ function renderMatrixGroupedRows(loading, days) {
         ${days.map((_,di)=>{
           if(loading) return `<td><div class="dcell loading">…</div></td>`;
           if(!fc) return `<td><div class="dcell empty">—</div></td>`;
-          const sc=getScore(fc,di), isBest=di===bestDay;
-          const irSc=getIRScoreVal(fc,di,s);
-          const irDot=(sc<75 && irSc>=75)?'<span class="ir-dot"></span>':'';
+          const sc=getDisplayScore(fc,di,s), isBest=di===bestDay;
+          // Le point ne sert qu'en mode classique, comme indice qu'un basculement en
+          // infrarouge révèlerait un meilleur score — inutile (et redondant) une fois
+          // qu'on est déjà en mode infrarouge.
+          const irSc=_scoreMode==='classic' ? getIRScoreVal(fc,di,s) : null;
+          const irDot=(_scoreMode==='classic' && sc<75 && irSc>=75)?'<span class="ir-dot"></span>':'';
           return `<td><div class="dcell ${cellClass(sc)} ${isBest?'best-day':''}">${irDot}${sc}</div></td>`;
         }).join('')}
       </tr>`;
@@ -5777,7 +5818,7 @@ function renderCardsGrouped(loading, days) {
 function renderSpotCard(s, loading, days) {
     const fc=forecasts[s.id];
     let bestSc=0,bestDayLabel='';
-       if(fc){let bi=0;fc.forEach((d,i)=>{const sc=getScore(fc,i); if(sc>bestSc){bestSc=sc;bi=i;}});bestDayLabel=fullLabel(days[bi]);}
+       if(fc){let bi=0;fc.forEach((d,i)=>{const sc=getDisplayScore(fc,i,s); if(sc>bestSc){bestSc=sc;bi=i;}});bestDayLabel=fullLabel(days[bi]);}
     const body=loading
       ?`<div class="scard-body" id="sdb-${s.id}"><div style="padding:1rem;color:var(--text3);font-size:13px;font-family:var(--mono)">Chargement…</div></div>`
       :!fc
