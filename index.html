@@ -2644,6 +2644,7 @@ tr.country-group-row td{border-bottom:1px solid rgba(255,255,255,.08);background
         <button class="comm-nav-btn" id="comm-btn-captures" onclick="switchCommView('captures')">📸 Captures extrêmes</button>
         <button class="comm-nav-btn" id="comm-btn-materiel" onclick="switchCommView('materiel')">🔭 Matériel & Technique</button>
         <button class="comm-nav-btn" id="comm-btn-spots" onclick="switchCommView('spots')">📍 Spots & Reconnaissances</button>
+        <button class="comm-nav-btn" id="comm-btn-beta" onclick="switchCommView('beta')" style="border-color:rgba(167,139,250,.3);">🧪 Bêta Testeurs</button>
       </nav>
     </aside>
 
@@ -10695,7 +10696,17 @@ const FORUM_RUBRIQUES = {
   captures:   { label: '📸 Captures extrêmes',       icon: '📸', color: '#86efac', tags: ['Photo','VLD','Record','Pyrenées','Alpes','Corse'] },
   materiel:   { label: '🔭 Matériel & Technique',    icon: '🔭', color: '#f59e0b', tags: ['Optique','Digiscoping','Sony','Kowa','Nikon','Astuce'] },
   spots:      { label: '📍 Spots & Reconnaissances', icon: '📍', color: '#f87171', tags: ['Spot','Reco','France','Tunisie','Nouveau spot'] },
+  'beta-classique': { label: '🧪 Bêta · Vision Classique', icon: '🧪', color: '#a78bfa', tags: ['Calibration','VIS','Terrain'], beta: true },
+  'beta-ir':        { label: '🧪 Bêta · Vision Infrarouge', icon: '🔴', color: '#fb7185', tags: ['Calibration','IR','720nm','850nm','920nm','Full Spectrum'], beta: true },
 };
+
+// Filtres disponibles pour la "molette" du rapport bêta infrarouge
+const IR_FILTER_OPTIONS = [
+  { value: '720',  label: '720 nm' },
+  { value: '850',  label: '850 nm' },
+  { value: '920',  label: '920 nm' },
+  { value: 'full', label: 'Full Spectrum (sans filtre)' },
+];
 
 // ── Rendu liste des posts ─────────────────────────────────────────────────
 async function forumRenderPosts(rubrique, container) {
@@ -10734,6 +10745,7 @@ async function forumRenderPosts(rubrique, container) {
         + '<span class="forum-card-date">' + dateStr + '</span>'
         + '</div>'
         + '<div class="forum-card-title">' + escHtml(p.title) + '</div>'
+        + betaSummaryHtml(rubrique, p.beta)
         + '<div class="forum-card-body">' + escHtml(preview) + '</div>'
         + (tags ? '<div class="forum-card-tags">' + tags + '</div>' : '')
         + '<div class="forum-card-footer" onclick="event.stopPropagation()">'
@@ -10781,6 +10793,119 @@ window.forumDelete = async function(postId, rubrique) {
 };
 
 // ── Éditeur d'article (création) ─────────────────────────────────────────
+// ── Champs structurés additionnels pour les rapports bêta ───────────────────
+// Ces valeurs sont stockées comme champs séparés sur le doc Firestore (pas
+// fondues dans le texte libre) afin de rester exploitables pour la
+// calibration V2.5 (tri, export, croisement des données).
+function betaExtraFieldsHtml(rubrique, existing) {
+  const d = (existing && existing.beta) || {};
+  const inputStyle = 'width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(0,212,255,.15);border-radius:8px;color:#e0eeff;font-size:12px;padding:.4rem .6rem;box-sizing:border-box;';
+  const lblStyle = 'font-size:9px;color:rgba(150,180,210,.6);font-family:var(--display);letter-spacing:.08em;display:block;margin-bottom:.3rem;';
+
+  if (rubrique === 'beta-ir') {
+    const wheel = IR_FILTER_OPTIONS.map(function(f) {
+      const checked = d.filter === f.value ? ' checked' : (!d.filter && f.value === '850' ? ' checked' : '');
+      return '<label style="flex:1;min-width:80px;text-align:center;background:rgba(255,255,255,.05);border:1px solid rgba(251,113,133,.25);border-radius:8px;padding:.4rem .3rem;cursor:pointer;font-size:11px;color:var(--text2);">'
+        + '<input type="radio" name="beta-ir-filter" value="' + f.value + '"' + checked + ' style="margin-right:.3rem;">' + f.label + '</label>';
+    }).join('');
+
+    return '<div style="background:rgba(251,113,133,.06);border:1px solid rgba(251,113,133,.2);border-radius:10px;padding:.8rem;margin-bottom:.9rem;">'
+      + '<label style="' + lblStyle + '">FILTRE UTILISÉ</label>'
+      + '<div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.8rem;">' + wheel + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.6rem;">'
+      + '<div><label style="' + lblStyle + '">SPOT / CIBLE</label><input id="beta-f-spot" type="text" value="' + escHtml(d.spot||'') + '" placeholder="Ex : Zaghouan → Etna" style="' + inputStyle + '"></div>'
+      + '<div><label style="' + lblStyle + '">DISTANCE (KM)</label><input id="beta-f-distance" type="number" step="0.1" value="' + (d.distance!=null?d.distance:'') + '" style="' + inputStyle + '"></div>'
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.6rem;">'
+      + '<div><label style="' + lblStyle + '">PWV (MM)</label><input id="beta-f-pwv" type="number" step="0.1" value="' + (d.pwv!=null?d.pwv:'') + '" style="' + inputStyle + '"></div>'
+      + '<div><label style="' + lblStyle + '">SPREAD T−TD (°C)</label><input id="beta-f-spread" type="number" step="0.1" value="' + (d.spread!=null?d.spread:'') + '" style="' + inputStyle + '"></div>'
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.6rem;">'
+      + '<div><label style="' + lblStyle + '">NÉBULOSITÉ BASSE (%)</label><input id="beta-f-cloudlow" type="number" step="1" value="' + (d.cloudLow!=null?d.cloudLow:'') + '" style="' + inputStyle + '"></div>'
+      + '<div><label style="' + lblStyle + '">NÉBULOSITÉ MOY/HAUTE (%)</label><input id="beta-f-cloudmidhigh" type="number" step="1" value="' + (d.cloudMidHigh!=null?d.cloudMidHigh:'') + '" style="' + inputStyle + '"></div>'
+      + '</div>'
+      + '<label style="' + lblStyle + '">RÉSULTAT OBTENU</label>'
+      + '<div style="display:flex;gap:.3rem;">' + [1,2,3,4,5].map(function(n) {
+          const checked = d.rating === n ? ' checked' : '';
+          return '<label style="flex:1;text-align:center;background:rgba(255,255,255,.05);border:1px solid rgba(251,113,133,.2);border-radius:6px;padding:.3rem 0;cursor:pointer;font-size:11px;color:var(--text2);"><input type="radio" name="beta-ir-rating" value="' + n + '"' + checked + ' style="margin-right:.25rem;">' + n + '</label>';
+        }).join('') + '</div>'
+      + '</div>';
+  }
+
+  if (rubrique === 'beta-classique') {
+    const conds = [
+      { v: 'excellentes', l: '🟢 Excellentes' },
+      { v: 'moyennes',    l: '🟡 Moyennes' },
+      { v: 'faibles',     l: '🔴 Faibles' },
+    ];
+    return '<div style="background:rgba(167,139,250,.06);border:1px solid rgba(167,139,250,.2);border-radius:10px;padding:.8rem;margin-bottom:.9rem;">'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.6rem;">'
+      + '<div><label style="' + lblStyle + '">SPOT / CIBLE</label><input id="beta-f-spot" type="text" value="' + escHtml(d.spot||'') + '" placeholder="Ex : Zaghouan → Etna" style="' + inputStyle + '"></div>'
+      + '<div><label style="' + lblStyle + '">DISTANCE (KM)</label><input id="beta-f-distance" type="number" step="0.1" value="' + (d.distance!=null?d.distance:'') + '" style="' + inputStyle + '"></div>'
+      + '</div>'
+      + '<label style="' + lblStyle + '">CONDITIONS OBSERVÉES</label>'
+      + '<div style="display:flex;gap:.4rem;flex-wrap:wrap;">' + conds.map(function(c) {
+          const checked = d.conditions === c.v ? ' checked' : (!d.conditions && c.v === 'moyennes' ? ' checked' : '');
+          return '<label style="flex:1;min-width:100px;text-align:center;background:rgba(255,255,255,.05);border:1px solid rgba(167,139,250,.2);border-radius:8px;padding:.4rem .3rem;cursor:pointer;font-size:11px;color:var(--text2);"><input type="radio" name="beta-classique-cond" value="' + c.v + '"' + checked + ' style="margin-right:.3rem;">' + c.l + '</label>';
+        }).join('') + '</div>'
+      + '</div>';
+  }
+
+  return '';
+}
+
+// Lit les champs bêta actuellement affichés dans l'éditeur (retourne null si non applicable)
+function readBetaExtraFields(rubrique) {
+  if (rubrique === 'beta-ir') {
+    const filterEl = document.querySelector('input[name="beta-ir-filter"]:checked');
+    const ratingEl = document.querySelector('input[name="beta-ir-rating"]:checked');
+    const num = function(id) { const v = document.getElementById(id).value; return v === '' ? null : parseFloat(v); };
+    return {
+      filter: filterEl ? filterEl.value : null,
+      spot: document.getElementById('beta-f-spot').value.trim(),
+      distance: num('beta-f-distance'),
+      pwv: num('beta-f-pwv'),
+      spread: num('beta-f-spread'),
+      cloudLow: num('beta-f-cloudlow'),
+      cloudMidHigh: num('beta-f-cloudmidhigh'),
+      rating: ratingEl ? parseInt(ratingEl.value, 10) : null,
+    };
+  }
+  if (rubrique === 'beta-classique') {
+    const condEl = document.querySelector('input[name="beta-classique-cond"]:checked');
+    const num = function(id) { const v = document.getElementById(id).value; return v === '' ? null : parseFloat(v); };
+    return {
+      spot: document.getElementById('beta-f-spot').value.trim(),
+      distance: num('beta-f-distance'),
+      conditions: condEl ? condEl.value : null,
+    };
+  }
+  return null;
+}
+
+// Résumé lisible des champs bêta pour l'affichage en tête d'article
+function betaSummaryHtml(rubrique, beta) {
+  if (!beta) return '';
+  const chip = function(t) { return '<span class="comm-metric-chip">' + escHtml(t) + '</span>'; };
+  const chips = [];
+  if (beta.spot) chips.push('📍 ' + beta.spot);
+  if (beta.distance != null) chips.push(beta.distance + ' km');
+  if (rubrique === 'beta-ir') {
+    const fLabel = (IR_FILTER_OPTIONS.find(function(f){ return f.value === beta.filter; }) || {}).label;
+    if (fLabel) chips.push('🎯 ' + fLabel);
+    if (beta.pwv != null) chips.push('PWV ' + beta.pwv + 'mm');
+    if (beta.spread != null) chips.push('Spread ' + beta.spread + '°C');
+    if (beta.cloudLow != null) chips.push('Nuages bas ' + beta.cloudLow + '%');
+    if (beta.cloudMidHigh != null) chips.push('Nuages moy/haut ' + beta.cloudMidHigh + '%');
+    if (beta.rating != null) chips.push('Résultat ' + beta.rating + '/5');
+  } else if (rubrique === 'beta-classique') {
+    const condLabel = beta.conditions === 'excellentes' ? '🟢 Excellentes' : beta.conditions === 'faibles' ? '🔴 Faibles' : beta.conditions === 'moyennes' ? '🟡 Moyennes' : null;
+    if (condLabel) chips.push(condLabel);
+  }
+  if (!chips.length) return '';
+  return '<div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.8rem;">' + chips.map(chip).join('') + '</div>';
+}
+
 window.forumOpenEditor = function(rubrique, postId) {
   if (!window.currentUser) { alert('Connecte-toi (bouton en haut) pour publier un article — ça permet de savoir qui a écrit quoi dans le forum partagé.'); return; }
   const existing = postId ? _forumPostsCache.find(function(p) { return p.id === postId; }) : null;
@@ -10812,6 +10937,9 @@ window.forumOpenEditor = function(rubrique, postId) {
     + '<div><label style="font-size:9px;color:rgba(150,180,210,.6);font-family:var(--display);letter-spacing:.08em;display:block;margin-bottom:.3rem;">TITRE DE L\'ARTICLE</label>'
     + '<input id="fc-title" type="text" value="' + escHtml((existing && existing.title) || '') + '" placeholder="Titre accrocheur…" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(0,212,255,.15);border-radius:8px;color:#e0eeff;font-size:12px;padding:.45rem .7rem;box-sizing:border-box;"></div>'
     + '</div>'
+
+    // Champs spécifiques bêta (calibration) — filtre IR, météo, distance, note
+    + betaExtraFieldsHtml(rubrique, existing)
 
     // Barre d'outils formatting
     + '<div style="display:flex;gap:.4rem;margin-bottom:.4rem;flex-wrap:wrap;">'
@@ -10869,6 +10997,9 @@ window.forumSubmitPost = async function(rubrique, postId) {
   if (!title) { alert('Le titre est requis.'); return; }
   if (!body || body === '<br>') { alert('Le contenu est requis.'); return; }
   const tags = Array.from(document.querySelectorAll('input[name="ftag"]:checked')).map(function(i) { return i.value; });
+  const beta = readBetaExtraFields(rubrique); // null si rubrique non-bêta
+
+  if (rubrique === 'beta-ir' && !beta.filter) { alert('Sélectionne le filtre utilisé (720 / 850 / 920 / Full Spectrum).'); return; }
 
   const submitBtn = document.querySelector('#forum-editor-overlay button[onclick^="forumSubmitPost"]');
   if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '💾 Publication…'; }
@@ -10876,12 +11007,16 @@ window.forumSubmitPost = async function(rubrique, postId) {
   try {
     const fb = window.fbFn;
     if (postId) {
-      await fb.updateDoc(fb.doc(window.db, COMMUNITY_COLLECTION, postId), { author: author, title: title, body: body, tags: tags, edited: Date.now() });
+      const patch = { author: author, title: title, body: body, tags: tags, edited: Date.now() };
+      if (beta) patch.beta = beta;
+      await fb.updateDoc(fb.doc(window.db, COMMUNITY_COLLECTION, postId), patch);
     } else {
-      await fb.addDoc(fb.collection(window.db, COMMUNITY_COLLECTION), {
+      const doc = {
         rubrique: rubrique, author: author, authorUid: window.currentUser.uid,
         title: title, body: body, tags: tags, likes: 0, replies: 0, timestamp: Date.now()
-      });
+      };
+      if (beta) doc.beta = beta;
+      await fb.addDoc(fb.collection(window.db, COMMUNITY_COLLECTION), doc);
     }
     await forumLoadPosts(true);
     forumCloseEditor();
@@ -10916,6 +11051,7 @@ window.forumOpenReader = function(postId) {
     + '<button onclick="forumCloseReader()" style="background:none;border:none;color:rgba(200,220,240,.5);font-size:20px;cursor:pointer;flex-shrink:0;line-height:1;margin-left:1rem;">✕</button>'
     + '</div>'
     + '<hr style="border:none;border-top:1px solid rgba(0,212,255,.1);margin:.8rem 0;">'
+    + betaSummaryHtml(p.rubrique, p.beta)
     + '<div style="font-size:13px;line-height:1.8;color:#cce0f0;">' + p.body + '</div>'
     + (tags ? '<div style="margin-top:1rem;display:flex;gap:.4rem;flex-wrap:wrap;">' + tags + '</div>' : '')
     + '<div style="display:flex;gap:1rem;margin-top:1.2rem;padding-top:.8rem;border-top:1px solid rgba(255,255,255,.06);font-size:11px;color:rgba(150,180,210,.5);">'
@@ -10953,9 +11089,15 @@ window.switchCommView = async function(view) {
   if (!main) return;
 
   const FORUM_VIEWS = ['conditions','captures','materiel','spots'];
+  const BETA_VIEWS = ['beta-classique','beta-ir'];
   if (view === 'journal') {
     _forumLastActiveView = null; // vue privée, pas concernée par le refresh Firestore
     renderJournalView(main);
+  } else if (view === 'beta' || BETA_VIEWS.indexOf(view) !== -1) {
+    const activeBetaBtn = document.getElementById('comm-btn-beta');
+    document.querySelectorAll('.comm-nav-btn').forEach(function(b){ b.classList.remove('active'); });
+    if (activeBetaBtn) activeBetaBtn.classList.add('active');
+    renderBetaShell(main, BETA_VIEWS.indexOf(view) !== -1 ? view : undefined);
   } else if (FORUM_VIEWS.indexOf(view) !== -1) {
     _forumLastActiveView = view;
     await forumRenderPosts(view, main);
@@ -10963,6 +11105,34 @@ window.switchCommView = async function(view) {
     _forumLastActiveView = 'fil';
     await renderFilView(main);
   }
+};
+
+// ── Onglet Bêta Testeurs — coquille avec 2 sous-onglets ────────────────────
+let _betaLastSub = 'beta-classique';
+
+function renderBetaShell(main, forceSub) {
+  if (forceSub) _betaLastSub = forceSub;
+  main.innerHTML = '<div style="margin-bottom:1rem;">'
+    + '<div style="font-family:var(--display);font-size:.75rem;letter-spacing:.1em;color:#a78bfa;margin-bottom:.3rem;">🧪 BÊTA TESTEURS</div>'
+    + '<div style="font-size:11px;color:var(--text3);margin-bottom:.8rem;">Rapports structurés qui servent directement à calibrer le moteur SKY-RANGE. Visible par les bêta-testeurs.</div>'
+    + '<div style="display:flex;gap:.5rem;flex-wrap:wrap;">'
+    + '<button class="comm-nav-btn beta-sub-btn" id="beta-sub-btn-beta-classique" onclick="switchBetaSubView(\'beta-classique\')">🧪 Vision Classique</button>'
+    + '<button class="comm-nav-btn beta-sub-btn" id="beta-sub-btn-beta-ir" onclick="switchBetaSubView(\'beta-ir\')">🔴 Vision Infrarouge</button>'
+    + '</div>'
+    + '</div>'
+    + '<div id="beta-sub-main"></div>';
+  switchBetaSubView(_betaLastSub);
+}
+
+window.switchBetaSubView = async function(sub) {
+  _betaLastSub = sub;
+  _forumLastActiveView = sub; // pour que le refresh Firestore auto retombe sur le bon sous-onglet
+  document.querySelectorAll('.beta-sub-btn').forEach(function(b){ b.classList.remove('active'); });
+  const btn = document.getElementById('beta-sub-btn-' + sub);
+  if (btn) btn.classList.add('active');
+  const subMain = document.getElementById('beta-sub-main');
+  if (!subMain) return;
+  await forumRenderPosts(sub, subMain);
 };
 
 // ── Vue Journal ───────────────────────────────────
