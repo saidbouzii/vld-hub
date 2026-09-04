@@ -10737,6 +10737,7 @@ async function forumRenderPosts(rubrique, container) {
       const dateStr = d.toLocaleDateString('fr-FR', { day:'2-digit', month:'short', year:'numeric' });
       const preview = p.body.replace(/<[^>]*>/g, '').substring(0, 120) + (p.body.length > 120 ? '…' : '');
       const canDelete = myUid && p.authorUid === myUid;
+      const thumb = p.photo ? '<div style="float:right;width:52px;height:40px;border-radius:6px;overflow:hidden;margin-left:.6rem;flex-shrink:0;"><img src="' + p.photo + '" style="width:100%;height:100%;object-fit:cover;"></div>' : '';
 
       html += '<div class="forum-card" onclick="forumOpenReader(&apos;' + p.id + '&apos;)">'
         + '<div class="forum-card-header">'
@@ -10746,7 +10747,7 @@ async function forumRenderPosts(rubrique, container) {
         + '</div>'
         + '<div class="forum-card-title">' + escHtml(p.title) + '</div>'
         + betaSummaryHtml(rubrique, p.beta)
-        + '<div class="forum-card-body">' + escHtml(preview) + '</div>'
+        + '<div class="forum-card-body">' + thumb + escHtml(preview) + '</div>'
         + (tags ? '<div class="forum-card-tags">' + tags + '</div>' : '')
         + '<div class="forum-card-footer" onclick="event.stopPropagation()">'
         + '<span onclick="forumLike(&apos;' + p.id + '&apos;,this,&apos;' + rubrique + '&apos;)">👍 ' + (p.likes || 0) + '</span>'
@@ -10801,6 +10802,13 @@ function betaExtraFieldsHtml(rubrique, existing) {
   const d = (existing && existing.beta) || {};
   const inputStyle = 'width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(0,212,255,.15);border-radius:8px;color:#e0eeff;font-size:12px;padding:.4rem .6rem;box-sizing:border-box;';
   const lblStyle = 'font-size:9px;color:rgba(150,180,210,.6);font-family:var(--display);letter-spacing:.08em;display:block;margin-bottom:.3rem;';
+  const infoBtn = function(key) { return '<span onclick="showBetaInfo(\'' + key + '\')" style="cursor:pointer;margin-left:.3rem;opacity:.8;">ℹ️</span>'; };
+  const photoPreview = existing && existing.photo
+    ? '<div style="margin-bottom:.5rem;border-radius:8px;overflow:hidden;max-width:160px;"><img src="' + existing.photo + '" style="width:100%;display:block;"></div>'
+    : '';
+  const photoField = '<label style="' + lblStyle + '">📷 PHOTO (fortement recommandé)</label>'
+    + photoPreview
+    + '<input type="file" accept="image/*" id="beta-f-photo" style="width:100%;font-size:11px;color:var(--text2);margin-bottom:.6rem;">';
 
   if (rubrique === 'beta-ir') {
     const wheel = IR_FILTER_OPTIONS.map(function(f) {
@@ -10812,17 +10820,18 @@ function betaExtraFieldsHtml(rubrique, existing) {
     return '<div style="background:rgba(251,113,133,.06);border:1px solid rgba(251,113,133,.2);border-radius:10px;padding:.8rem;margin-bottom:.9rem;">'
       + '<label style="' + lblStyle + '">FILTRE UTILISÉ</label>'
       + '<div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.8rem;">' + wheel + '</div>'
+      + photoField
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.6rem;">'
       + '<div><label style="' + lblStyle + '">SPOT / CIBLE</label><input id="beta-f-spot" type="text" value="' + escHtml(d.spot||'') + '" placeholder="Ex : Zaghouan → Etna" style="' + inputStyle + '"></div>'
       + '<div><label style="' + lblStyle + '">DISTANCE (KM)</label><input id="beta-f-distance" type="number" step="0.1" value="' + (d.distance!=null?d.distance:'') + '" style="' + inputStyle + '"></div>'
       + '</div>'
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.6rem;">'
-      + '<div><label style="' + lblStyle + '">PWV (MM)</label><input id="beta-f-pwv" type="number" step="0.1" value="' + (d.pwv!=null?d.pwv:'') + '" style="' + inputStyle + '"></div>'
-      + '<div><label style="' + lblStyle + '">SPREAD T−TD (°C)</label><input id="beta-f-spread" type="number" step="0.1" value="' + (d.spread!=null?d.spread:'') + '" style="' + inputStyle + '"></div>'
+      + '<div><label style="' + lblStyle + '">PWV (MM)' + infoBtn('pwv') + '</label><input id="beta-f-pwv" type="number" step="0.1" value="' + (d.pwv!=null?d.pwv:'') + '" style="' + inputStyle + '"></div>'
+      + '<div><label style="' + lblStyle + '">SPREAD T−TD (°C)' + infoBtn('spread') + '</label><input id="beta-f-spread" type="number" step="0.1" value="' + (d.spread!=null?d.spread:'') + '" style="' + inputStyle + '"></div>'
       + '</div>'
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.6rem;">'
-      + '<div><label style="' + lblStyle + '">NÉBULOSITÉ BASSE (%)</label><input id="beta-f-cloudlow" type="number" step="1" value="' + (d.cloudLow!=null?d.cloudLow:'') + '" style="' + inputStyle + '"></div>'
-      + '<div><label style="' + lblStyle + '">NÉBULOSITÉ MOY/HAUTE (%)</label><input id="beta-f-cloudmidhigh" type="number" step="1" value="' + (d.cloudMidHigh!=null?d.cloudMidHigh:'') + '" style="' + inputStyle + '"></div>'
+      + '<div><label style="' + lblStyle + '">NÉBULOSITÉ BASSE (%)' + infoBtn('cloudLow') + '</label><input id="beta-f-cloudlow" type="number" step="1" value="' + (d.cloudLow!=null?d.cloudLow:'') + '" style="' + inputStyle + '"></div>'
+      + '<div><label style="' + lblStyle + '">NÉBULOSITÉ MOY/HAUTE (%)' + infoBtn('cloudMidHigh') + '</label><input id="beta-f-cloudmidhigh" type="number" step="1" value="' + (d.cloudMidHigh!=null?d.cloudMidHigh:'') + '" style="' + inputStyle + '"></div>'
       + '</div>'
       + '<label style="' + lblStyle + '">RÉSULTAT OBTENU</label>'
       + '<div style="display:flex;gap:.3rem;">' + [1,2,3,4,5].map(function(n) {
@@ -10839,6 +10848,7 @@ function betaExtraFieldsHtml(rubrique, existing) {
       { v: 'faibles',     l: '🔴 Faibles' },
     ];
     return '<div style="background:rgba(167,139,250,.06);border:1px solid rgba(167,139,250,.2);border-radius:10px;padding:.8rem;margin-bottom:.9rem;">'
+      + photoField
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.6rem;">'
       + '<div><label style="' + lblStyle + '">SPOT / CIBLE</label><input id="beta-f-spot" type="text" value="' + escHtml(d.spot||'') + '" placeholder="Ex : Zaghouan → Etna" style="' + inputStyle + '"></div>'
       + '<div><label style="' + lblStyle + '">DISTANCE (KM)</label><input id="beta-f-distance" type="number" step="0.1" value="' + (d.distance!=null?d.distance:'') + '" style="' + inputStyle + '"></div>'
@@ -10905,6 +10915,49 @@ function betaSummaryHtml(rubrique, beta) {
   if (!chips.length) return '';
   return '<div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.8rem;">' + chips.map(chip).join('') + '</div>';
 }
+
+// ── Infobulles explicatives pour les champs de calibration ─────────────────
+const BETA_FIELD_INFO = {
+  pwv: {
+    title: '💧 PWV — Vapeur d\'eau intégrée',
+    text: 'Quantité totale de vapeur d\'eau contenue dans toute la colonne d\'air au-dessus du spot, en millimètres. Plus la valeur est basse, plus l\'air est sec et plus l\'infrarouge proche traverse bien l\'atmosphère.<br><br>'
+      + '<b>Où la trouver :</b> directement dans SKY-RANGE, sur la fiche du spot → carte score infrarouge → bouton « Comprendre le score IR » → ligne « Vapeur eau colonne (PWV) ». C\'est la même donnée que le moteur utilise pour calculer le score.'
+  },
+  spread: {
+    title: '🌡️ Spread T − Td',
+    text: 'Écart entre la température de l\'air et le point de rosée, en °C. Plus l\'écart est grand, plus l\'air est sec (loin de la saturation en humidité) — c\'est favorable à l\'infrarouge.<br><br>'
+      + '<b>Où le trouver :</b> dans SKY-RANGE, sur la fiche météo du spot (température et point de rosée sont affichés séparément) — fais la soustraction, ou regarde directement le détail du score IR qui l\'affiche déjà calculé.'
+  },
+  cloudLow: {
+    title: '☁️ Nébulosité basse',
+    text: 'Pourcentage de couverture nuageuse en basse altitude au-dessus du spot. Un ciel dégagé en basse couche est indispensable — ces nuages bloquent complètement la ligne de visée s\'ils sont présents.<br><br>'
+      + '<b>Où la trouver :</b> dans SKY-RANGE, sur la fiche météo du spot ou dans le détail du score IR (« Nuages bas »).'
+  },
+  cloudMidHigh: {
+    title: '☁️ Nébulosité moyenne / haute',
+    text: 'Pourcentage de couverture nuageuse à moyenne et haute altitude. Même hors de la ligne de visée directe, ces nuages bloquent la lumière car ils sont peu transparents à toutes les longueurs d\'onde (diffusion de Mie) — l\'infrarouge n\'y échappe pas.<br><br>'
+      + '<b>Où la trouver :</b> dans SKY-RANGE, sur la fiche météo du spot ou dans le détail du score IR (« Nuages moyens/hauts »).'
+  },
+};
+
+window.showBetaInfo = function(key) {
+  const info = BETA_FIELD_INFO[key];
+  if (!info) return;
+  var old = document.getElementById('beta-info-overlay');
+  if (old) old.remove();
+  var overlay = document.createElement('div');
+  overlay.id = 'beta-info-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9500;display:flex;align-items:center;justify-content:center;padding:1.2rem;backdrop-filter:blur(4px);';
+  overlay.innerHTML = '<div style="background:#0d1628;border:1px solid rgba(251,113,133,.3);border-radius:14px;max-width:400px;padding:1.2rem;" onclick="event.stopPropagation()">'
+    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.7rem;">'
+    + '<div style="font-family:var(--display);font-size:12px;color:#fb7185;letter-spacing:.05em;">' + info.title + '</div>'
+    + '<button onclick="document.getElementById(\'beta-info-overlay\').remove()" style="background:none;border:none;color:rgba(200,220,240,.5);font-size:18px;cursor:pointer;line-height:1;">✕</button>'
+    + '</div>'
+    + '<div style="font-size:12px;line-height:1.6;color:#cce0f0;">' + info.text + '</div>'
+    + '</div>';
+  overlay.addEventListener('click', function(){ overlay.remove(); });
+  document.body.appendChild(overlay);
+};
 
 window.forumOpenEditor = function(rubrique, postId) {
   if (!window.currentUser) { alert('Connecte-toi (bouton en haut) pour publier un article — ça permet de savoir qui a écrit quoi dans le forum partagé.'); return; }
@@ -11004,11 +11057,33 @@ window.forumSubmitPost = async function(rubrique, postId) {
   const submitBtn = document.querySelector('#forum-editor-overlay button[onclick^="forumSubmitPost"]');
   if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '💾 Publication…'; }
 
+  // ── Lecture + upload de la photo si un fichier a été sélectionné ──
+  var photoInput = document.getElementById('beta-f-photo');
+  var photoFile = photoInput && photoInput.files && photoInput.files[0];
+
+  function readFileAsDataUrl(file) {
+    return new Promise(function(resolve) {
+      var reader = new FileReader();
+      reader.onload = function(ev) { resolve(ev.target.result); };
+      reader.onerror = function() { resolve(null); };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  var photoUrl = null;
+  if (photoFile) {
+    const dataUrl = await readFileAsDataUrl(photoFile);
+    if (dataUrl) {
+      photoUrl = await uploadPhotoToStorage(dataUrl, 'beta_reports/' + (postId || Date.now()) + '_photo');
+    }
+  }
+
   try {
     const fb = window.fbFn;
     if (postId) {
       const patch = { author: author, title: title, body: body, tags: tags, edited: Date.now() };
       if (beta) patch.beta = beta;
+      if (photoUrl) patch.photo = photoUrl;
       await fb.updateDoc(fb.doc(window.db, COMMUNITY_COLLECTION, postId), patch);
     } else {
       const doc = {
@@ -11016,6 +11091,7 @@ window.forumSubmitPost = async function(rubrique, postId) {
         title: title, body: body, tags: tags, likes: 0, replies: 0, timestamp: Date.now()
       };
       if (beta) doc.beta = beta;
+      if (photoUrl) doc.photo = photoUrl;
       await fb.addDoc(fb.collection(window.db, COMMUNITY_COLLECTION), doc);
     }
     await forumLoadPosts(true);
@@ -11052,6 +11128,7 @@ window.forumOpenReader = function(postId) {
     + '</div>'
     + '<hr style="border:none;border-top:1px solid rgba(0,212,255,.1);margin:.8rem 0;">'
     + betaSummaryHtml(p.rubrique, p.beta)
+    + (p.photo ? '<div style="margin-bottom:1rem;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,.08);"><img src="' + p.photo + '" style="width:100%;display:block;max-height:320px;object-fit:cover;"></div>' : '')
     + '<div style="font-size:13px;line-height:1.8;color:#cce0f0;">' + p.body + '</div>'
     + (tags ? '<div style="margin-top:1rem;display:flex;gap:.4rem;flex-wrap:wrap;">' + tags + '</div>' : '')
     + '<div style="display:flex;gap:1rem;margin-top:1.2rem;padding-top:.8rem;border-top:1px solid rgba(255,255,255,.06);font-size:11px;color:rgba(150,180,210,.5);">'
