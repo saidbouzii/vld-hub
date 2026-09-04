@@ -10803,12 +10803,16 @@ function betaExtraFieldsHtml(rubrique, existing) {
   const inputStyle = 'width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(0,212,255,.15);border-radius:8px;color:#e0eeff;font-size:12px;padding:.4rem .6rem;box-sizing:border-box;';
   const lblStyle = 'font-size:9px;color:rgba(150,180,210,.6);font-family:var(--display);letter-spacing:.08em;display:block;margin-bottom:.3rem;';
   const infoBtn = function(key) { return '<span onclick="showBetaInfo(\'' + key + '\')" style="cursor:pointer;margin-left:.3rem;opacity:.8;">ℹ️</span>'; };
-  const photoPreview = existing && existing.photo
-    ? '<div style="margin-bottom:.5rem;border-radius:8px;overflow:hidden;max-width:160px;"><img src="' + existing.photo + '" style="width:100%;display:block;"></div>'
+  const existingPhotos = (existing && existing.photos) || (existing && existing.photo ? [existing.photo] : []);
+  const photoPreview = existingPhotos.length
+    ? '<div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.5rem;">' + existingPhotos.map(function(url) {
+        return '<div style="border-radius:8px;overflow:hidden;width:70px;height:56px;"><img src="' + url + '" style="width:100%;height:100%;object-fit:cover;"></div>';
+      }).join('') + '</div>'
     : '';
-  const photoField = '<label style="' + lblStyle + '">📷 PHOTO (fortement recommandé)</label>'
+  const photoField = '<label style="' + lblStyle + '">📷 PHOTOS (fortement recommandé — plusieurs possibles)</label>'
     + photoPreview
-    + '<input type="file" accept="image/*" id="beta-f-photo" style="width:100%;font-size:11px;color:var(--text2);margin-bottom:.6rem;">';
+    + (existingPhotos.length ? '<div style="font-size:9px;color:rgba(150,180,210,.5);margin-bottom:.3rem;">Sélectionner de nouvelles photos ci-dessous les ajoutera aux existantes.</div>' : '')
+    + '<input type="file" accept="image/*" multiple id="beta-f-photo" style="width:100%;font-size:11px;color:var(--text2);margin-bottom:.6rem;">';
 
   if (rubrique === 'beta-ir') {
     const wheel = IR_FILTER_OPTIONS.map(function(f) {
@@ -11057,9 +11061,9 @@ window.forumSubmitPost = async function(rubrique, postId) {
   const submitBtn = document.querySelector('#forum-editor-overlay button[onclick^="forumSubmitPost"]');
   if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '💾 Publication…'; }
 
-  // ── Lecture + upload de la photo si un fichier a été sélectionné ──
+  // ── Lecture + upload des photos si des fichiers ont été sélectionnés ──
   var photoInput = document.getElementById('beta-f-photo');
-  var photoFile = photoInput && photoInput.files && photoInput.files[0];
+  var photoFiles = photoInput && photoInput.files ? Array.from(photoInput.files) : [];
 
   function readFileAsDataUrl(file) {
     return new Promise(function(resolve) {
@@ -11070,20 +11074,27 @@ window.forumSubmitPost = async function(rubrique, postId) {
     });
   }
 
-  var photoUrl = null;
-  if (photoFile) {
-    const dataUrl = await readFileAsDataUrl(photoFile);
-    if (dataUrl) {
-      photoUrl = await uploadPhotoToStorage(dataUrl, 'beta_reports/' + (postId || Date.now()) + '_photo');
-    }
+  // Photos déjà présentes si on modifie un rapport existant
+  var existingPost = postId ? _forumPostsCache.find(function(p){ return p.id === postId; }) : null;
+  var existingPhotos = existingPost ? ((existingPost.photos) || (existingPost.photo ? [existingPost.photo] : [])) : [];
+
+  var newPhotoUrls = [];
+  if (photoFiles.length) {
+    const uploads = await Promise.all(photoFiles.map(async function(file, idx) {
+      const dataUrl = await readFileAsDataUrl(file);
+      if (!dataUrl) return null;
+      return uploadPhotoToStorage(dataUrl, 'beta_reports/' + (postId || Date.now()) + '_photo_' + idx);
+    }));
+    newPhotoUrls = uploads.filter(Boolean);
   }
+  var allPhotos = existingPhotos.concat(newPhotoUrls);
 
   try {
     const fb = window.fbFn;
     if (postId) {
       const patch = { author: author, title: title, body: body, tags: tags, edited: Date.now() };
       if (beta) patch.beta = beta;
-      if (photoUrl) patch.photo = photoUrl;
+      if (allPhotos.length) { patch.photos = allPhotos; patch.photo = allPhotos[0]; }
       await fb.updateDoc(fb.doc(window.db, COMMUNITY_COLLECTION, postId), patch);
     } else {
       const doc = {
@@ -11091,7 +11102,7 @@ window.forumSubmitPost = async function(rubrique, postId) {
         title: title, body: body, tags: tags, likes: 0, replies: 0, timestamp: Date.now()
       };
       if (beta) doc.beta = beta;
-      if (photoUrl) doc.photo = photoUrl;
+      if (allPhotos.length) { doc.photos = allPhotos; doc.photo = allPhotos[0]; }
       await fb.addDoc(fb.collection(window.db, COMMUNITY_COLLECTION), doc);
     }
     await forumLoadPosts(true);
@@ -11113,6 +11124,15 @@ window.forumOpenReader = function(postId) {
   const tags = (p.tags || []).map(function(t) { return '<span class="forum-tag">' + escHtml(t) + '</span>'; }).join('');
   const myUid = window.currentUser ? window.currentUser.uid : null;
   const canDelete = myUid && p.authorUid === myUid;
+  const photos = p.photos || (p.photo ? [p.photo] : []);
+
+  const gallery = photos.length
+    ? '<div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem;">' + photos.map(function(url) {
+        return '<div onclick="openBetaLightbox(&apos;' + encodeURIComponent(url) + '&apos;)" style="cursor:zoom-in;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,.08);width:110px;height:88px;flex-shrink:0;background:#000;">'
+          + '<img src="' + url + '" style="width:100%;height:100%;object-fit:contain;">'
+          + '</div>';
+      }).join('') + '</div>'
+    : '';
 
   const overlay = document.createElement('div');
   overlay.id = 'forum-reader-overlay';
@@ -11128,11 +11148,12 @@ window.forumOpenReader = function(postId) {
     + '</div>'
     + '<hr style="border:none;border-top:1px solid rgba(0,212,255,.1);margin:.8rem 0;">'
     + betaSummaryHtml(p.rubrique, p.beta)
-    + (p.photo ? '<div style="margin-bottom:1rem;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,.08);"><img src="' + p.photo + '" style="width:100%;display:block;max-height:320px;object-fit:cover;"></div>' : '')
+    + gallery
     + '<div style="font-size:13px;line-height:1.8;color:#cce0f0;">' + p.body + '</div>'
     + (tags ? '<div style="margin-top:1rem;display:flex;gap:.4rem;flex-wrap:wrap;">' + tags + '</div>' : '')
-    + '<div style="display:flex;gap:1rem;margin-top:1.2rem;padding-top:.8rem;border-top:1px solid rgba(255,255,255,.06);font-size:11px;color:rgba(150,180,210,.5);">'
+    + '<div style="display:flex;gap:1rem;margin-top:1.2rem;padding-top:.8rem;border-top:1px solid rgba(255,255,255,.06);font-size:11px;color:rgba(150,180,210,.5);align-items:center;">'
     + '<span style="cursor:pointer;" onclick="forumLikeReader(&apos;' + p.id + '&apos;,this)">👍 ' + (p.likes||0) + ' j\'aime</span>'
+    + (canDelete ? '<span style="cursor:pointer;color:#00d8ff;" onclick="forumCloseReader();forumOpenEditor(&apos;' + p.rubrique + '&apos;,&apos;' + p.id + '&apos;)">✏️ Modifier</span>' : '')
     + (canDelete ? '<span style="margin-left:auto;cursor:pointer;color:#f87171;" onclick="forumDelete(&apos;' + p.id + '&apos;,&apos;' + p.rubrique + '&apos;);forumCloseReader()">🗑️ Supprimer</span>' : '')
     + '</div>'
     + '</div>';
@@ -11144,6 +11165,20 @@ window.forumOpenReader = function(postId) {
 window.forumCloseReader = function() {
   const el = document.getElementById('forum-reader-overlay');
   if (el) el.remove();
+};
+
+// ── Visionneuse plein écran (sans crop, image entière) ──────────────────
+window.openBetaLightbox = function(encodedUrl) {
+  const url = decodeURIComponent(encodedUrl);
+  var old = document.getElementById('beta-lightbox');
+  if (old) old.remove();
+  var box = document.createElement('div');
+  box.id = 'beta-lightbox';
+  box.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:9600;display:flex;align-items:center;justify-content:center;padding:1rem;';
+  box.innerHTML = '<img src="' + url + '" style="max-width:100%;max-height:100%;object-fit:contain;">'
+    + '<button onclick="document.getElementById(\'beta-lightbox\').remove()" style="position:absolute;top:1rem;right:1.2rem;background:rgba(255,255,255,.1);border:none;color:#fff;font-size:22px;width:38px;height:38px;border-radius:50%;cursor:pointer;line-height:1;">✕</button>';
+  box.addEventListener('click', function(e) { if (e.target === box) box.remove(); });
+  document.body.appendChild(box);
 };
 
 window.forumLikeReader = async function(postId, el) {
