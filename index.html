@@ -8576,39 +8576,45 @@ function computeAtmosphereSubscoreV2(spot, h, aodResPrecomputed) {
     diagnostics.push(vldDiag("ATM_SIGMA_AGGREGATE_FALLBACK", "info", VLD_MODEL_TYPES.HEURISTIC,
       `Sigma pointwise non calculable (OBS/MID incomplets) : repli sur AOD/RH agrégés uniques (comportement d'origine).`));
   } else if (rh !== null) {
-    // §27 — Décision 05/09-5 : quand l'AOD est TOTALEMENT indisponible (aucune
+    // §27 — Décision 05/09-6 : quand l'AOD est TOTALEMENT indisponible (aucune
     // valeur, ni pointwise ni agrégée), le comportement d'origine sautait
     // entièrement la composante extinction — ce qui revient à traiter
     // implicitement "AOD indisponible" comme "extinction nulle", donnant un
     // score Air maximal quelle que soit l'humidité (constat terrain : Mont
-    // Lozère 72% RH → 100/100). Repli minimal : on suppose un AOD de fond
-    // "background" typique (air rural/continental propre, hors pollution/
-    // poussière — valeur HEURISTIC non mesurée, volontairement basse et
-    // documentée) pour que la RH continue au moins à jouer son rôle de
-    // multiplicateur hygroscopique au lieu d'être neutralisée. Nettement
-    // moins fiable qu'un AOD mesuré — reflété dans le modelType HEURISTIC et
-    // le diagnostic ci-dessous, distinct du cas agrégé normal.
-    const AOD_BACKGROUND_FALLBACK = 0.05; // fond continental propre typique
-    const rhFactor = 1 / Math.pow(1 - Math.min(rh, 95) / 100, 0.3);
-    const effBackground = computeAodEffectiveV2(AOD_BACKGROUND_FALLBACK, blh).aodEffective ?? AOD_BACKGROUND_FALLBACK;
-    sigma = Math.max(effBackground * VLD_LEGACY_KOSCH_CALIBRATION.value * rhFactor, 0.0001);
+    // Lozère 72% RH → 100/100). Un premier repli (05/09-5, AOD de fond fictif
+    // 0.05 × rhFactor Koschmieder) s'est révélé lui aussi trop optimiste : sur
+    // Crêt de la Perdrix à 82% RH, l'extinction restait proche de son maximum
+    // (~93/100) — l'AOD fictif, même multiplié par rhFactor, reste trop faible
+    // pour produire une vraie pénalité une fois passé par la formule physique
+    // (dVis/distance). Remplacé ici par un score RH-only direct et prudent
+    // (bornes de prudence choisies, pas une loi physique) : linéaire de 60/60
+    // à RH≤40% jusqu'à 0/60 à RH≥95%, sans repasser par Koschmieder/dVis.
+    // Volontairement plus sévère qu'un calcul avec AOD réellement mesurée —
+    // c'est le but : aucune mesure d'aérosols disponible pour ce point.
+    const RH_FALLBACK_SCORE_MAX = 40; // %, RH en dessous = 60/60
+    const RH_FALLBACK_SCORE_MIN = 95; // %, RH au-dessus = 0/60
+    const rhOnlyScore = Math.max(0, Math.min(60,
+      60 * (RH_FALLBACK_SCORE_MIN - rh) / (RH_FALLBACK_SCORE_MIN - RH_FALLBACK_SCORE_MAX)));
+    score += rhOnlyScore; maxScore += 60;
     sigmaSource = 'RH_ONLY_FALLBACK';
     diagnostics.push(vldDiag("ATM_SIGMA_RH_ONLY_FALLBACK", "warning", VLD_MODEL_TYPES.HEURISTIC,
-      `AOD totalement indisponible (aucune donnée, ni pointwise ni agrégée) : repli sur un AOD de fond typique non mesuré (${AOD_BACKGROUND_FALLBACK}) × rhFactor(RH=${rh.toFixed(0)}%) — évite qu'une RH élevée n'ait aucun effet faute de donnée AOD (§27, décision 05/09-5). Fiabilité réduite : aucune mesure d'aérosols réelle pour ce point.`));
+      `AOD totalement indisponible (aucune donnée, ni pointwise ni agrégée) : repli RH-only direct et prudent (linéaire ${RH_FALLBACK_SCORE_MAX}%→60/60, ${RH_FALLBACK_SCORE_MIN}%→0/60, bornes de prudence — pas une loi physique), RH=${rh.toFixed(0)}% → ${rhOnlyScore.toFixed(1)}/60 (§27, décision 05/09-6, remplace le fallback AOD fictif 05/09-5 jugé trop optimiste sur cas réel). Fiabilité réduite : aucune mesure d'aérosols pour ce point.`));
   }
 
-  if (sigma !== null && distKm !== null && distKm > 0) {
-    const lt = h._lightingType;
-    const C0 = lt === 'BACKLIGHT_PERFECT' ? 1.3 : lt === 'BACKLIGHT_GOOD' ? 1.15 : lt === 'FRONT_LIGHT' ? 0.8 : 1.0;
-    const dVis = -Math.log(0.02 / C0) / sigma;
-    const ratio = dVis / distKm;
-    const koschScore = ratio >= 1.3 ? 60 : ratio >= 1.0 ? 42 : ratio >= 0.85 ? 18 : 0; // sur 60
-    score += koschScore; maxScore += 60;
-    diagnostics.push(vldDiag("ATM_EXTINCTION_KOSCH", "info", VLD_MODEL_TYPES.EMPIRICAL,
-      `Extinction Koschmieder (sigma source=${sigmaSource}) : ratio dVis/d=${ratio.toFixed(2)} → ${koschScore}/60.`));
-  } else {
-    diagnostics.push(vldDiag("ATM_EXTINCTION_UNAVAILABLE", "warning", VLD_MODEL_TYPES.PROXY,
-      "AOD indisponible : composante extinction non calculable, sous-score basé sur les variables restantes uniquement."));
+  if (sigmaSource !== 'RH_ONLY_FALLBACK') {
+    if (sigma !== null && distKm !== null && distKm > 0) {
+      const lt = h._lightingType;
+      const C0 = lt === 'BACKLIGHT_PERFECT' ? 1.3 : lt === 'BACKLIGHT_GOOD' ? 1.15 : lt === 'FRONT_LIGHT' ? 0.8 : 1.0;
+      const dVis = -Math.log(0.02 / C0) / sigma;
+      const ratio = dVis / distKm;
+      const koschScore = ratio >= 1.3 ? 60 : ratio >= 1.0 ? 42 : ratio >= 0.85 ? 18 : 0; // sur 60
+      score += koschScore; maxScore += 60;
+      diagnostics.push(vldDiag("ATM_EXTINCTION_KOSCH", "info", VLD_MODEL_TYPES.EMPIRICAL,
+        `Extinction Koschmieder (sigma source=${sigmaSource}) : ratio dVis/d=${ratio.toFixed(2)} → ${koschScore}/60.`));
+    } else {
+      diagnostics.push(vldDiag("ATM_EXTINCTION_UNAVAILABLE", "warning", VLD_MODEL_TYPES.PROXY,
+        "AOD indisponible : composante extinction non calculable, sous-score basé sur les variables restantes uniquement."));
+    }
   }
 
   // 2) Dust — une seule fois (V1 la comptait 2× : transparenceAxe + critère §10)
