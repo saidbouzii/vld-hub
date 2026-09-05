@@ -8519,6 +8519,23 @@ function computeAtmosphereSubscoreV2(spot, h, aodResPrecomputed) {
 
   // 1) Extinction Koschmieder sur AOD EFFECTIVE (basse couche via BLH, V2.0-C)
   //    — seule légitime utilisation de RH ici (croissance hygroscopique).
+  //
+  // §26-v2 — Décision 05/09-4 : le patch worst-of-3 AOD/dust précédent (05/09-3)
+  // s'est révélé strictement redondant — h.aod_bc et h.dust sont DÉJÀ des
+  // Math.max(obs, mid, tgt) calculés en amont à la récupération des données
+  // (cf. commentaires ci-dessous pour dust). Il a donc été retiré.
+  //
+  // Le vrai problème identifié : RH n'a pas de point cible (h.rh_tgt n'existe
+  // pas) et n'est jamais couplée point par point à l'AOD — le code prenait une
+  // seule paire (aodColumn agrégé, h.rh au point observateur). Ci-dessous :
+  // calcul du sigma d'extinction séparément pour OBS (aod_obs × rhFactor(h.rh))
+  // et MID (aod_mid × rhFactor(h.rh_mid)), puis on retient le pire des deux —
+  // jamais max(RH) et max(AOD) pris indépendamment, ce qui combinerait deux
+  // endroits du trajet n'ayant jamais coexisté. Si un point n'a pas les deux
+  // valeurs, il est ignoré ; si aucun des deux n'est exploitable, repli exact
+  // sur le comportement d'origine (AOD/RH agrégés uniques). Ne touche ni
+  // sampleWeatherProfile, ni computeCloudPathV2, ni les poids/éliminateurs/
+  // soft caps.
   const aodColumn = h.aod_bc ?? h.aod ?? null;
   const blh = h.blh ?? null;
   const rh = h.rh ?? null;
@@ -8526,10 +8543,36 @@ function computeAtmosphereSubscoreV2(spot, h, aodResPrecomputed) {
   const aodRes = aodResPrecomputed || computeAodEffectiveV2(aodColumn, blh);
   if (!aodResPrecomputed) diagnostics.push(aodRes.diagnostic);
 
-  if (aodRes.aodEffective !== null && distKm !== null && distKm > 0) {
-    const sigmaBase = aodRes.aodEffective * VLD_LEGACY_KOSCH_CALIBRATION.value; // 0.20 legacy, non recalibré (V3)
+  const _atmPointSigma = (aodPoint, rhPoint) => {
+    if (aodPoint == null || !isFinite(aodPoint) || rhPoint == null || !isFinite(rhPoint)) return null;
+    const eff = computeAodEffectiveV2(aodPoint, blh).aodEffective;
+    if (eff == null) return null;
+    const sigmaBase = eff * VLD_LEGACY_KOSCH_CALIBRATION.value;
+    const rhFactor = 1 / Math.pow(1 - Math.min(rhPoint, 95) / 100, 0.3);
+    return Math.max(sigmaBase * rhFactor, 0.0001);
+  };
+  const sigmaObsPoint = _atmPointSigma(h.aod_obs, h.rh);
+  const sigmaMidPoint = _atmPointSigma(h.aod_mid, h.rh_mid);
+  const pointwiseCandidates = [];
+  if (sigmaObsPoint != null) pointwiseCandidates.push({ label: 'OBS', sigma: sigmaObsPoint, aod: h.aod_obs, rh: h.rh });
+  if (sigmaMidPoint != null) pointwiseCandidates.push({ label: 'MID', sigma: sigmaMidPoint, aod: h.aod_mid, rh: h.rh_mid });
+
+  let sigma = null, sigmaSource = null;
+  if (pointwiseCandidates.length > 0) {
+    const worst = pointwiseCandidates.reduce((a, b) => (b.sigma > a.sigma ? b : a));
+    sigma = worst.sigma;
+    sigmaSource = worst.label;
+    diagnostics.push(vldDiag("ATM_SIGMA_POINTWISE", "info", VLD_MODEL_TYPES.EMPIRICAL,
+      `Sigma pointwise (AOD×rhFactor(RH) couplés au même point) : ${pointwiseCandidates.map(c => `${c.label}(AOD=${c.aod.toFixed(3)}, RH=${c.rh.toFixed(0)}%)→σ=${c.sigma.toFixed(5)}`).join(', ')} — pire retenu = ${sigmaSource} (§26-v2, décision 05/09-4).`));
+  } else if (aodRes.aodEffective !== null) {
     const rhFactor = (rh !== null) ? 1 / Math.pow(1 - Math.min(rh, 95) / 100, 0.3) : 1;
-    const sigma = Math.max(sigmaBase * rhFactor, 0.0001);
+    sigma = Math.max(aodRes.aodEffective * VLD_LEGACY_KOSCH_CALIBRATION.value * rhFactor, 0.0001);
+    sigmaSource = 'AGGREGATE';
+    diagnostics.push(vldDiag("ATM_SIGMA_AGGREGATE_FALLBACK", "info", VLD_MODEL_TYPES.HEURISTIC,
+      `Sigma pointwise non calculable (OBS/MID incomplets) : repli sur AOD/RH agrégés uniques (comportement d'origine).`));
+  }
+
+  if (sigma !== null && distKm !== null && distKm > 0) {
     const lt = h._lightingType;
     const C0 = lt === 'BACKLIGHT_PERFECT' ? 1.3 : lt === 'BACKLIGHT_GOOD' ? 1.15 : lt === 'FRONT_LIGHT' ? 0.8 : 1.0;
     const dVis = -Math.log(0.02 / C0) / sigma;
@@ -8537,7 +8580,7 @@ function computeAtmosphereSubscoreV2(spot, h, aodResPrecomputed) {
     const koschScore = ratio >= 1.3 ? 60 : ratio >= 1.0 ? 42 : ratio >= 0.85 ? 18 : 0; // sur 60
     score += koschScore; maxScore += 60;
     diagnostics.push(vldDiag("ATM_EXTINCTION_KOSCH", "info", VLD_MODEL_TYPES.EMPIRICAL,
-      `Extinction Koschmieder (AOD effective basse couche × croissance hygroscopique RH) : ratio dVis/d=${ratio.toFixed(2)} → ${koschScore}/60.`));
+      `Extinction Koschmieder (sigma source=${sigmaSource}) : ratio dVis/d=${ratio.toFixed(2)} → ${koschScore}/60.`));
   } else {
     diagnostics.push(vldDiag("ATM_EXTINCTION_UNAVAILABLE", "warning", VLD_MODEL_TYPES.PROXY,
       "AOD indisponible : composante extinction non calculable, sous-score basé sur les variables restantes uniquement."));
@@ -8850,6 +8893,49 @@ function computeWeightedSynthesisV2(subscores, regimeRes, elimRes) {
     scorePct = Math.min(scorePct, 20); // même plafond que le hardElim legacy (precip>70 → cap 20)
     diagnostics.push(vldDiag("SYNTHESIS_ELIMINATOR_CAP", "warning", VLD_MODEL_TYPES.HEURISTIC,
       `Synthèse plafonnée à 20/100 par hard eliminator(s) (§24), indépendamment de la moyenne pondérée (${Math.round(weighted)}/100).`));
+  }
+
+  // §25 — Plafonds physiques gradués (décision 05/09-2, version prudente v1).
+  // Constat terrain (Mont Mézenc 89/100 malgré RH 87%/nuages moyens 49%) : les
+  // éliminateurs binaires ci-dessus (§24) ne couvrent que les cas extrêmes
+  // (trajet ≥90% bloqué, transmission <5%, précip >70%). Entre ça et "tout va
+  // bien", un mauvais sous-score atmosphere/cloud peut être intégralement
+  // compensé par vent/pression/précipitations favorables dans la moyenne
+  // pondérée — c'est ce qui produit un score final trop optimiste.
+  //
+  // Ces plafonds ne font QUE réduire un score déjà trop haut ; ils ne peuvent
+  // jamais l'augmenter (Math.min uniquement). Ils sont volontairement séparés
+  // des éliminateurs §24 (qui restent inchangés) et n'affectent ni atmSub, ni
+  // computeCloudPathV2, ni aucun sous-score — seulement le résultat final de
+  // cette fonction. Seuils/valeurs de départ HEURISTIC, à valider sur
+  // plusieurs sorties réelles avant d'envisager une refonte de atmSub (§26,
+  // pas encore fait volontairement — cf. décision 05/09-2).
+  const softCaps = [];
+  if (subscores.atmosphere != null && isFinite(subscores.atmosphere)) {
+    if (subscores.atmosphere < 25) {
+      softCaps.push({ cap: 40, reason: `atmosphere ${Math.round(subscores.atmosphere)}/100 < 25` });
+    } else if (subscores.atmosphere < 40) {
+      softCaps.push({ cap: 50, reason: `atmosphere ${Math.round(subscores.atmosphere)}/100 < 40` });
+    }
+  }
+  if (subscores.cloud != null && isFinite(subscores.cloud)) {
+    if (subscores.cloud < 30) {
+      softCaps.push({ cap: 40, reason: `cloud ${Math.round(subscores.cloud)}/100 < 30` });
+    } else if (subscores.cloud < 50) {
+      softCaps.push({ cap: 55, reason: `cloud ${Math.round(subscores.cloud)}/100 < 50` });
+    }
+  }
+
+  if (softCaps.length > 0) {
+    const tightestCap = Math.min(...softCaps.map(c => c.cap));
+    if (tightestCap < scorePct) {
+      diagnostics.push(vldDiag("SYNTHESIS_SOFT_CAP_APPLIED", "warning", VLD_MODEL_TYPES.HEURISTIC,
+        `Synthèse plafonnée à ${tightestCap}/100 par plafond(s) physique(s) gradué(s) (§25, v1 prudente) : ${softCaps.map(c => c.reason).join(' ; ')} — score avant plafond : ${Math.round(scorePct)}/100.`));
+      scorePct = tightestCap;
+    } else {
+      diagnostics.push(vldDiag("SYNTHESIS_SOFT_CAP_EVALUATED", "info", VLD_MODEL_TYPES.HEURISTIC,
+        `Plafond(s) physique(s) gradué(s) (§25) évalué(s) mais non déclenché(s) (score ${Math.round(scorePct)}/100 déjà ≤ ${tightestCap}) : ${softCaps.map(c => c.reason).join(' ; ')}.`));
+    }
   }
 
   scorePct = Math.round(Math.max(0, scorePct));
