@@ -4761,6 +4761,42 @@ function scoreDay(spot, h) {
   return { score: finalScore, rawScore: rawPct, items, hasElim: hardElim, regimes };
 }
 
+/**
+ * Décision (05/09) : le moteur V2 (synthèse pondérée, §21-22) devient la
+ * note affichée partout dans l'app, à la place de l'addition V1 ci-dessus —
+ * suite au constat qu'un ciel couvert (nuages moyens ~75%, hauts ~52% en
+ * voile épais) + humidité 69% pouvait produire un score V1 de 83/100,
+ * trompeur pour quelqu'un qui déciderait de se déplacer sur cette base.
+ *
+ * Cette fonction reste un WRAPPER autour de scoreDay() : les items (labels
+ * V1 — Nuages bas/moyen/haut, Humidité, Vis. mi-trajet, Précipitations,
+ * Pression, Vent, Gradient RH — affichés dans le détail du score) sont
+ * conservés tels quels, seul le NOMBRE final affiché change de source.
+ * Si le moteur V2 échoue ou n'est pas chargé, repli silencieux sur le
+ * score V1 (aucune régression possible).
+ *
+ * @param {Object} spot
+ * @param {Object} h - météo du créneau (jour ou snapshot horaire)
+ * @param {number} [k] - coefficient de réfraction (h.k_bislin du jour ; requis pour activer V2)
+ * @param {Array} [refractionLevelsOverride] - h._refractionLevels du jour (créneaux horaires n'en ont pas)
+ * @param {Object} [turbulenceOverride] - { windShear, dTdh } du jour (idem)
+ * @returns {Object} même forme que scoreDay() : { score, rawScore, items, hasElim, regimes }
+ */
+function getV2FinalScore(spot, h, k, refractionLevelsOverride, turbulenceOverride) {
+  const v1 = scoreDay(spot, h);
+  try {
+    if (k != null && isFinite(k) && window.VLD_ENGINE_V2 && typeof VLD_ENGINE_V2.wrapLegacyResult === 'function') {
+      const v2 = VLD_ENGINE_V2.wrapLegacyResult(spot, h, k, refractionLevelsOverride, turbulenceOverride);
+      if (v2.score.synthesis != null && isFinite(v2.score.synthesis)) {
+        return { ...v1, score: v2.score.synthesis, _v1Score: v1.score, _v2: v2 };
+      }
+    }
+  } catch (e) {
+    // Repli silencieux vers V1 — jamais d'erreur visible pour l'utilisateur.
+  }
+  return v1;
+}
+
 // ═══════════════════════════════════════════════════
 // FETCH
 // ═══════════════════════════════════════════════════
@@ -5194,7 +5230,7 @@ wind: avg(d1.hourly?.wind_speed_10m),
         _day: h._day, _obsDate: obsDate.toISOString(),
         _dataProvenanceWorst: h._dataProvenanceWorst, _dataAgeMin: h._dataAgeMin,
       };
-      hourlyScores['abs_' + absH] = scoreDay(spot, hDataAbs).score;
+      hourlyScores['abs_' + absH] = getV2FinalScore(spot, hDataAbs, h.k_bislin, h._refractionLevels, {windShear:h.wind_shear, dTdh:h.dTdh}).score;
       hourlyScores['abs_' + absH + '_elev'] = Math.round(solarElevation(spot.obs.lat, spot.obs.lon, obsDate) * 10) / 10;
       _hSnap['abs_' + absH] = hDataAbs;
     }
@@ -5226,7 +5262,7 @@ wind: avg(d1.hourly?.wind_speed_10m),
         _day: h._day, _obsDate: obsDate.toISOString(),
         _dataProvenanceWorst: h._dataProvenanceWorst, _dataAgeMin: h._dataAgeMin,
       };
-      const rawScore = scoreDay(spot, hData).score;
+      const rawScore = getV2FinalScore(spot, hData, h.k_bislin, h._refractionLevels, {windShear:h.wind_shear, dTdh:h.dTdh}).score;
       const elev = solarElevation(spot.obs.lat, spot.obs.lon, obsDate);
       hourlyScores[offset] = rawScore;
       hourlyScores[offset + '_elev'] = Math.round(elev * 10) / 10;
@@ -5258,7 +5294,7 @@ wind: avg(d1.hourly?.wind_speed_10m),
         _day: h._day, _obsDate: obsDate.toISOString(),
         _dataProvenanceWorst: h._dataProvenanceWorst, _dataAgeMin: h._dataAgeMin,
       };
-      const rawScore = scoreDay(spot, hData).score;
+      const rawScore = getV2FinalScore(spot, hData, h.k_bislin, h._refractionLevels, {windShear:h.wind_shear, dTdh:h.dTdh}).score;
       const elev = solarElevation(spot.obs.lat, spot.obs.lon, obsDate);
       hourlyScores['eve' + offset] = rawScore;
       hourlyScores['eve' + offset + '_elev'] = Math.round(elev * 10) / 10;
@@ -5268,7 +5304,7 @@ wind: avg(d1.hourly?.wind_speed_10m),
     // Injecter _obsDate dans h pour que solarGeometryAdvanced ait une date réelle (sunrise + 1h)
     const mainObsDate = sunriseStr ? new Date(new Date(sunriseStr).getTime() + 60*60*1000) : (() => { const d=new Date(dt); d.setUTCHours(7,0,0,0); return d; })();
     h._obsDate = mainObsDate.toISOString();
-    daily.push({ date:dt, day, sunriseHour, sunriseStr, sunsetHour, sunsetStr, hourlyScores, ...scoreDay(spot,h), raw:h, _d1:d1, _d2:d2, _d4:d4, _hSnap });;
+    daily.push({ date:dt, day, sunriseHour, sunriseStr, sunsetHour, sunsetStr, hourlyScores, ...getV2FinalScore(spot, h, h.k_bislin, h._refractionLevels, {windShear:h.wind_shear, dTdh:h.dTdh}), raw:h, _d1:d1, _d2:d2, _d4:d4, _hSnap });;
   }
   saveToCache(daily);
   return daily;
@@ -5926,36 +5962,40 @@ function openScoreModal(dataB64) {
 
   const scColor = score >= 75 ? '#4ade80' : score >= 55 ? 'var(--amber)' : score >= 35 ? '#f97316' : 'var(--red)';
 
-  // Deuxième avis (moteur V2, cahier des charges §21-22) — purement informatif,
-  // ne modifie jamais la note ci-dessus. Expliqué en mots simples pour rester
-  // lisible sans connaître le détail technique du moteur.
+  // Détail du moteur V2 (cahier des charges §21-22) — décision du 05/09 :
+  // v2Summary.synthesis EST désormais la note affichée en haut (cf. getV2FinalScore /
+  // wrapLegacyResult, v2.score.final). Ce bloc ne fait plus "comparer" un futur
+  // calcul : il détaille la composition de la note déjà affichée.
+  // "Ancien score résolution instrument (v2Summary.optical)" volontairement
+  // retiré ici : documenté comme obsolète dans le code (sature à 100/100 dès
+  // que N≥10, quasi toujours le cas sur des cibles VLD) et n'apporte plus
+  // d'information utile depuis que resolutionEffective l'a remplacé.
   const v2Html = v2Summary ? `
     <div class="sep-section" style="color:#c084fc;margin-top:1rem;padding-top:.75rem;border-top:1px dashed rgba(255,255,255,.08)">
-      🧪 Deuxième avis (en test)
+      🧮 Détail du calcul (moteur V2)
     </div>
     <div style="font-size:11px;color:var(--text3);margin-bottom:.5rem;line-height:1.5">
-      Un nouveau moteur de calcul tourne en coulisses, en parallèle de celui qui donne la note ci-dessus.
-      Il regarde la même météo mais avec une méthode plus poussée. Pour l'instant il ne fait que
-      <strong>comparer</strong> — la note affichée en haut n'a pas bougé et ne bougera pas tant qu'on
-      n'a pas vérifié qu'il est fiable sur plusieurs vraies sorties.
+      La note affichée en haut est calculée par ce moteur (synthèse pondérée des critères
+      ci-dessous). Les libellés nuages/humidité/précipitations/vent/pression au-dessus restent
+      ceux du calcul historique, conservés pour rester lisibles.
     </div>
-    ${v2Summary.atmosphere != null ? `<div class="sep-item">🌫️ Air (transparence) selon le nouveau calcul : <strong>${Math.round(v2Summary.atmosphere)}/100</strong></div>` : ''}
+    ${v2Summary.atmosphere != null ? `<div class="sep-item">🌫️ Air (transparence) : <strong>${Math.round(v2Summary.atmosphere)}/100</strong></div>` : ''}
     ${v2Summary.cloud != null ? `<div class="sep-item">☁️ Nuages (trajet dégagé) : <strong>${Math.round(v2Summary.cloud)}/100</strong></div>` : ''}
     ${v2Summary.refraction != null ? `<div class="sep-item">📐 Trajet de la lumière (réfraction) : <strong>${Math.round(v2Summary.refraction)}/100</strong></div>` : ''}
-    ${v2Summary.seeingArcsec != null ? `<div class="sep-item">🌀 Flou attendu (turbulence) : <strong>${v2Summary.seeingArcsec.toFixed(2)}″</strong>${v2Summary.legacySeeingArcsec != null ? ` <span style="color:var(--text3)">(ancienne estimation : ${v2Summary.legacySeeingArcsec.toFixed(2)}″)</span>` : ''}</div>` : ''}
-    ${v2Summary.resolutionEffective != null ? `<div class="sep-item">🔭 Résolution effective attendue (instrument + turbulence du jour) : <strong>${Math.round(v2Summary.resolutionEffective)}/100</strong>${v2Summary.effectiveResolutionArcsec != null ? ` <span style="color:var(--text3)">(${v2Summary.effectiveResolutionArcsec.toFixed(2)}″)</span>` : ''}</div>` : ''}
-    ${v2Summary.optical != null ? `<div class="sep-item" style="color:var(--text3)">🔭 Ancien score résolution instrument (statique, non pondéré) : ${Math.round(v2Summary.optical)}/100</div>` : ''}
     ${v2Summary.solar != null ? `<div class="sep-item">☀️ Géométrie solaire (contre-jour/rasant/face) : <strong>${Math.round(v2Summary.solar)}/100</strong></div>`
       : (v2Summary.solarLightingType === 'NO_SUN' ? `<div class="sep-item" style="color:var(--text3)">☀️ Géométrie solaire : soleil sous l'horizon à cet horaire — exclue de la note</div>` : '')}
-    ${v2Summary.synthesis != null ? `<div class="sep-item">🧮 Note globale selon le nouveau calcul : <strong>${v2Summary.synthesis}/100</strong></div>
+    ${v2Summary.synthesis != null ? `<div class="sep-item">🧮 Note (Air 30% · Nuages 18% · Réfraction 15% · Géométrie solaire 15%, renormalisé si un critère manque) : <strong>${v2Summary.synthesis}/100</strong></div>
       <div style="font-size:11px;color:var(--text3);margin:.15rem 0 .5rem;line-height:1.5">
-        Combine, pondérés : Air 30% · Nuages 18% · Réfraction 15% · Résolution effective (turbulence + optique instrument) 22% · Géométrie solaire 15%
-        (renormalisé si un critère manque ce jour-là). La courbure terrestre (Bislin/globe) n'entre volontairement
-        <strong>jamais</strong> dans cette note — elle reste affichée séparément, à titre informatif uniquement.
-        Pas encore la note affichée en haut.
+        La courbure terrestre (Bislin/globe) n'entre volontairement <strong>jamais</strong> dans cette
+        note — elle reste affichée séparément, à titre informatif uniquement.
       </div>` : ''}
-    ${v2Summary.eliminated ? `<div class="sep-item" style="color:var(--red)">⛔ Le nouveau calcul éliminerait cette sortie : ${v2Summary.eliminatorReasons.map(r => r.label).join(' · ')}</div>` : ''}
-    ${v2Summary.confidence != null ? `<div class="sep-item">🎯 Fiabilité de ce deuxième avis : <strong>${Math.round(v2Summary.confidence)}%</strong> <span style="color:var(--text3)">(dépend de la qualité des données météo dispo ce jour-là)</span></div>` : ''}
+    ${v2Summary.eliminated ? `<div class="sep-item" style="color:var(--red)">⛔ Sortie éliminée par un critère bloquant : ${v2Summary.eliminatorReasons.map(r => r.label).join(' · ')}</div>` : ''}
+    ${v2Summary.confidence != null ? `<div class="sep-item">🎯 Fiabilité de cette note : <strong>${Math.round(v2Summary.confidence)}%</strong> <span style="color:var(--text3)">(dépend de la qualité des données météo dispo ce jour-là)</span></div>` : ''}
+    <div class="sep-section" style="color:#8b8fa3;margin-top:.75rem;padding-top:.5rem;border-top:1px dashed rgba(255,255,255,.06);font-size:11px">
+      🧪 En cours de calibration (n'affecte pas la note ci-dessus)
+    </div>
+    ${v2Summary.seeingArcsec != null ? `<div class="sep-item" style="color:var(--text3)">🌀 Flou attendu (turbulence) : ${v2Summary.seeingArcsec.toFixed(2)}″${v2Summary.legacySeeingArcsec != null ? ` (ancienne estimation : ${v2Summary.legacySeeingArcsec.toFixed(2)}″)` : ''}</div>` : ''}
+    ${v2Summary.resolutionEffective != null ? `<div class="sep-item" style="color:var(--text3)">🔭 Résolution effective (instrument + turbulence du jour) : ${Math.round(v2Summary.resolutionEffective)}/100${v2Summary.effectiveResolutionArcsec != null ? ` (${v2Summary.effectiveResolutionArcsec.toFixed(2)}″)` : ''} — exclu de la note tant que non calibré sur sessions réelles</div>` : ''}
   ` : '';
 
   document.getElementById('score-modal-body').innerHTML = `
@@ -7278,11 +7318,47 @@ function calcIPR(spot, k, h) {
 
 // ═══════════════════════════════════════════════════════════════════════
 // VLD ENGINE V2 — FONDATIONS (Phase V2.0-A : types, JSON, diagnostics, adapter)
-// Scaffolding uniquement. Aucun module physique V2 n'est encore branché ;
-// le moteur V1 (scoreDay, calcIPR, _calcBislin, calcCn2...) reste l'unique
-// source utilisée par le frontend. Rien ci-dessous n'est appelé par l'UI —
-// zéro impact, zéro risque de régression. Réf. cahier des charges §2, §9,
+// Historique : scaffolding initial, aucun module physique branché, V1 seul
+// utilisé par le frontend, zéro impact. Réf. cahier des charges §2, §9,
 // §25, §26, §33-34 (phase V2.0-A).
+//
+// §35 — BASCULE V1 → V2 (05/09, cahier des charges)
+// ───────────────────────────────────────────────────────────────────────
+// Constat déclencheur : sur une sortie réelle (Crêt de la Perdrix, nuages
+// moyens ~75% "Couvert", nuages hauts ~52% "Voile épais", humidité 69%),
+// le score V1 affichait 83/100 — un utilisateur non averti aurait pu se
+// déplacer pour rien. Cause : dans V1, "Vis. mi-trajet" (score composite
+// de visibilité API) écrasait les pénalités individuelles de nuages/
+// humidité au lieu de les refléter, sans qu'aucune limite forte n'empêche
+// le total de rester élevé.
+//
+// Décision : le moteur V2 (synthèse pondérée §21-22, ci-dessous) devient
+// le score affiché partout dans l'app (cards, matrice, modale — cf.
+// getV2FinalScore() et v2.score.final dans wrapLegacyResult()), à la
+// place de l'addition point-par-point V1. Le score V1 (scoreDay) est
+// conservé comme repli automatique si V2 échoue ou n'est pas chargé, et
+// reste visible en interne (v2.legacy.score) pour comparaison.
+//
+// Ce qui NE change PAS dans l'UI : les libellés/pénalités détaillés du
+// calcul V1 (Nuages bas/moyen/haut, Humidité, Gradient RH, Précipitations,
+// Pression, Vent, Vis. mi-trajet) restent affichés tels quels dans le
+// détail du score — ils restent utiles pour comprendre la météo brute,
+// même si ce n'est plus leur somme qui détermine la note finale.
+//
+// Ce qui est retiré de l'UI comme obsolète : le panneau "Deuxième avis
+// (en test)" (qui comparait passivement V1 vs V2 sans jamais rien changer)
+// et la ligne "Ancien score résolution instrument" (v2.score.optical,
+// documenté comme saturant à 100/100 dès que N≥10 — quasi toujours vrai
+// sur une cible VLD — donc sans variabilité journalière réelle utile).
+//
+// Ce qui continue de tourner EN COULISSES sans impacter la note affichée :
+// "resolutionEffective" (turbulence/seeing physique + résolution optique
+// instrument, §19-21). Repéré comme suspect sur le terrain (sorti à 0/100
+// avec un flou attendu de ~10.8″, alors que le reste de la sortie était
+// cohérent) — signe probable d'un bug de calcul plutôt qu'une vraie
+// dégradation. Exclu de computeWeightedSynthesisV2() (cf. commentaire sur
+// place) jusqu'à calibration sur plusieurs sessions réelles, mais toujours
+// calculé et affiché dans le détail "En cours de calibration" pour audit.
 // ═══════════════════════════════════════════════════════════════════════
 
 /**
@@ -8621,11 +8697,14 @@ const VLD_SYNTHESIS_WEIGHTS_V1 = Object.freeze({
  * atmosphérique et de l'optique de propagation, jamais d'un modèle de
  * courbure terrestre (choix de fond du projet, pas un oubli).
  *
- * IMPORTANT — comme tous les modules V2 précédents, ceci est un DEUXIÈME
- * AVIS comparatif (v2.score.synthesis), pas le score affiché sur les cards
- * (v2.score.final reste v1.score, cf. wrapLegacyResult). Rien ne change
- * pour l'utilisateur tant que ce n'est pas validé sur plusieurs sessions
- * réelles et sciemment basculé.
+ * MISE À JOUR (05/09) — v2.score.synthesis est désormais le score affiché
+ * sur les cards (v2.score.final = synthesis si calculable, repli v1.score
+ * sinon, cf. wrapLegacyResult / getV2FinalScore). Ce n'est plus un deuxième
+ * avis comparatif silencieux : la bascule a été décidée après constat qu'un
+ * ciel couvert + humide pouvait produire un score V1 trompeur (83/100).
+ * "resolutionEffective" reste temporairement exclu de cette moyenne pondérée
+ * (cf. computeWeightedSynthesisV2) le temps d'être calibré sur des sessions
+ * réelles — il continue d'être calculé et affiché à titre de suivi.
  */
 
 /**
@@ -8728,7 +8807,20 @@ function computeWeightedSynthesisV2(subscores, regimeRes, elimRes) {
   const weights = VLD_SYNTHESIS_WEIGHTS_V1;
   // geometry (courbure/Bislin) volontairement absent : cf. §22 révisé ci-dessus.
   // solar (géométrie solaire) inclus depuis V2.0-K : cf. commentaire des poids.
-  const keys = ['atmosphere', 'cloud', 'refraction', 'resolutionEffective', 'solar'];
+  //
+  // Décision (05/09) : "resolutionEffective" est temporairement EXCLU de la
+  // moyenne pondérée de la note affichée. Constat terrain : cette sous-note
+  // est ressortie à 0/100 (effectiveResolutionArcsec ≈ 10.8″, très supérieur
+  // à ce qu'un seeing réaliste devrait donner) sur une sortie autrement
+  // cohérente — signe probable d'un bug de calcul (turbulence/seeing physique
+  // V2.1, computeCn2ProfileV2/computeOpticalResolutionV2) plutôt qu'une vraie
+  // dégradation optique. Plutôt que de laisser une valeur suspecte peser 22%
+  // de la note principale, le sous-score continue d'être calculé et exposé
+  // (v2.score.resolutionEffective, panneau "Deuxième avis") pour audit et
+  // calibration terrain, mais n'entre plus dans le calcul tant qu'il n'a pas
+  // été vérifié sur plusieurs sorties réelles. Poids restants renormalisés
+  // automatiquement (cf. weightSum ci-dessous) sur atmosphere/cloud/refraction/solar.
+  const keys = ['atmosphere', 'cloud', 'refraction', 'solar'];
 
   const available = keys.filter(k => subscores[k] != null && isFinite(subscores[k]));
   if (available.length === 0) {
@@ -8940,7 +9032,10 @@ function wrapLegacyResult(spot, h, k, refractionLevelsOverride, turbulenceOverri
   v2.solar.modelType = solarRes.modelType;
   v2.score.solar = solarRes.scorePct;
 
-  v2.score.final = v1.score; // ← toujours le score legacy, seul affiché sur les cards
+  // v2.score.final est fixé plus bas (après calcul de synthesisRes) : décision
+  // du 05/09 — la synthèse V2 (§21-22) devient le score affiché quand elle est
+  // calculable, avec repli sur v1.score sinon. v1.score reste conservé dans
+  // v2.legacy.score pour comparaison/rollback.
   v2.score.confidence = confidenceRes.value; // ne modifie JAMAIS score.final (§25)
   v2.score.modelType = VLD_MODEL_TYPES.HEURISTIC; // synthèse /100 additive V1, poids non calibrés
 
@@ -8968,12 +9063,17 @@ function wrapLegacyResult(spot, h, k, refractionLevelsOverride, turbulenceOverri
   }, regimeRes, elimRes);
   v2.score.synthesis = synthesisRes.scorePct;
 
+  // Décision (05/09) : score affiché = synthèse V2 si calculable, repli V1 sinon.
+  v2.score.final = (synthesisRes.scorePct != null && Number.isFinite(synthesisRes.scorePct))
+    ? synthesisRes.scorePct
+    : v1.score;
+
   v2.confidence.value = confidenceRes.value;
   v2.confidence.factors = confidenceRes.factors;
 
   v2.diagnostics.push(
-    vldDiag("V1_PASSTHROUGH", "info", VLD_MODEL_TYPES.HEURISTIC,
-      "Score final (v2.score.final) produit intégralement par le moteur V1 (scoreDay). Aucun impact frontend."),
+    vldDiag("V2_SYNTHESIS_IS_FINAL", "info", VLD_MODEL_TYPES.HEURISTIC,
+      `Score final (v2.score.final) = synthèse V2 pondérée (§21-22) quand calculable (${synthesisRes.scorePct ?? 'n/a'}/100), repli sur V1 (scoreDay, ${v1.score}/100) sinon. Décision du 05/09 — remplace l'ancien passthrough V1 systématique.`),
     vldDiag("KOSCH_020_LEGACY", "warning", VLD_MODEL_TYPES.EMPIRICAL,
       "Extinction dérivée de la constante de calibration historique 0.20, non recalée sur données terrain (voir VLD_LEGACY_KOSCH_CALIBRATION)."),
     aodRes.diagnostic,
