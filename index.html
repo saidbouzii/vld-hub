@@ -6354,7 +6354,7 @@ function renderDayRow(dayData, date, spot) {
         // §26-v2 (décision 05/09-4) — expose en clair, dans le panneau déjà visible,
         // le diagnostic sigma pointwise OBS/MID (ou son repli agrégé) pour pouvoir
         // vérifier sans devtools si le couplage RH×AOD a été utilisé.
-        atmSigmaDiag: (v2.diagnostics.find(d => d.id === 'ATM_SIGMA_POINTWISE' || d.id === 'ATM_SIGMA_AGGREGATE_FALLBACK' || d.id === 'ATM_EXTINCTION_UNAVAILABLE') || {}).message ?? null,
+        atmSigmaDiag: (v2.diagnostics.find(d => d.id === 'ATM_SIGMA_POINTWISE' || d.id === 'ATM_SIGMA_AGGREGATE_FALLBACK' || d.id === 'ATM_SIGMA_RH_ONLY_FALLBACK' || d.id === 'ATM_EXTINCTION_UNAVAILABLE') || {}).message ?? null,
       };
     }
   } catch (e) {
@@ -8575,6 +8575,26 @@ function computeAtmosphereSubscoreV2(spot, h, aodResPrecomputed) {
     sigmaSource = 'AGGREGATE';
     diagnostics.push(vldDiag("ATM_SIGMA_AGGREGATE_FALLBACK", "info", VLD_MODEL_TYPES.HEURISTIC,
       `Sigma pointwise non calculable (OBS/MID incomplets) : repli sur AOD/RH agrégés uniques (comportement d'origine).`));
+  } else if (rh !== null) {
+    // §27 — Décision 05/09-5 : quand l'AOD est TOTALEMENT indisponible (aucune
+    // valeur, ni pointwise ni agrégée), le comportement d'origine sautait
+    // entièrement la composante extinction — ce qui revient à traiter
+    // implicitement "AOD indisponible" comme "extinction nulle", donnant un
+    // score Air maximal quelle que soit l'humidité (constat terrain : Mont
+    // Lozère 72% RH → 100/100). Repli minimal : on suppose un AOD de fond
+    // "background" typique (air rural/continental propre, hors pollution/
+    // poussière — valeur HEURISTIC non mesurée, volontairement basse et
+    // documentée) pour que la RH continue au moins à jouer son rôle de
+    // multiplicateur hygroscopique au lieu d'être neutralisée. Nettement
+    // moins fiable qu'un AOD mesuré — reflété dans le modelType HEURISTIC et
+    // le diagnostic ci-dessous, distinct du cas agrégé normal.
+    const AOD_BACKGROUND_FALLBACK = 0.05; // fond continental propre typique
+    const rhFactor = 1 / Math.pow(1 - Math.min(rh, 95) / 100, 0.3);
+    const effBackground = computeAodEffectiveV2(AOD_BACKGROUND_FALLBACK, blh).aodEffective ?? AOD_BACKGROUND_FALLBACK;
+    sigma = Math.max(effBackground * VLD_LEGACY_KOSCH_CALIBRATION.value * rhFactor, 0.0001);
+    sigmaSource = 'RH_ONLY_FALLBACK';
+    diagnostics.push(vldDiag("ATM_SIGMA_RH_ONLY_FALLBACK", "warning", VLD_MODEL_TYPES.HEURISTIC,
+      `AOD totalement indisponible (aucune donnée, ni pointwise ni agrégée) : repli sur un AOD de fond typique non mesuré (${AOD_BACKGROUND_FALLBACK}) × rhFactor(RH=${rh.toFixed(0)}%) — évite qu'une RH élevée n'ait aucun effet faute de donnée AOD (§27, décision 05/09-5). Fiabilité réduite : aucune mesure d'aérosols réelle pour ce point.`));
   }
 
   if (sigma !== null && distKm !== null && distKm > 0) {
