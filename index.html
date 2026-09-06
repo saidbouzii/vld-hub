@@ -8789,26 +8789,45 @@ const VLD_SYNTHESIS_WEIGHTS_V1 = Object.freeze({
 function computeHardEliminatorsV2(precipPct, cloudBlockPct, transmission550) {
   const diagnostics = [];
   const reasons = [];
+  const caps = [];
 
+  // §24-v2 — Décision 05/09-7 : mêmes 3 seuils de déclenchement qu'avant
+  // (rien de nouveau ne s'active), mais le plafond associé devient continu
+  // au lieu d'être une constante à 20 pour tout franchissement. Constat
+  // terrain : cloudBlockPct=91% et cloudBlockPct=99% produisaient exactement
+  // le même score final (20) alors que ce sont deux situations très
+  // différentes. Chaque métrique a son propre plafond continu ; le plus
+  // sévère l'emporte via Math.min, exactement comme le booléen `eliminated`
+  // le faisait déjà implicitement — mais avec la bonne intensité. Aucun
+  // seuil nouveau, aucun changement pour les cas qui ne franchissent aucun
+  // seuil (cap reste 100, donc sans effet).
   if (precipPct != null && precipPct > 70) {
     reasons.push({ key: 'heavy_precip', label: `Précipitations fortes (${Math.round(precipPct)}%)`, modelType: VLD_MODEL_TYPES.HEURISTIC });
+    // ancrages (70,100) → (100,10), linéaire
+    caps.push({ key: 'heavy_precip', cap: Math.max(10, 100 - (precipPct - 70) * 3) });
   }
   if (cloudBlockPct != null && cloudBlockPct >= 90) {
     reasons.push({ key: 'cloud_path_blocked', label: `Trajet quasi-totalement bloqué par les nuages (${Math.round(cloudBlockPct)}%, V2.0-H)`, modelType: VLD_MODEL_TYPES.HEURISTIC });
+    // ancrages (90,100) → (100,10), linéaire
+    caps.push({ key: 'cloud_path_blocked', cap: Math.max(10, 100 - (cloudBlockPct - 90) * 9) });
   }
   if (transmission550 != null && transmission550 < 0.05) {
     reasons.push({ key: 'transmission_near_zero', label: `Transmission 550nm quasi nulle (${(transmission550 * 100).toFixed(1)}%)`, modelType: VLD_MODEL_TYPES.PROXY });
+    // ancrages (0,10) → (0.05,100), linéaire
+    caps.push({ key: 'transmission_near_zero', cap: Math.max(10, 10 + (transmission550 / 0.05) * 90) });
   }
   // Pas d'éliminateur "géométrie/courbure" ici (retiré volontairement) : la
   // hauteur visible réfractée (Bislin) reste affichée à titre informatif dans
   // v2.geometry, mais n'élimine jamais et ne pèse jamais dans la note globale.
 
+  const cap = caps.length > 0 ? Math.min(...caps.map(c => c.cap)) : 100;
+
   if (reasons.length > 0) {
     diagnostics.push(vldDiag("HARD_ELIMINATOR_TRIGGERED", "warning", VLD_MODEL_TYPES.HEURISTIC,
-      `${reasons.length} éliminateur(s) déclenché(s) : ${reasons.map(r => r.key).join(', ')} — plafonne la synthèse V2 indépendamment de la moyenne pondérée.`));
+      `${reasons.length} éliminateur(s) déclenché(s) : ${caps.map(c => `${c.key}→cap ${c.cap.toFixed(1)}`).join(', ')} — plafonne la synthèse V2 à ${cap.toFixed(1)}/100 (§24-v2, décision 05/09-7, continu — remplace l'ancien plafond fixe à 20), indépendamment de la moyenne pondérée.`));
   }
 
-  return { eliminated: reasons.length > 0, reasons, diagnostics };
+  return { eliminated: reasons.length > 0, reasons, cap, diagnostics };
 }
 
 /**
@@ -8921,51 +8940,48 @@ function computeWeightedSynthesisV2(subscores, regimeRes, elimRes) {
   let scorePct = Math.min(100, weighted + regimeRes.bonusPct);
 
   if (elimRes.eliminated) {
-    scorePct = Math.min(scorePct, 20); // même plafond que le hardElim legacy (precip>70 → cap 20)
+    scorePct = Math.min(scorePct, elimRes.cap);
     diagnostics.push(vldDiag("SYNTHESIS_ELIMINATOR_CAP", "warning", VLD_MODEL_TYPES.HEURISTIC,
-      `Synthèse plafonnée à 20/100 par hard eliminator(s) (§24), indépendamment de la moyenne pondérée (${Math.round(weighted)}/100).`));
+      `Synthèse plafonnée à ${elimRes.cap.toFixed(1)}/100 par hard eliminator(s) continu(s) (§24-v2), indépendamment de la moyenne pondérée (${Math.round(weighted)}/100).`));
   }
 
-  // §25 — Plafonds physiques gradués (décision 05/09-2, version prudente v1).
-  // Constat terrain (Mont Mézenc 89/100 malgré RH 87%/nuages moyens 49%) : les
-  // éliminateurs binaires ci-dessus (§24) ne couvrent que les cas extrêmes
-  // (trajet ≥90% bloqué, transmission <5%, précip >70%). Entre ça et "tout va
-  // bien", un mauvais sous-score atmosphere/cloud peut être intégralement
-  // compensé par vent/pression/précipitations favorables dans la moyenne
-  // pondérée — c'est ce qui produit un score final trop optimiste.
-  //
-  // Ces plafonds ne font QUE réduire un score déjà trop haut ; ils ne peuvent
-  // jamais l'augmenter (Math.min uniquement). Ils sont volontairement séparés
-  // des éliminateurs §24 (qui restent inchangés) et n'affectent ni atmSub, ni
-  // computeCloudPathV2, ni aucun sous-score — seulement le résultat final de
-  // cette fonction. Seuils/valeurs de départ HEURISTIC, à valider sur
-  // plusieurs sorties réelles avant d'envisager une refonte de atmSub (§26,
-  // pas encore fait volontairement — cf. décision 05/09-2).
+  // §25-v2 — Décision 05/09-7 : mêmes principes que §24-v2 ci-dessus, mêmes
+  // seuils de déclenchement (25/40 pour atmosphere, 30/50 pour cloud), mais
+  // plafond continu au lieu des constantes 40/50/40/55. Constat terrain :
+  // Crêt de la Perdrix avait un score pondéré calculé à 87, ramené brutalement
+  // à 50 par le seul fait que atmosphere=32 (<40) — l'info "87 calculé" était
+  // détruite, pas compressée. Ancrages validés :
+  //   atmosphere : (40,100) → (25,50) → (0,20), deux segments linéaires
+  //   cloud      : (50,100) → (30,55) → (0,20), deux segments linéaires
+  // Continuité vérifiée aux jonctions (25→50 des deux côtés, 30→55 des deux
+  // côtés). Cap=100 quand le seuil n'est pas franchi → Math.min neutre,
+  // comportement strictement inchangé. N'affecte ni atmSub, ni AOD/fallback
+  // RH-only, ni computeCloudPathV2 — uniquement le résultat final ici.
   const softCaps = [];
   if (subscores.atmosphere != null && isFinite(subscores.atmosphere)) {
-    if (subscores.atmosphere < 25) {
-      softCaps.push({ cap: 40, reason: `atmosphere ${Math.round(subscores.atmosphere)}/100 < 25` });
-    } else if (subscores.atmosphere < 40) {
-      softCaps.push({ cap: 50, reason: `atmosphere ${Math.round(subscores.atmosphere)}/100 < 40` });
-    }
+    const x = subscores.atmosphere;
+    let cap = 100;
+    if (x < 25) cap = 20 + x * (30 / 25);
+    else if (x < 40) cap = 50 + (x - 25) * (50 / 15);
+    if (cap < 100) softCaps.push({ cap, reason: `atmosphere ${Math.round(x)}/100 → cap ${cap.toFixed(1)}` });
   }
   if (subscores.cloud != null && isFinite(subscores.cloud)) {
-    if (subscores.cloud < 30) {
-      softCaps.push({ cap: 40, reason: `cloud ${Math.round(subscores.cloud)}/100 < 30` });
-    } else if (subscores.cloud < 50) {
-      softCaps.push({ cap: 55, reason: `cloud ${Math.round(subscores.cloud)}/100 < 50` });
-    }
+    const x = subscores.cloud;
+    let cap = 100;
+    if (x < 30) cap = 20 + x * (35 / 30);
+    else if (x < 50) cap = 55 + (x - 30) * (45 / 20);
+    if (cap < 100) softCaps.push({ cap, reason: `cloud ${Math.round(x)}/100 → cap ${cap.toFixed(1)}` });
   }
 
   if (softCaps.length > 0) {
     const tightestCap = Math.min(...softCaps.map(c => c.cap));
     if (tightestCap < scorePct) {
       diagnostics.push(vldDiag("SYNTHESIS_SOFT_CAP_APPLIED", "warning", VLD_MODEL_TYPES.HEURISTIC,
-        `Synthèse plafonnée à ${tightestCap}/100 par plafond(s) physique(s) gradué(s) (§25, v1 prudente) : ${softCaps.map(c => c.reason).join(' ; ')} — score avant plafond : ${Math.round(scorePct)}/100.`));
+        `Synthèse plafonnée à ${tightestCap.toFixed(1)}/100 par plafond(s) physique(s) gradué(s) continu(s) (§25-v2, décision 05/09-7) : ${softCaps.map(c => c.reason).join(' ; ')} — score avant plafond : ${Math.round(scorePct)}/100.`));
       scorePct = tightestCap;
     } else {
       diagnostics.push(vldDiag("SYNTHESIS_SOFT_CAP_EVALUATED", "info", VLD_MODEL_TYPES.HEURISTIC,
-        `Plafond(s) physique(s) gradué(s) (§25) évalué(s) mais non déclenché(s) (score ${Math.round(scorePct)}/100 déjà ≤ ${tightestCap}) : ${softCaps.map(c => c.reason).join(' ; ')}.`));
+        `Plafond(s) physique(s) gradué(s) continu(s) (§25-v2) évalué(s) mais non déclenché(s) (score ${Math.round(scorePct)}/100 déjà ≤ ${tightestCap.toFixed(1)}) : ${softCaps.map(c => c.reason).join(' ; ')}.`));
     }
   }
 
