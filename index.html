@@ -3430,6 +3430,7 @@ function switchTerrainSub(sub) {
 
 let _profilSpot = null;
 let _profilPoints = null;
+let _profilProfile = null;
 let _profilK = 0.17;
 
 function populateProfilSelect() {
@@ -3527,6 +3528,7 @@ function loadTerrainProfil(spotId) {
   if (!_profilSpot) return;
   highlightSpotLine(spotId);
   _profilPoints = null;
+  _profilProfile = null;
 
   // K depuis forecasts si dispo
   const fc = (window.forecasts || {})[spotId];
@@ -3558,17 +3560,11 @@ function onProfilSlider(val) {
 async function fetchAndRenderProfilInline(spot, k) {
   const svgDiv = document.getElementById('profil-svg');
   try {
-    const N = 50;
-    const pts = interpolatePoints(spot.obs.lat, spot.obs.lon, spot.tgt.lat, spot.tgt.lon, N);
-    const lats = pts.map(p => p.lat.toFixed(6)).join(',');
-    const lons = pts.map(p => p.lon.toFixed(6)).join(',');
-    const url = `https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lons}`;
-    const resp = await fetch(url, {signal: AbortSignal.timeout(12000)});
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    const data = await resp.json();
-    if (!data.elevation?.length) throw new Error('no_data');
-    const distM = spot.dist_km * 1000;
-    _profilPoints = pts.map((p, i) => ({ dist: p.f * distM, elev: data.elevation[i] }));
+    // Pipeline V2 : trajet géodésique + DEM haute résolution (OpenTopoData
+    // EU-DEM/SRTM, fallback Open-Meteo), échantillonnage adaptatif ~250m.
+    const profile = await loadVLDTerrainProfile(spot);
+    _profilProfile = profile;
+    _profilPoints = profile.points; // bruts (sans LOS/k) — l'analyse est refaite à chaque κ
     renderProfilInlineSVG(spot, _profilPoints, _profilK);
   } catch(err) {
     svgDiv.innerHTML = `<div style="padding:2.5rem;text-align:center;color:var(--text3);font-family:var(--mono);font-size:11px;">❌ Profil indisponible (${err.message})</div>`;
@@ -3576,20 +3572,21 @@ async function fetchAndRenderProfilInline(spot, k) {
 }
 
 function renderProfilInlineSVG(spot, points, k) {
-  // Réutilise exactement renderMapProfileSVG mais dans les divs inline
+  // Analyse centralisée V2 (dépend de κ) — refaite à chaque changement de κ,
+  // aucun re-fetch DEM nécessaire (points bruts déjà en cache).
   const svgDiv = document.getElementById('profil-svg');
   const statDiv = document.getElementById('profil-stats');
   const obsAlt = spot.obs.alt || 0;
   const tgtAlt = spot.tgt.alt || 0;
-  const totalDist = spot.dist_km * 1000;
+  const analysed = analyseTerrainObstruction(spot, points, k);
+  const aPoints = analysed.points; // {dist, elev, losRefr, clearanceM, blocked, dataset}
+  const totalDist = aPoints.at(-1).dist;
   const R = 6371000;
   const Rp = R / (1 - k);
+  const losRefr = d => (obsAlt + (tgtAlt - obsAlt) * (d / totalDist)) + (d * (totalDist - d)) / (2 * Rp);
 
-  const losElev = d => obsAlt + (tgtAlt - obsAlt) * (d / totalDist);
-  const losRefr = d => losElev(d) + (d * (totalDist - d)) / (2 * Rp);
-
-  const elevations = points.map(p => p.elev);
-  const allY = [...elevations, obsAlt, tgtAlt, ...points.map(p => losRefr(p.dist))];
+  const validElevs = aPoints.map(p => p.elev).filter(e => e != null && Number.isFinite(e));
+  const allY = [...validElevs, obsAlt, tgtAlt, ...aPoints.map(p => p.losRefr)];
   const minElev = Math.min(...allY) - 80;
   const maxElev = Math.max(...allY) + 180;
 
@@ -3598,21 +3595,21 @@ function renderProfilInlineSVG(spot, points, k) {
   const sx = d => PAD.l + (d / totalDist) * iW;
   const sy = e => PAD.t + iH - ((e - minElev) / (maxElev - minElev)) * iH;
 
-  const obstacles = points.filter((p, i) => i > 0 && i < points.length - 1 && p.elev > losRefr(p.dist));
-  const maxObs = obstacles.length ? obstacles.reduce((a, b) => (a.elev - losRefr(a.dist)) > (b.elev - losRefr(b.dist)) ? a : b) : null;
+  const obstacles = aPoints.filter(p => p.blocked);
+  const maxObs = obstacles.length ? obstacles.reduce((a, b) => (a.clearanceM < b.clearanceM ? a : b)) : null;
 
-  const terrainPts = points.map(p => `${sx(p.dist).toFixed(1)},${sy(p.elev).toFixed(1)}`).join(' ');
+  const terrainPts = aPoints.map(p => `${sx(p.dist).toFixed(1)},${sy(Number.isFinite(p.elev) ? p.elev : minElev).toFixed(1)}`).join(' ');
   const terrainPoly = `${sx(0)},${sy(minElev)} ${terrainPts} ${sx(totalDist)},${sy(minElev)}`;
   const losGeoLine = `${sx(0)},${sy(obsAlt)} ${sx(totalDist)},${sy(tgtAlt)}`;
-  const losRefrPts = points.map(p => `${sx(p.dist).toFixed(1)},${sy(losRefr(p.dist)).toFixed(1)}`).join(' ');
+  const losRefrPts = aPoints.map(p => `${sx(p.dist).toFixed(1)},${sy(p.losRefr).toFixed(1)}`).join(' ');
 
-  const topLine = points.map(p => `${sx(p.dist).toFixed(1)},${sy(losRefr(p.dist)).toFixed(1)}`).join(' ');
-  const botLine = points.map(p => `${sx(p.dist).toFixed(1)},${sy(Math.max(p.elev, minElev)).toFixed(1)}`).reverse().join(' ');
+  const topLine = aPoints.map(p => `${sx(p.dist).toFixed(1)},${sy(p.losRefr).toFixed(1)}`).join(' ');
+  const botLine = aPoints.map(p => `${sx(p.dist).toFixed(1)},${sy(Math.max(Number.isFinite(p.elev) ? p.elev : minElev, minElev)).toFixed(1)}`).reverse().join(' ');
   const clearZone = `<polygon points="${topLine} ${botLine}" fill="rgba(56,189,248,0.06)" stroke="none"/>`;
 
   let obsZones = '';
   obstacles.forEach(p => {
-    const x = sx(p.dist), top = sy(p.elev), bot = sy(losRefr(p.dist));
+    const x = sx(p.dist), top = sy(p.elev), bot = sy(p.losRefr);
     obsZones += `<line x1="${x}" y1="${top}" x2="${x}" y2="${bot}" stroke="#ef4444" stroke-width="2" opacity="0.75"/>`;
   });
 
@@ -3662,23 +3659,30 @@ function renderProfilInlineSVG(spot, points, k) {
 
   const d_H = Math.sqrt((Rp + obsAlt) ** 2 - Rp ** 2);
   let verdictColor, verdictText;
-  if (d_H >= totalDist) {
-    verdictText = obstacles.length === 0 ? `✅ Visible` : `⚠️ Terrain obstacle`;
-    verdictColor = obstacles.length === 0 ? '#22c55e' : '#f59e0b';
+  if (analysed.status === 'INDETERMINATE') {
+    verdictText = `❓ Indéterminé (${analysed.missingCount} pts manquants)`;
+    verdictColor = '#f59e0b';
+  } else if (d_H >= totalDist) {
+    verdictText = analysed.status === 'CLEAR' ? `✅ Visible` : `⚠️ Terrain obstacle`;
+    verdictColor = analysed.status === 'CLEAR' ? '#22c55e' : '#f59e0b';
   } else {
     const inner = totalDist - d_H;
     const hh = Math.sqrt(inner * inner + Rp * Rp) - Rp;
     const visible = Math.max(0, tgtAlt - hh);
     verdictText = visible > 0 ? `✅ ${Math.round(visible)}m visible` : `❌ Caché · ${Math.round(hh - tgtAlt)}m sous horizon`;
     verdictColor = visible > 0 ? '#22c55e' : '#f87171';
-    if (obstacles.length > 0) { verdictText += ' + terrain'; verdictColor = '#f87171'; }
+    if (analysed.status === 'BLOCKED') { verdictText += ' + terrain'; verdictColor = '#f87171'; }
   }
-  const maxExcess = maxObs ? Math.round(maxObs.elev - losRefr(maxObs.dist)) : 0;
+  const maxExcess = maxObs ? Math.round(-maxObs.clearanceM) : 0;
+  const confColor = analysed.confidenceLabel === 'HIGH' ? 'var(--green)' : analysed.confidenceLabel === 'MEDIUM' ? 'var(--orange)' : '#f87171';
+  const dataset = aPoints[0]?.dataset || '—';
+  const spacingM = _profilProfile?.spacingM || (totalDist / (aPoints.length - 1));
   statDiv.innerHTML = `
     <div class="mp-stat"><div class="mp-stat-label">VERDICT</div><div class="mp-stat-val" style="color:${verdictColor};font-size:12px">${verdictText}</div></div>
     <div class="mp-stat"><div class="mp-stat-label">LIFT RÉFRACTION</div><div class="mp-stat-val" style="color:var(--cyan)">+${lift_m} m</div></div>
     <div class="mp-stat"><div class="mp-stat-label">MAX OBSTACLE / LOS</div><div class="mp-stat-val" style="color:${maxObs ? '#f87171' : 'var(--green)'}">${maxObs ? '+' + maxExcess + 'm à ' + (maxObs.dist/1000).toFixed(0) + 'km' : '—'}</div></div>
-    <div class="mp-stat"><div class="mp-stat-label">SOURCE TERRAIN</div><div class="mp-stat-val" style="color:var(--text2);font-size:10px">Open-Meteo · ${points.length} pts</div></div>`;
+    <div class="mp-stat"><div class="mp-stat-label">SOURCE TERRAIN</div><div class="mp-stat-val" style="color:var(--text2);font-size:10px">${dataset} · ${aPoints.length} pts · ~${Math.round(spacingM)}m</div></div>
+    <div class="mp-stat"><div class="mp-stat-label">CONFIANCE</div><div class="mp-stat-val" style="color:${confColor}">${analysed.confidenceLabel} (${Math.round(analysed.confidence*100)}%)</div></div>`;
 }
 
 function updateChecklistProgress() {
@@ -9519,11 +9523,13 @@ function closeTerrainOverlay(e) {
 // ═══════════════════════════════════════════════════
 let _mapProfileSpot = null;
 let _mapProfilePoints = null; // cached terrain points
+let _mapProfileProfile = null; // cached raw V2 profile (points + DEM/spacing metadata)
 let _mapProfileK = 0.17;
 
 function openMapProfile(spot) {
   _mapProfileSpot = spot;
   _mapProfilePoints = null;
+  _mapProfileProfile = null;
 
   // K ERA5 depuis les prévisions si dispo
   const fc = (window.forecasts || {})[spot.id];
@@ -9569,17 +9575,10 @@ function onMapProfileSlider(val) {
 async function fetchAndRenderMapProfile(spot, k) {
   const svgDiv = document.getElementById('map-profile-svg');
   try {
-    const N = 50;
-    const pts = interpolatePoints(spot.obs.lat, spot.obs.lon, spot.tgt.lat, spot.tgt.lon, N);
-    const lats = pts.map(p => p.lat.toFixed(6)).join(',');
-    const lons = pts.map(p => p.lon.toFixed(6)).join(',');
-    const url = `https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lons}`;
-    const resp = await fetch(url, {signal: AbortSignal.timeout(12000)});
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    const data = await resp.json();
-    if (!data.elevation || !data.elevation.length) throw new Error('no_data');
-    const distM = spot.dist_km * 1000;
-    _mapProfilePoints = pts.map((p, i) => ({ dist: p.f * distM, elev: data.elevation[i] }));
+    // Pipeline V2 : trajet géodésique + DEM haute résolution, échantillonnage adaptatif.
+    const profile = await loadVLDTerrainProfile(spot);
+    _mapProfileProfile = profile;
+    _mapProfilePoints = profile.points; // bruts — l'analyse κ est refaite au rendu
     renderMapProfileSVG(spot, _mapProfilePoints, _mapProfileK);
   } catch(err) {
     svgDiv.innerHTML = `<div style="padding:2.5rem;text-align:center;color:var(--text3);font-family:var(--mono);font-size:11px">❌ Profil terrain indisponible (${err.message})</div>`;
@@ -9591,7 +9590,11 @@ function renderMapProfileSVG(spot, points, k) {
   const statDiv = document.getElementById('map-profile-stats');
   const obsAlt = spot.obs.alt || 0;
   const tgtAlt = spot.tgt.alt || 0;
-  const totalDist = spot.dist_km * 1000;
+  // Analyse centralisée V2 (dépend de κ) — refaite à chaque changement de κ,
+  // aucun re-fetch DEM nécessaire (points bruts déjà en cache).
+  const analysed = analyseTerrainObstruction(spot, points, k);
+  const aPoints = analysed.points; // {dist, elev, losRefr, clearanceM, blocked, dataset}
+  const totalDist = aPoints.at(-1).dist;
   const R = 6371000;
   const Rp = R / (1 - k);
 
@@ -9600,8 +9603,8 @@ function renderMapProfileSVG(spot, points, k) {
   // LOS avec réfraction : lift parabolique
   const losRefr = d => losElev(d) + (d * (totalDist - d)) / (2 * Rp);
 
-  const elevations = points.map(p => p.elev);
-  const allY = [...elevations, obsAlt, tgtAlt, ...points.map(p => losRefr(p.dist))];
+  const validElevs = aPoints.map(p => p.elev).filter(e => e != null && Number.isFinite(e));
+  const allY = [...validElevs, obsAlt, tgtAlt, ...aPoints.map(p => p.losRefr)];
   const minElev = Math.min(...allY) - 80;
   const maxElev = Math.max(...allY) + 180;
 
@@ -9610,33 +9613,32 @@ function renderMapProfileSVG(spot, points, k) {
   const sx = d => PAD.l + (d / totalDist) * iW;
   const sy = e => PAD.t + iH - ((e - minElev) / (maxElev - minElev)) * iH;
 
-  // Obstacles (terrain > LOS réfractée)
-  const obstacles = points.filter((p, i) => i > 0 && i < points.length - 1 && p.elev > losRefr(p.dist));
-  const maxObs = obstacles.length ? obstacles.reduce((a, b) =>
-    (a.elev - losRefr(a.dist)) > (b.elev - losRefr(b.dist)) ? a : b) : null;
+  // Obstacles — calculés une seule fois par analyseTerrainObstruction (p.blocked)
+  const obstacles = aPoints.filter(p => p.blocked);
+  const maxObs = obstacles.length ? obstacles.reduce((a, b) => (a.clearanceM < b.clearanceM ? a : b)) : null;
 
   // Terrain polygon
-  const terrainPts = points.map(p => `${sx(p.dist).toFixed(1)},${sy(p.elev).toFixed(1)}`).join(' ');
+  const terrainPts = aPoints.map(p => `${sx(p.dist).toFixed(1)},${sy(Number.isFinite(p.elev) ? p.elev : minElev).toFixed(1)}`).join(' ');
   const terrainPoly = `${sx(0)},${sy(minElev)} ${terrainPts} ${sx(totalDist)},${sy(minElev)}`;
 
   // LOS lignes
   const losGeoLine = `${sx(0)},${sy(obsAlt)} ${sx(totalDist)},${sy(tgtAlt)}`;
-  const losRefrPts = points.map(p => `${sx(p.dist).toFixed(1)},${sy(losRefr(p.dist)).toFixed(1)}`).join(' ');
+  const losRefrPts = aPoints.map(p => `${sx(p.dist).toFixed(1)},${sy(p.losRefr).toFixed(1)}`).join(' ');
 
   // Zone visible (entre LOS réfractée et terrain quand terrain < LOS)
-  const clearPts = points.filter(p => p.elev < losRefr(p.dist));
+  const clearPts = aPoints.filter(p => Number.isFinite(p.elev) && p.elev < p.losRefr);
   let clearZone = '';
   if (clearPts.length > 1) {
     // Highlight visible corridor subtly
-    const topLine = points.map(p => `${sx(p.dist).toFixed(1)},${sy(losRefr(p.dist)).toFixed(1)}`).join(' ');
-    const botLine = points.map(p => `${sx(p.dist).toFixed(1)},${sy(Math.max(p.elev, minElev)).toFixed(1)}`).reverse().join(' ');
+    const topLine = aPoints.map(p => `${sx(p.dist).toFixed(1)},${sy(p.losRefr).toFixed(1)}`).join(' ');
+    const botLine = aPoints.map(p => `${sx(p.dist).toFixed(1)},${sy(Math.max(Number.isFinite(p.elev) ? p.elev : minElev, minElev)).toFixed(1)}`).reverse().join(' ');
     clearZone = `<polygon points="${topLine} ${botLine}" fill="rgba(56,189,248,0.06)" stroke="none"/>`;
   }
 
   // Obstacle zones
   let obsZones = '';
   obstacles.forEach(p => {
-    const x = sx(p.dist), top = sy(p.elev), bot = sy(losRefr(p.dist));
+    const x = sx(p.dist), top = sy(p.elev), bot = sy(p.losRefr);
     obsZones += `<line x1="${x}" y1="${top}" x2="${x}" y2="${bot}" stroke="#ef4444" stroke-width="2" opacity="0.75"/>`;
   });
 
@@ -9666,10 +9668,13 @@ function renderMapProfileSVG(spot, points, k) {
   // Horizon check
   const d_H = Math.sqrt((Rp + obsAlt) ** 2 - Rp ** 2);
   let verdictColor, verdictText;
-  if (d_H >= totalDist) {
+  if (analysed.status === 'INDETERMINATE') {
+    verdictText = `❓ Indéterminé (${analysed.missingCount} pts manquants)`;
+    verdictColor = '#f59e0b';
+  } else if (d_H >= totalDist) {
     const visibleM = Math.max(0, tgtAlt - (Math.sqrt((totalDist - d_H < 0 ? 0 : (totalDist - d_H) ** 2 + Rp ** 2) - Rp)));
-    verdictText = obstacles.length === 0 ? `✅ Visible · +${Math.round(visibleM)}m` : `⚠️ Terrain obstacle`;
-    verdictColor = obstacles.length === 0 ? '#22c55e' : '#f59e0b';
+    verdictText = analysed.status === 'CLEAR' ? `✅ Visible · +${Math.round(visibleM)}m` : `⚠️ Terrain obstacle`;
+    verdictColor = analysed.status === 'CLEAR' ? '#22c55e' : '#f59e0b';
   } else {
     const inner = totalDist - d_H;
     const hh = Math.sqrt(inner * inner + Rp * Rp) - Rp;
@@ -9681,7 +9686,7 @@ function renderMapProfileSVG(spot, points, k) {
       verdictText = `❌ Caché · ${Math.round(hh - tgtAlt)}m sous horizon`;
       verdictColor = '#f87171';
     }
-    if (obstacles.length > 0) { verdictText += ` + terrain`; verdictColor = '#f87171'; }
+    if (analysed.status === 'BLOCKED') { verdictText += ` + terrain`; verdictColor = '#f87171'; }
   }
 
   // Legend
@@ -9716,7 +9721,10 @@ function renderMapProfileSVG(spot, points, k) {
   svgDiv.innerHTML = svg;
 
   // Stats
-  const maxExcess = maxObs ? Math.round(maxObs.elev - losRefr(maxObs.dist)) : 0;
+  const maxExcess = maxObs ? Math.round(-maxObs.clearanceM) : 0;
+  const confColor = analysed.confidenceLabel === 'HIGH' ? 'var(--green)' : analysed.confidenceLabel === 'MEDIUM' ? 'var(--orange)' : '#f87171';
+  const dataset = aPoints[0]?.dataset || '—';
+  const spacingM = _mapProfileProfile?.spacingM || (totalDist / (aPoints.length - 1));
   statDiv.innerHTML = `
     <div class="mp-stat">
       <div class="mp-stat-label">VERDICT</div>
@@ -9734,69 +9742,227 @@ function renderMapProfileSVG(spot, points, k) {
     </div>
     <div class="mp-stat">
       <div class="mp-stat-label">SOURCE TERRAIN</div>
-      <div class="mp-stat-val" style="color:var(--text2);font-size:10px">Open-Meteo · ${points.length} pts</div>
+      <div class="mp-stat-val" style="color:var(--text2);font-size:10px">${dataset} · ${aPoints.length} pts · ~${Math.round(spacingM)}m</div>
+    </div>
+    <div class="mp-stat">
+      <div class="mp-stat-label">CONFIANCE</div>
+      <div class="mp-stat-val" style="color:${confColor}">${analysed.confidenceLabel} (${Math.round(analysed.confidence*100)}%)</div>
     </div>`;
 }
 
 
-// Interpoler N points entre obs et cible sur la grande-cercle
-function interpolatePoints(lat1, lon1, lat2, lon2, n) {
+// ═══════════════════════════════════════════════════
+// VLD TERRAIN ENGINE V2 — DEM fiable (EU-DEM/SRTM via OpenTopoData,
+// fallback Open-Meteo), trajet géodésique, échantillonnage adaptatif,
+// analyse d'obstruction centralisée. Voir cahier des charges V2.
+// ═══════════════════════════════════════════════════
+const VLD_TERRAIN_CONFIG = Object.freeze({
+  spacingM: 250,
+  maxPoints: 4000,
+  demPrimary: 'eudem25m,srtm30m',
+  demFallback: 'open-meteo',
+  obstructionToleranceM: 5,
+  batchSize: 100,
+  batchDelayMs: 1050
+});
+
+function haversineDistanceM(lat1, lon1, lat2, lon2) {
+  const R = 6371008.8;
+  const p1 = lat1 * Math.PI / 180;
+  const p2 = lat2 * Math.PI / 180;
+  const dp = (lat2 - lat1) * Math.PI / 180;
+  const dl = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function getTerrainSampleCount(distM) {
+  return Math.min(
+    VLD_TERRAIN_CONFIG.maxPoints,
+    Math.max(2, Math.ceil(distM / VLD_TERRAIN_CONFIG.spacingM) + 1)
+  );
+}
+
+// Interpolation géodésique (grand cercle, slerp sur la sphère) — remplace
+// l'ancien mélange linéaire lat/lon qui pouvait rater des crêtes situées
+// hors de la trajectoire réelle sur les longues distances.
+function geodesicInterpolate(lat1, lon1, lat2, lon2, n) {
+  const toRad = d => d * Math.PI / 180, toDeg = r => r * 180 / Math.PI;
+  const phi1 = toRad(lat1), lam1 = toRad(lon1);
+  const phi2 = toRad(lat2), lam2 = toRad(lon2);
+  const x1 = Math.cos(phi1) * Math.cos(lam1), y1 = Math.cos(phi1) * Math.sin(lam1), z1 = Math.sin(phi1);
+  const x2 = Math.cos(phi2) * Math.cos(lam2), y2 = Math.cos(phi2) * Math.sin(lam2), z2 = Math.sin(phi2);
+  const dotP = Math.max(-1, Math.min(1, x1 * x2 + y1 * y2 + z1 * z2));
+  const theta = Math.acos(dotP);
   const pts = [];
   for (let i = 0; i <= n; i++) {
     const f = i / n;
-    pts.push({ lat: lat1 + (lat2 - lat1) * f, lon: lon1 + (lon2 - lon1) * f, f });
+    if (theta < 1e-12) { pts.push({ lat: lat1, lon: lon1, f }); continue; }
+    const A = Math.sin((1 - f) * theta) / Math.sin(theta);
+    const B = Math.sin(f * theta) / Math.sin(theta);
+    const x = A * x1 + B * x2, y = A * y1 + B * y2, z = A * z1 + B * z2;
+    const lat = toDeg(Math.atan2(z, Math.sqrt(x * x + y * y)));
+    const lon = toDeg(Math.atan2(y, x));
+    pts.push({ lat, lon, f });
   }
   return pts;
+}
+
+// Conservé pour compatibilité ascendante — délègue au trajet géodésique.
+function interpolatePoints(lat1, lon1, lat2, lon2, n) {
+  return geodesicInterpolate(lat1, lon1, lat2, lon2, n);
+}
+
+function vldSleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// DEM primaire : OpenTopoData (EU-DEM 25m puis SRTM 30m). Retourne un
+// tableau d'altitudes (ou null pour NODATA/mer), dans l'ordre des points.
+async function queryOpenTopoData(points) {
+  const results = [];
+  for (let i = 0; i < points.length; i += VLD_TERRAIN_CONFIG.batchSize) {
+    const batch = points.slice(i, i + VLD_TERRAIN_CONFIG.batchSize);
+    const locations = batch.map(p => `${p.lat.toFixed(6)},${p.lon.toFixed(6)}`).join('|');
+    const url = 'https://api.opentopodata.org/v1/' + VLD_TERRAIN_CONFIG.demPrimary + '?' +
+      new URLSearchParams({ locations, interpolation: 'bilinear', nodata_value: 'null' });
+    const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!resp.ok) throw new Error(`OpenTopoData HTTP ${resp.status}`);
+    const json = await resp.json();
+    if (!json.results) throw new Error('OpenTopoData: réponse invalide');
+    results.push(...json.results.map(r => (r && Number.isFinite(r.elevation)) ? r.elevation : null));
+    if (i + VLD_TERRAIN_CONFIG.batchSize < points.length) await vldSleep(VLD_TERRAIN_CONFIG.batchDelayMs);
+  }
+  return results;
+}
+
+// Fallback : Open-Meteo (GLO-90), moins précis mais toujours disponible.
+async function queryOpenMeteoElevation(points) {
+  const results = [];
+  for (let i = 0; i < points.length; i += 100) {
+    const batch = points.slice(i, i + 100);
+    const lats = batch.map(p => p.lat.toFixed(6)).join(',');
+    const lons = batch.map(p => p.lon.toFixed(6)).join(',');
+    const url = `https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lons}`;
+    const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!resp.ok) throw new Error(`Open-Meteo HTTP ${resp.status}`);
+    const json = await resp.json();
+    if (!json.elevation || !json.elevation.length) throw new Error('Open-Meteo: pas de données');
+    results.push(...json.elevation.map(e => Number.isFinite(e) ? e : null));
+  }
+  return results;
+}
+
+// Chargeur de profil terrain partagé par les trois vues (overlay, inline, carte).
+// Trajet géodésique + échantillonnage adaptatif (~250m, plafond 4000 pts) +
+// DEM haute résolution avec fallback automatique.
+async function loadVLDTerrainProfile(spot) {
+  const totalDist = haversineDistanceM(spot.obs.lat, spot.obs.lon, spot.tgt.lat, spot.tgt.lon);
+  const N = getTerrainSampleCount(totalDist);
+  const geoPoints = geodesicInterpolate(spot.obs.lat, spot.obs.lon, spot.tgt.lat, spot.tgt.lon, N);
+
+  let elevations, dataset;
+  try {
+    elevations = await queryOpenTopoData(geoPoints);
+    const missing = elevations.filter(e => e == null).length;
+    if (missing > elevations.length * 0.5) throw new Error('trop de NODATA OpenTopoData');
+    dataset = 'EU-DEM 25m / SRTM 30m';
+  } catch (err) {
+    dataset = 'Open-Meteo (fallback)';
+    elevations = await queryOpenMeteoElevation(geoPoints);
+  }
+
+  const points = geoPoints.map((p, i) => ({
+    lat: p.lat, lon: p.lon, f: p.f,
+    dist: totalDist * p.f,
+    elev: elevations[i],
+    dataset
+  }));
+
+  return { points, totalDist, dataset, sampleCount: points.length, spacingM: N > 0 ? totalDist / N : totalDist };
+}
+
+// Analyse centralisée de la ligne de visée : une seule fonction produit
+// CLEAR / BLOCKED / INDETERMINATE, consommée par les trois renderers.
+function analyseTerrainObstruction(spot, points, k) {
+  const totalDist = points.at(-1).dist;
+  const obsAlt = spot.obs.alt || 0;
+  const tgtAlt = spot.tgt.alt || 0;
+  const R = 6371000;
+  const Rp = R / (1 - k);
+
+  const losGeo = d => obsAlt + (tgtAlt - obsAlt) * (d / totalDist);
+  const losRefr = d => losGeo(d) + (d * (totalDist - d)) / (2 * Rp);
+
+  let minClearanceM = Infinity;
+  let maxObstacle = null;
+
+  const analysed = points.map((p, i) => {
+    const hasElev = p.elev != null && Number.isFinite(p.elev);
+    const clearanceM = hasElev ? (losRefr(p.dist) - p.elev) : null;
+    const blocked = hasElev && i > 0 && i < points.length - 1 &&
+      clearanceM < -VLD_TERRAIN_CONFIG.obstructionToleranceM;
+    if (hasElev && clearanceM < minClearanceM) {
+      minClearanceM = clearanceM;
+      maxObstacle = { ...p, clearanceM };
+    }
+    return { ...p, losGeo: losGeo(p.dist), losRefr: losRefr(p.dist), clearanceM, blocked };
+  });
+
+  const missingCount = analysed.filter(p => p.elev == null || !Number.isFinite(p.elev)).length;
+  const hasMissing = missingCount > 0;
+  const hasBlocked = analysed.some(p => p.blocked);
+  const status = hasBlocked ? 'BLOCKED' : hasMissing ? 'INDETERMINATE' : 'CLEAR';
+
+  // Confiance : pénalise données manquantes et marge de clearance faible.
+  const missingRatio = missingCount / analysed.length;
+  let confidence = 1 - missingRatio * 0.6;
+  if (Number.isFinite(minClearanceM) && Math.abs(minClearanceM) < 20) confidence -= 0.15;
+  confidence = Math.max(0.1, Math.min(1, confidence));
+  const confidenceLabel = confidence >= 0.75 ? 'HIGH' : confidence >= 0.45 ? 'MEDIUM' : 'LOW';
+
+  return { points: analysed, status, minClearanceM, maxObstacle, confidence, confidenceLabel, missingCount };
+}
+
+// Pipeline complète : chargement DEM + analyse. Utilisée quand aucun
+// re-calcul interactif du κ n'est nécessaire (overlay terrain simple).
+async function runVLDTerrainEngine(spot, k) {
+  const profile = await loadVLDTerrainProfile(spot);
+  const analysed = analyseTerrainObstruction(spot, profile.points, k);
+  return { ...profile, ...analysed };
 }
 
 async function fetchAndRenderTerrain(spot) {
   const svgDiv  = document.getElementById('terrain-overlay-svg');
   const statDiv = document.getElementById('terrain-overlay-stats');
   try {
-    const N = 50;
     const obsAlt = spot.obs.alt || 0;
     const tgtAlt = spot.tgt.alt || 0;
-    const distM  = spot.dist_km * 1000;
 
-    // Générer les points intermédiaires
-    const pts = interpolatePoints(spot.obs.lat, spot.obs.lon, spot.tgt.lat, spot.tgt.lon, N);
-    const lats = pts.map(p => p.lat.toFixed(6)).join(',');
-    const lons = pts.map(p => p.lon.toFixed(6)).join(',');
-
-    // Open-Meteo elevation API — CORS OK, gratuit, sans clé
-    const url = `https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lons}`;
-    const resp = await fetch(url, {signal: AbortSignal.timeout(12000)});
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    const data = await resp.json();
-    if (!data.elevation || !data.elevation.length) throw new Error('no_data');
-
-    const elevations = data.elevation;
-    const points = pts.map((p, i) => ({
-      dist: p.f * distM,
-      elev: elevations[i],
-    }));
-
-    const totalDist = distM;
     // Utilise K ERA5 du jour si disponible
     const fc0 = (window.forecasts || {})[spot.id]?.[0]?.raw;
     const k = (fc0?.k_bislin != null) ? fc0.k_bislin : 0.17;
+
+    // Pipeline centralisée V2 : trajet géodésique + DEM haute résolution +
+    // analyse d'obstruction unique (voir VLD_TERRAIN_CONFIG plus haut).
+    const engineResult = await runVLDTerrainEngine(spot, k);
+    const points = engineResult.points; // {dist, elev, losRefr, clearanceM, blocked, dataset, ...}
+    const totalDist = engineResult.totalDist;
     const R = 6371000;
-    const losElev = d => obsAlt + (tgtAlt - obsAlt) * (d / totalDist);
-    const losRefr = d => losElev(d) + (d * (totalDist - d)) / (2 * R / (1 - k));
+    const Rp = R / (1 - k);
+    const losRefr = d => (obsAlt + (tgtAlt - obsAlt) * (d / totalDist)) + (d * (totalDist - d)) / (2 * Rp);
 
-    const obstacles = points.filter((p,i) => i>0 && i<points.length-1 && p.elev > losRefr(p.dist));
-    const maxObs = obstacles.length ? obstacles.reduce((a,b) =>
-      (a.elev - losRefr(a.dist)) > (b.elev - losRefr(b.dist)) ? a : b) : null;
+    const obstacles = points.filter(p => p.blocked);
+    const maxObs = obstacles.length ? obstacles.reduce((a, b) => (a.clearanceM < b.clearanceM ? a : b)) : null;
 
-    const minElev = Math.min(...elevations, obsAlt, tgtAlt) - 50;
-    const maxElev = Math.max(...elevations, obsAlt, tgtAlt) + 150;
+    const validElevs = points.map(p => p.elev).filter(e => e != null && Number.isFinite(e));
+    const minElev = Math.min(...validElevs, obsAlt, tgtAlt) - 50;
+    const maxElev = Math.max(...validElevs, obsAlt, tgtAlt) + 150;
 
     const W=800, H=260, PAD={t:24,r:20,b:40,l:55};
     const iW = W-PAD.l-PAD.r, iH = H-PAD.t-PAD.b;
     const sx = d => PAD.l + (d/totalDist)*iW;
     const sy = e => PAD.t + iH - ((e-minElev)/(maxElev-minElev))*iH;
 
-    const terrainPts = points.map(p => `${sx(p.dist).toFixed(1)},${sy(p.elev).toFixed(1)}`).join(' ');
+    const terrainPts = points.map(p => `${sx(p.dist).toFixed(1)},${sy(Number.isFinite(p.elev) ? p.elev : minElev).toFixed(1)}`).join(' ');
     const terrainPoly = `${sx(0)},${sy(minElev)} ${terrainPts} ${sx(totalDist)},${sy(minElev)}`;
     const losLine = `${sx(0)},${sy(obsAlt)} ${sx(totalDist)},${sy(tgtAlt)}`;
     const refrPts = points.map(p => `${sx(p.dist).toFixed(1)},${sy(losRefr(p.dist)).toFixed(1)}`).join(' ');
@@ -9831,7 +9997,7 @@ async function fetchAndRenderTerrain(spot) {
       <line x1="${Lx+55}" y1="${Ly}" x2="${Lx+65}" y2="${Ly}" stroke="rgba(255,255,255,0.3)" stroke-width="1" stroke-dasharray="3,2"/>
       <text x="${Lx+68}" y="${Ly+2}" fill="#8899aa" font-size="8" font-family="monospace">LOS géom.</text>
       <line x1="${Lx+120}" y1="${Ly}" x2="${Lx+130}" y2="${Ly}" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="3,2"/>
-      <text x="${Lx+133}" y="${Ly+2}" fill="#38bdf8" font-size="8" font-family="monospace">LOS κ=0.17</text>
+      <text x="${Lx+133}" y="${Ly+2}" fill="#38bdf8" font-size="8" font-family="monospace">LOS κ=${k.toFixed(3)}</text>
       ${obstacles.length?`<line x1="${Lx+185}" y1="${Ly-2}" x2="${Lx+185}" y2="${Ly+4}" stroke="#ef4444" stroke-width="2.5" opacity="0.8"/><text x="${Lx+190}" y="${Ly+2}" fill="#f87171" font-size="8" font-family="monospace">Obstacle</text>`:''}`;
 
     const svg=`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
@@ -9848,10 +10014,13 @@ async function fetchAndRenderTerrain(spot) {
 
     svgDiv.innerHTML = svg;
 
-    const verdict = obstacles.length===0
-      ? `<span style="color:var(--green)">✅ Couloir dégagé</span>`
-      : `<span style="color:#f87171">⚠️ ${obstacles.length} obstacle(s)</span>`;
-    const maxExcess = maxObs ? Math.round(maxObs.elev - losRefr(maxObs.dist)) : 0;
+    const verdict = engineResult.status === 'BLOCKED'
+      ? `<span style="color:#f87171">⚠️ ${obstacles.length} obstacle(s)</span>`
+      : engineResult.status === 'INDETERMINATE'
+      ? `<span style="color:#f59e0b">❓ Indéterminé (${engineResult.missingCount} pts manquants)</span>`
+      : `<span style="color:var(--green)">✅ Couloir dégagé</span>`;
+    const maxExcess = maxObs ? Math.round(-maxObs.clearanceM) : 0;
+    const confColor = engineResult.confidenceLabel === 'HIGH' ? 'var(--green)' : engineResult.confidenceLabel === 'MEDIUM' ? 'var(--orange)' : '#f87171';
 
     statDiv.innerHTML=`
       <div class="terrain-stat-box">
@@ -9870,7 +10039,11 @@ async function fetchAndRenderTerrain(spot) {
       </div>
       <div class="terrain-stat-box">
         <div class="terrain-stat-label">SOURCE</div>
-        <div class="terrain-stat-val" style="color:var(--text2);font-size:10px">Open-Meteo · ${points.length} pts</div>
+        <div class="terrain-stat-val" style="color:var(--text2);font-size:10px">${engineResult.dataset} · ${points.length} pts · ~${Math.round(engineResult.spacingM)}m</div>
+      </div>
+      <div class="terrain-stat-box">
+        <div class="terrain-stat-label">CONFIANCE</div>
+        <div class="terrain-stat-val" style="color:${confColor}">${engineResult.confidenceLabel} (${Math.round(engineResult.confidence*100)}%)</div>
       </div>`;
 
   } catch(err) {
