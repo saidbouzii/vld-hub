@@ -5173,6 +5173,24 @@ pm10: (()=>{ const v=[avg(d3.hourly?.pm10),avg(d3b?.hourly?.pm10),avg(d3c?.hourl
 aod_obs: avg(d3b?.hourly?.aerosol_optical_depth),
 aod_mid: avg(d3?.hourly?.aerosol_optical_depth),
 aod_tgt: avg(d3c?.hourly?.aerosol_optical_depth),
+// §28 — Décision 05/09-8 : diagnostic brut (pas un fix) pour comprendre
+// pourquoi aod_obs/mid/tgt sont quasi-systématiquement null en usage réel
+// alors que dust/pm10 (même appel API) sont bien renseignés. Capture l'état
+// du tableau AVANT qu'avg() ne le réduise en null, pour distinguer "champ
+// absent de la réponse API" de "champ présent mais vide sur la fenêtre 5h-11h
+// utilisée par avg()". Exposé via le diagnostic ATM_SIGMA_*_FALLBACK déjà
+// affiché dans le panneau — aucune nouvelle UI, aucun changement de score.
+_aodRawDebug: (() => {
+  const describe = (json) => {
+    const arr = json?.hourly?.aerosol_optical_depth;
+    if (!Array.isArray(arr)) return "absent (champ non renvoyé par l'API)";
+    const windowVals = arr.slice(s, e);
+    const nonNullWindow = windowVals.filter(x => x !== null && x !== undefined && !isNaN(x)).length;
+    const nonNullTotal = arr.filter(x => x !== null && x !== undefined && !isNaN(x)).length;
+    return `présent (${arr.length} pts au total, ${nonNullTotal} non-null au total, ${nonNullWindow}/${windowVals.length} non-null sur la fenêtre 5h-11h)`;
+  };
+  return { obs: describe(d3b), mid: describe(d3), tgt: describe(d3c) };
+})(),
 dust_obs: avg(d3b?.hourly?.dust),
 dust_mid: avg(d3?.hourly?.dust),
 dust_tgt: avg(d3c?.hourly?.dust),
@@ -8574,7 +8592,7 @@ function computeAtmosphereSubscoreV2(spot, h, aodResPrecomputed) {
     sigma = Math.max(aodRes.aodEffective * VLD_LEGACY_KOSCH_CALIBRATION.value * rhFactor, 0.0001);
     sigmaSource = 'AGGREGATE';
     diagnostics.push(vldDiag("ATM_SIGMA_AGGREGATE_FALLBACK", "info", VLD_MODEL_TYPES.HEURISTIC,
-      `Sigma pointwise non calculable (OBS/MID incomplets) : repli sur AOD/RH agrégés uniques (comportement d'origine).`));
+      `Sigma pointwise non calculable (OBS/MID incomplets) : repli sur AOD/RH agrégés uniques (comportement d'origine).${h._aodRawDebug ? ` [debug §28] obs:${h._aodRawDebug.obs} · mid:${h._aodRawDebug.mid} · tgt:${h._aodRawDebug.tgt}` : ''}`));
   } else if (rh !== null) {
     // §27 — Décision 05/09-6 : quand l'AOD est TOTALEMENT indisponible (aucune
     // valeur, ni pointwise ni agrégée), le comportement d'origine sautait
@@ -8598,7 +8616,7 @@ function computeAtmosphereSubscoreV2(spot, h, aodResPrecomputed) {
     score += rhOnlyScore; maxScore += 60;
     sigmaSource = 'RH_ONLY_FALLBACK';
     diagnostics.push(vldDiag("ATM_SIGMA_RH_ONLY_FALLBACK", "warning", VLD_MODEL_TYPES.HEURISTIC,
-      `AOD totalement indisponible (aucune donnée, ni pointwise ni agrégée) : repli RH-only direct et prudent (linéaire ${RH_FALLBACK_SCORE_MAX}%→60/60, ${RH_FALLBACK_SCORE_MIN}%→0/60, bornes de prudence — pas une loi physique), RH=${rh.toFixed(0)}% → ${rhOnlyScore.toFixed(1)}/60 (§27, décision 05/09-6, remplace le fallback AOD fictif 05/09-5 jugé trop optimiste sur cas réel). Fiabilité réduite : aucune mesure d'aérosols pour ce point.`));
+      `AOD totalement indisponible (aucune donnée, ni pointwise ni agrégée) : repli RH-only direct et prudent (linéaire ${RH_FALLBACK_SCORE_MAX}%→60/60, ${RH_FALLBACK_SCORE_MIN}%→0/60, bornes de prudence — pas une loi physique), RH=${rh.toFixed(0)}% → ${rhOnlyScore.toFixed(1)}/60 (§27, décision 05/09-6, remplace le fallback AOD fictif 05/09-5 jugé trop optimiste sur cas réel). Fiabilité réduite : aucune mesure d'aérosols pour ce point.${h._aodRawDebug ? ` [debug §28] obs:${h._aodRawDebug.obs} · mid:${h._aodRawDebug.mid} · tgt:${h._aodRawDebug.tgt}` : ''}`));
   }
 
   if (sigmaSource !== 'RH_ONLY_FALLBACK') {
