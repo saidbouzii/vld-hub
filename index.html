@@ -2161,7 +2161,6 @@ tr.country-group-row td{border-bottom:1px solid rgba(255,255,255,.08);background
 </button>
 <div id="hamburger-menu">
   <button class="tab-btn" onclick="switchTab('previsions');toggleHamburger(true)">📡 PRÉVISIONS SPOT</button>
-  <button class="tab-btn" onclick="switchTab('carte');toggleHamburger(true)">🗺️ TERRAIN</button>
   <button class="tab-btn" onclick="switchTab('creator');toggleHamburger(true)">🛠️ CRÉATEUR DE SPOT</button>
   <button class="tab-btn" onclick="switchTab('alertes');toggleHamburger(true)">📨 ALERTES</button>
   <button class="tab-btn" onclick="switchTab('labo');toggleHamburger(true)">🔬 LABO PHOTO</button>
@@ -2172,7 +2171,6 @@ tr.country-group-row td{border-bottom:1px solid rgba(255,255,255,.08);background
 <div class="tab-nav">
   <button class="tab-btn active" onclick="switchTab('accueil')" id="tab-btn-accueil">🏔️ ACCUEIL</button>
   <button class="tab-btn" onclick="switchTab('previsions')" id="tab-btn-previsions">📡 PRÉVISIONS SPOT</button>
-  <button class="tab-btn" onclick="switchTab('carte')" id="tab-btn-carte">🗺️ TERRAIN</button>
   <button class="tab-btn" onclick="switchTab('creator')" id="tab-btn-creator">🛠️ CRÉATEUR DE SPOT</button>
   <button class="tab-btn" onclick="switchTab('alertes')" id="tab-btn-alertes">📨 ALERTES</button>
   <button class="tab-btn" onclick="switchTab('labo')" id="tab-btn-labo">🔬 LABO PHOTO</button>
@@ -2398,12 +2396,6 @@ tr.country-group-row td{border-bottom:1px solid rgba(255,255,255,.08);background
     <div class="hl-carousel" id="hlCarousel">
 
       <div class="hl-carousel-spacer"></div>
-
-      <div class="hl-card" onclick="switchTab('carte')" data-idx="0">
-        <img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/file_000000000a2471f4b22be45f4ee04c2b.png" alt="Carte" loading="lazy" style="object-position: center 55%;">
-        <div class="hl-card-overlay"></div>
-        <div class="hl-card-label">🗺️ Terrain</div>
-      </div>
 
       <div class="hl-card" onclick="switchTab('labo')" data-idx="1">
         <img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/ChatGPT%20Image%2031%20mai%202026%2C%2012_48_21.png" alt="Labo Photo" loading="lazy">
@@ -6418,7 +6410,7 @@ function renderDayRow(dayData, date, spot) {
     </div>
     <div class="drow-body" id="${did}">
       <div class="drow-left"><div class="mb-grid">${renderMeteoButtons(items)}</div>${explainRow}<img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/bandeau4communaute.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;">${communityBanner}</div>
-      <div class="drow-right">${renderNewCurveBlock(spot,k)}<img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/bandeau2optique.png" alt="" style="width:100%;height:66px;object-fit:cover;object-position:center;border-radius:10px;display:block;margin:.75rem 0;">${renderKMini(k,h,spot,getIRScore(forecasts[spot.id], day, spot))}${renderAngularResolutionBlock(h, spot, getApertureMm())}<img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/bandeau3relief.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;margin:.75rem 0;">${renderHWTBlock(spot)}</div>
+      <div class="drow-right">${renderNewCurveBlock(spot,k)}<img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/bandeau2optique.png" alt="" style="width:100%;height:66px;object-fit:cover;object-position:center;border-radius:10px;display:block;margin:.75rem 0;">${renderKMini(k,h,spot,getIRScore(forecasts[spot.id], day, spot))}${renderAngularResolutionBlock(h, spot, getApertureMm())}<img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/bandeau3relief.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;margin:.75rem 0;"></div>
     </div>
   </div>`;
 }
