@@ -9815,6 +9815,20 @@ function interpolatePoints(lat1, lon1, lat2, lon2, n) {
 
 function vldSleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+// Fetch avec reprise automatique sur 429 (rate limit) : respecte l'en-tête
+// Retry-After si présent, sinon backoff exponentiel. Évite qu'une rafale de
+// lots (nécessaire sur les longs trajets) ne se fasse bloquer par l'API.
+async function vldFetchWithRetry(url, { timeoutMs = 15000, maxRetries = 4 } = {}) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const resp = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+    if (resp.status !== 429) return resp;
+    if (attempt === maxRetries) return resp; // on laisse l'appelant gérer l'échec final
+    const retryAfterHeader = parseFloat(resp.headers.get('Retry-After'));
+    const waitMs = Number.isFinite(retryAfterHeader) ? retryAfterHeader * 1000 : 1500 * Math.pow(2, attempt);
+    await vldSleep(waitMs);
+  }
+}
+
 // DEM primaire : OpenTopoData (EU-DEM 25m puis SRTM 30m). Retourne un
 // tableau d'altitudes (ou null pour NODATA/mer), dans l'ordre des points.
 async function queryOpenTopoData(points) {
@@ -9824,7 +9838,7 @@ async function queryOpenTopoData(points) {
     const locations = batch.map(p => `${p.lat.toFixed(6)},${p.lon.toFixed(6)}`).join('|');
     const url = 'https://api.opentopodata.org/v1/' + VLD_TERRAIN_CONFIG.demPrimary + '?' +
       new URLSearchParams({ locations, interpolation: 'bilinear', nodata_value: 'null' });
-    const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    const resp = await vldFetchWithRetry(url);
     if (!resp.ok) throw new Error(`OpenTopoData HTTP ${resp.status}`);
     const json = await resp.json();
     if (!json.results) throw new Error('OpenTopoData: réponse invalide');
@@ -9835,6 +9849,10 @@ async function queryOpenTopoData(points) {
 }
 
 // Fallback : Open-Meteo (GLO-90), moins précis mais toujours disponible.
+// Espacement entre lots + reprise sur 429 : l'API elevation d'Open-Meteo a
+// une limite de débit plus stricte que son API météo et rejetait les longs
+// trajets (plusieurs milliers de points → ~20 lots tirés sans pause).
+const VLD_OPEN_METEO_BATCH_DELAY_MS = 1100;
 async function queryOpenMeteoElevation(points) {
   const results = [];
   for (let i = 0; i < points.length; i += 100) {
@@ -9842,11 +9860,12 @@ async function queryOpenMeteoElevation(points) {
     const lats = batch.map(p => p.lat.toFixed(6)).join(',');
     const lons = batch.map(p => p.lon.toFixed(6)).join(',');
     const url = `https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lons}`;
-    const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    const resp = await vldFetchWithRetry(url);
     if (!resp.ok) throw new Error(`Open-Meteo HTTP ${resp.status}`);
     const json = await resp.json();
     if (!json.elevation || !json.elevation.length) throw new Error('Open-Meteo: pas de données');
     results.push(...json.elevation.map(e => Number.isFinite(e) ? e : null));
+    if (i + 100 < points.length) await vldSleep(VLD_OPEN_METEO_BATCH_DELAY_MS);
   }
   return results;
 }
@@ -9866,6 +9885,7 @@ async function loadVLDTerrainProfile(spot) {
     if (missing > elevations.length * 0.5) throw new Error('trop de NODATA OpenTopoData');
     dataset = 'EU-DEM 25m / SRTM 30m';
   } catch (err) {
+    console.warn('[VLD Terrain] OpenTopoData indisponible, bascule sur Open-Meteo :', err.message);
     dataset = 'Open-Meteo (fallback)';
     elevations = await queryOpenMeteoElevation(geoPoints);
   }
