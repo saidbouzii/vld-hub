@@ -5992,6 +5992,7 @@ function openScoreModal(dataB64) {
     ${v2Summary.atmosphere != null ? `<div class="sep-item">🌫️ Air (transparence) : <strong>${Math.round(v2Summary.atmosphere)}/100</strong></div>` : ''}
     ${v2Summary.atmSigmaDiag ? `<div class="sep-item" style="color:var(--text3);font-size:12px">🔬 ${v2Summary.atmSigmaDiag}</div>` : ''}
     ${v2Summary.cloud != null ? `<div class="sep-item">☁️ Nuages (trajet dégagé) : <strong>${Math.round(v2Summary.cloud)}/100</strong></div>` : ''}
+    ${v2Summary.cloudHighSplitDiag ? `<div class="sep-item" style="color:var(--text3);font-size:12px">☁️🔬 ${v2Summary.cloudHighSplitDiag}</div>` : ''}
     ${v2Summary.refraction != null ? `<div class="sep-item">📐 Trajet de la lumière (réfraction) : <strong>${Math.round(v2Summary.refraction)}/100</strong></div>` : ''}
     ${v2Summary.solar != null ? `<div class="sep-item">☀️ Géométrie solaire (contre-jour/rasant/face) : <strong>${Math.round(v2Summary.solar)}/100</strong></div>`
       : (v2Summary.solarLightingType === 'NO_SUN' ? `<div class="sep-item" style="color:var(--text3)">☀️ Géométrie solaire : soleil sous l'horizon à cet horaire — exclue de la note</div>` : '')}
@@ -6365,6 +6366,11 @@ function renderDayRow(dayData, date, spot) {
         // le diagnostic sigma pointwise OBS/MID (ou son repli agrégé) pour pouvoir
         // vérifier sans devtools si le couplage RH×AOD a été utilisé.
         atmSigmaDiag: (v2.diagnostics.find(d => d.id === 'ATM_SIGMA_POINTWISE' || d.id === 'ATM_SIGMA_AGGREGATE_FALLBACK' || d.id === 'ATM_SIGMA_RH_ONLY_FALLBACK' || d.id === 'ATM_EXTINCTION_UNAVAILABLE') || {}).message ?? null,
+        // Correction cirrus (05/09-8) — expose en clair le détail géométrique vs
+        // diffus du sous-score nuages hauts, pour audit sans devtools (cf. échange
+        // ChatGPT du 07/09 demandant les valeurs exactes de CLOUD_HIGH_SPLIT).
+        cloudHighSplitDiag: (v2.diagnostics.find(d => d.id === 'CLOUD_HIGH_SPLIT') || {}).message ?? null,
+        cloudHigh: v2.clouds?.high ?? null,
       };
     }
   } catch (e) {
