@@ -5995,7 +5995,7 @@ function openScoreModal(dataB64) {
     ${v2Summary.refraction != null ? `<div class="sep-item">📐 Trajet de la lumière (réfraction) : <strong>${Math.round(v2Summary.refraction)}/100</strong></div>` : ''}
     ${v2Summary.solar != null ? `<div class="sep-item">☀️ Géométrie solaire (contre-jour/rasant/face) : <strong>${Math.round(v2Summary.solar)}/100</strong></div>`
       : (v2Summary.solarLightingType === 'NO_SUN' ? `<div class="sep-item" style="color:var(--text3)">☀️ Géométrie solaire : soleil sous l'horizon à cet horaire — exclue de la note</div>` : '')}
-    ${v2Summary.synthesis != null ? `<div class="sep-item">🧮 Note (Air 30% · Nuages 18% · Réfraction 15% · Géométrie solaire 15%, renormalisé si un critère manque) : <strong>${v2Summary.synthesis}/100</strong></div>
+    ${v2Summary.synthesis != null ? `<div class="sep-item">🧮 Note (Air 30% · Nuages 18% · Réfraction 15% · Géométrie solaire 15% ; Résolution effective 22% temporairement exclue et non calibrée → poids ci-dessus renormalisés sur 100%) : <strong>${v2Summary.synthesis}/100</strong></div>
       <div style="font-size:11px;color:var(--text3);margin:.15rem 0 .5rem;line-height:1.5">
         La courbure terrestre (Bislin/globe) n'entre volontairement <strong>jamais</strong> dans cette
         note — elle reste affichée séparément, à titre informatif uniquement.
@@ -7901,6 +7901,32 @@ const VLD_CLOUD_OPACITY_FACTORS = Object.freeze({
 });
 
 /**
+ * PHASE V2.0-H(bis) — correction cirrus (05/09-8, diagnostic ChatGPT).
+ * Constat : computeCloudPathV2() ne pénalisait cloud_high QUE via
+ * pathFraction (fraction du trajet où le rayon géométrique traverse
+ * >MID_TOP=6000m). Pour une visée VLD quasi-horizontale entre deux sommets
+ * de faible/moyenne altitude, ce rayon ne dépasse presque jamais 6000m :
+ * fracHigh≈0 en permanence, donc un ciel 100% cirrus ressortait à
+ * "Nuages : 100/100" (trajet dégagé) — contradiction visible avec le score
+ * legacy V1 qui pénalise correctement (-14 pts). Cause physique : un voile
+ * de cirrus dégrade le contraste par diffusion/réflexion de la lumière
+ * ambiante sur toute la scène, même quand le rayon de visée ne "traverse"
+ * pas géométriquement la couche à 8-10km — ce n'est pas une obstruction
+ * ponctuelle comme un nuage bas, c'est un effet de voile global.
+ * Ce facteur porte cet effet diffus, calculé uniquement à partir de
+ * cloud_high (pas de pathFraction), et est combiné par MAX (pas addition)
+ * avec le bloc géométrique existant pour ne jamais compter deux fois le
+ * même phénomène si le rayon traverse réellement la couche haute (cas rare
+ * mais possible sur de très longues lignes). Valeur de départ volontairement
+ * inférieure à l'opacité "high" géométrique (0.45) : un voile de cirrus,
+ * même total, dégrade fortement la transparence mais ne doit pas être
+ * interprété comme "trajet totalement bloqué" (cf. §12) — HEURISTIC tant
+ * que non calibré sur sessions terrain réelles. Ne change ni les seuils
+ * LOW_TOP/MID_TOP, ni le score V1 (-14 pts legacy), ni v2.score.final.
+ */
+const VLD_CLOUD_HIGH_DIFFUSE_FACTOR = 0.35;
+
+/**
  * ═══════════════════════════════════════════════════════════════════════
  * PHASE V2.0-H — Nuages par couches traversées (cahier des charges §12)
  * ═══════════════════════════════════════════════════════════════════════
@@ -7967,7 +7993,20 @@ function computeCloudPathV2(sightline, h) {
   // 0 = aucun impact, 1 = trajet entièrement bloqué par cette couche seule.
   const blockLow  = fracLow  * (covLow  / 100) * VLD_CLOUD_OPACITY_FACTORS.low;
   const blockMid  = fracMid  * (covMid  / 100) * VLD_CLOUD_OPACITY_FACTORS.mid;
-  const blockHigh = fracHigh * (covHigh / 100) * VLD_CLOUD_OPACITY_FACTORS.high;
+
+  // Couche haute (cirrus) — corrigé le 05/09-8 (cf. VLD_CLOUD_HIGH_DIFFUSE_FACTOR
+  // ci-dessus) : deux effets distincts, jamais additionnés.
+  // 1) blockHighGeom : effet géométrique existant (rayon qui traverse réellement
+  //    >MID_TOP) — quasi toujours ≈0 en visée VLD horizontale, ce qui est correct
+  //    physiquement quand ça se produit (rayon qui monte vraiment dans les cirrus).
+  // 2) blockHighDiffuse : voile/diffusion globale liée à cloud_high seul, sans
+  //    dépendre de pathFraction — c'est ce terme qui manquait et causait la
+  //    contradiction "Nuages : 100/100" avec cloud_high=100%.
+  // Combinés par MAX (pas somme) pour ne jamais compter deux fois le même
+  // phénomène si jamais fracHigh redevient significatif sur une ligne extrême.
+  const blockHighGeom    = fracHigh * (covHigh / 100) * VLD_CLOUD_OPACITY_FACTORS.high;
+  const blockHighDiffuse = (covHigh / 100) * VLD_CLOUD_HIGH_DIFFUSE_FACTOR;
+  const blockHigh = Math.max(blockHighGeom, blockHighDiffuse);
 
   // Combinaison façon transmissions indépendantes (chaque couche laisse
   // passer 1-block, on multiplie) plutôt qu'une simple somme : évite qu'une
@@ -7977,15 +8016,23 @@ function computeCloudPathV2(sightline, h) {
 
   diagnostics.push(vldDiag("CLOUD_PATH_FRACTIONS", "info", VLD_MODEL_TYPES.PHYSICAL,
     `Rayon traverse : couche basse sur ${(fracLow * 100).toFixed(0)}% du trajet, moyenne sur ${(fracMid * 100).toFixed(0)}%, haute sur ${(fracHigh * 100).toFixed(0)}% (ligne de visée V2.0-D, ${lenTotal.toFixed(0)} km).`));
+  diagnostics.push(vldDiag("CLOUD_HIGH_SPLIT", "info", VLD_MODEL_TYPES.HEURISTIC,
+    `Nuages hauts (cloud_high=${Math.round(covHigh)}%) : impact géométrique ${Math.round(blockHighGeom * 100)}% (rayon traverse réellement >6000m sur ${(fracHigh * 100).toFixed(0)}% du trajet) · impact diffus/voile ${Math.round(blockHighDiffuse * 100)}% (indépendant de la géométrie) · retenu (max) ${Math.round(blockHigh * 100)}%.`));
   diagnostics.push(vldDiag("CLOUD_OPACITY_HEURISTIC", "warning", VLD_MODEL_TYPES.HEURISTIC,
-    "Facteurs d'opacité relative par couche (VLD_CLOUD_OPACITY_FACTORS) non calibrés sur données terrain — valeurs de départ."));
+    "Facteurs d'opacité relative par couche (VLD_CLOUD_OPACITY_FACTORS, VLD_CLOUD_HIGH_DIFFUSE_FACTOR) non calibrés sur données terrain — valeurs de départ."));
 
   return {
     low:  { coveragePct: covLow,  pathFraction: fracLow,  blockPct: Math.round(blockLow * 100) },
     mid:  { coveragePct: covMid,  pathFraction: fracMid,  blockPct: Math.round(blockMid * 100) },
-    high: { coveragePct: covHigh, pathFraction: fracHigh, blockPct: Math.round(blockHigh * 100) },
-    cloudBlockPct, // 0-100, "quelle part du trajet est effectivement bloquée par les nuages"
-    modelType: VLD_MODEL_TYPES.HEURISTIC, // physique pour la géométrie, heuristique pour l'opacité → bloc global heuristic
+    high: {
+      coveragePct: covHigh,
+      pathFraction: fracHigh,
+      blockPctGeometric: Math.round(blockHighGeom * 100),
+      blockPctDiffuse: Math.round(blockHighDiffuse * 100),
+      blockPct: Math.round(blockHigh * 100) // = max(géométrique, diffus) — total retenu pour cette couche
+    },
+    cloudBlockPct, // 0-100, "quelle part du trajet est effectivement bloquée par les nuages" (toutes couches confondues)
+    modelType: VLD_MODEL_TYPES.HEURISTIC, // physique pour la géométrie basse/moyenne, heuristique pour l'opacité et le voile diffus → bloc global heuristic
     diagnostics
   };
 }
