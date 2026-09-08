@@ -5996,6 +5996,7 @@ function openScoreModal(dataB64) {
     ${v2Summary.refraction != null ? `<div class="sep-item">📐 Trajet de la lumière (réfraction) : <strong>${Math.round(v2Summary.refraction)}/100</strong></div>` : ''}
     ${v2Summary.solar != null ? `<div class="sep-item">☀️ Géométrie solaire (contre-jour/rasant/face) : <strong>${Math.round(v2Summary.solar)}/100</strong></div>`
       : (v2Summary.solarLightingType === 'NO_SUN' ? `<div class="sep-item" style="color:var(--text3)">☀️ Géométrie solaire : soleil sous l'horizon à cet horaire — exclue de la note</div>` : '')}
+    ${v2Summary.solarVeilDiag ? `<div class="sep-item" style="color:var(--text3);font-size:12px">☀️🌫️ ${v2Summary.solarVeilDiag}</div>` : ''}
     ${v2Summary.synthesis != null ? `<div class="sep-item">🧮 Note (Air 30% · Nuages 18% · Réfraction 15% · Géométrie solaire 15% ; Résolution effective 22% temporairement exclue et non calibrée → poids ci-dessus renormalisés sur 100%) : <strong>${v2Summary.synthesis}/100</strong></div>
       <div style="font-size:11px;color:var(--text3);margin:.15rem 0 .5rem;line-height:1.5">
         La courbure terrestre (Bislin/globe) n'entre volontairement <strong>jamais</strong> dans cette
@@ -6371,6 +6372,8 @@ function renderDayRow(dayData, date, spot) {
         // ChatGPT du 07/09 demandant les valeurs exactes de CLOUD_HIGH_SPLIT).
         cloudHighSplitDiag: (v2.diagnostics.find(d => d.id === 'CLOUD_HIGH_SPLIT') || {}).message ?? null,
         cloudHigh: v2.clouds?.high ?? null,
+        // Correctif voile solaire (05/09-9) — cf. computeSolarGeometrySubscoreV2.
+        solarVeilDiag: (v2.diagnostics.find(d => d.id === 'SOLAR_VEIL_PENALTY') || {}).message ?? null,
       };
     }
   } catch (e) {
@@ -8719,7 +8722,14 @@ function computeAtmosphereSubscoreV2(spot, h, aodResPrecomputed) {
     "RH consolidée à 2 usages distincts en V2 (extinction Koschmieder + gradient vertical ΔRH), contre jusqu'à 5 usages cumulés en V1 (spread axe, humidité directe, malus combiné, ΔRH, facteur Koschmieder)."));
 
   const scorePct = maxScore > 0 ? Math.round((score / maxScore) * 100) : null;
-  return { scorePct, rawScore: score, maxScore, modelType: VLD_MODEL_TYPES.HEURISTIC, diagnostics };
+  // sigma / sigmaSource exposés (05/09-9, correctif voile solaire) : seule
+  // mesure déjà calculée de la charge/transparence atmosphérique (AOD × facteur
+  // RH × calibration Koschmieder). Réutilisée par computeSolarGeometrySubscoreV2
+  // pour le solarVeilPenalty — jamais recalculée en double. sigma reste null
+  // quand sigmaSource==='RH_ONLY_FALLBACK' (AOD totalement indisponible) : dans
+  // ce cas, le correctif solaire retombe sur h.rh directement, comme le fait
+  // déjà cette fonction pour son propre score.
+  return { scorePct, rawScore: score, maxScore, modelType: VLD_MODEL_TYPES.HEURISTIC, diagnostics, sigma, sigmaSource };
 }
 
 /**
@@ -8736,10 +8746,42 @@ function computeAtmosphereSubscoreV2(spot, h, aodResPrecomputed) {
  *
  * Barème provisoire (HEURISTIC, non calibré terrain — §30) : à ajuster une
  * fois des sessions réelles disponibles.
+ *
+ * CORRECTIF 05/09-9 (voile solaire directionnel, diagnostic ChatGPT du 08/09) :
+ * le barème ci-dessus classe uniquement sur (Δazimut, élévation solaire),
+ * sans jamais regarder si l'atmosphère est réellement transparente. Or un
+ * contre-jour bas (BACKLIGHT_GOOD, 90/100) suppose une silhouette nette, ce
+ * qui n'est vrai QUE si l'air est peu chargé — en air humide/chargé, le même
+ * géométrique produit l'effet inverse : un halo de diffusion vers l'avant
+ * (forward scattering / aréole circumsolaire) qui noie le contraste (cas
+ * terrain constaté : Crêt de la Perdrix, soleil ≈11°, horizon blanc/bleu
+ * laiteux visible, score pourtant à 85). Test de sensibilité confirmé avant
+ * correctif : Δaz=0°+soleil bas→90/100 quelle que soit la turbidité — voir
+ * l'échange du 08/09 (diagnostic + matrice de test) pour le détail complet.
+ *
+ * solarVeilPenalty = maxPenalty × f(élévation solaire) × f(Δazimut) × f(turbidité)
+ * — pénalité qui ne devient significative QUE si les trois conditions sont
+ * réunies simultanément (soleil bas ET cible proche de son azimut ET air
+ * chargé) ; reste quasi nulle sinon (soleil haut, cible loin en azimut, ou
+ * air très transparent) — voir la batterie de tests ChatGPT du 08/09 pour
+ * les valeurs attendues, toutes vérifiées avant mise en prod.
+ * Réutilise sigma (coefficient d'extinction déjà calculé par
+ * computeAtmosphereSubscoreV2 : AOD × facteur RH × calibration Koschmieder)
+ * — jamais recalculé ici. Quand sigma est indisponible (AOD totalement
+ * absente, sigmaSource==='RH_ONLY_FALLBACK'), repli sur h.rh directement,
+ * cohérent avec le repli déjà fait par le sous-score Air lui-même.
+ * Ne touche PAS C0 dans computeAtmosphereSubscoreV2 (biais similaire identifié
+ * mais volontairement laissé de côté — cf. échange 08/09 — pour ne pas modifier
+ * deux mécanismes à la fois et pouvoir attribuer clairement l'effet de CE
+ * correctif).
+ *
  * @param {Object} h - heure/jour météo (déjà passé par scoreDay())
+ * @param {number|null} sigma - coefficient d'extinction déjà calculé par
+ *   computeAtmosphereSubscoreV2 (atmSub.sigma), ou null si RH_ONLY_FALLBACK.
+ * @param {string|null} sigmaSource - atmSub.sigmaSource ('OBS'|'MID'|'AGGREGATE'|'RH_ONLY_FALLBACK'|null)
  * @returns {Object} { scorePct, lightingType, diffDeg, sunAltDeg, modelType, diagnostics }
  */
-function computeSolarGeometrySubscoreV2(h) {
+function computeSolarGeometrySubscoreV2(h, sigma, sigmaSource) {
   const diagnostics = [];
   const lt = h._lightingType ?? null;
   const diff = h._sunTargetDiffDeg ?? null;
@@ -8766,6 +8808,41 @@ function computeSolarGeometrySubscoreV2(h) {
       break;
     default:
       scorePct = null; label = "type d'éclairage non reconnu";
+  }
+
+  // ── Correctif voile solaire (05/09-9) ──────────────────────────────────
+  // Bornes Koschmieder de départ (HEURISTIC, non calibrées terrain) :
+  // sigma≈0.05 km⁻¹ ↔ portée météo ~78km (air très propre, pas de voile) ;
+  // sigma≈0.30 km⁻¹ ↔ portée météo ~13km (air chargé, voile net). Linéaire
+  // entre les deux. Repli RH direct (40%→0, 90%→1) si sigma indisponible.
+  const SIGMA_CLEAR = 0.05, SIGMA_HAZY = 0.30;
+  const RH_CLEAR = 40, RH_HAZY = 90;
+  const clamp01 = x => Math.max(0, Math.min(1, x));
+
+  let turbidityFactor = null, turbiditySource = null;
+  if (sigma != null && isFinite(sigma)) {
+    turbidityFactor = clamp01((sigma - SIGMA_CLEAR) / (SIGMA_HAZY - SIGMA_CLEAR));
+    turbiditySource = `sigma=${sigma.toFixed(4)}/km (source ${sigmaSource ?? '?'})`;
+  } else if (sigmaSource === 'RH_ONLY_FALLBACK' && h.rh != null && isFinite(h.rh)) {
+    turbidityFactor = clamp01((h.rh - RH_CLEAR) / (RH_HAZY - RH_CLEAR));
+    turbiditySource = `RH=${h.rh.toFixed(0)}% (repli RH_ONLY_FALLBACK, sigma indisponible)`;
+  }
+
+  let veilPenalty = 0;
+  if (scorePct !== null && turbidityFactor !== null && sunAlt !== null && diff !== null) {
+    const MAX_VEIL_PENALTY = 40; // points sur 100, plafond heuristique de départ
+    const altFactor  = clamp01(1 - sunAlt / 20);   // 1 à sunAlt≤0°, 0 dès sunAlt≥20°
+    const diffFactor = clamp01(1 - diff / 120);    // 1 à Δaz=0°, 0 dès Δaz≥120°
+    veilPenalty = MAX_VEIL_PENALTY * altFactor * diffFactor * turbidityFactor;
+    if (veilPenalty > 0.5) {
+      const scoreBeforeVeil = scorePct;
+      scorePct = Math.max(0, Math.round(scorePct - veilPenalty));
+      diagnostics.push(vldDiag("SOLAR_VEIL_PENALTY", "warning", VLD_MODEL_TYPES.HEURISTIC,
+        `Voile solaire directionnel : élévation=${Math.round(sunAlt)}° (altFactor=${altFactor.toFixed(2)}) · Δazimut=${Math.round(diff)}° (diffFactor=${diffFactor.toFixed(2)}) · turbidité=${turbiditySource} (facteur=${turbidityFactor.toFixed(2)}) → pénalité -${Math.round(veilPenalty)} pts (${scoreBeforeVeil}→${scorePct}/100). Correctif 05/09-9, non calibré terrain — ne modifie pas C0 (biais séparé, documenté).`));
+    }
+  } else if (turbidityFactor === null) {
+    diagnostics.push(vldDiag("SOLAR_VEIL_NO_DATA", "info", VLD_MODEL_TYPES.HEURISTIC,
+      "Voile solaire directionnel non évaluable (ni sigma ni RH disponibles) : sous-score géométrie solaire inchangé."));
   }
 
   diagnostics.push(vldDiag("SOLAR_GEOMETRY_SUBSCORE", "info", VLD_MODEL_TYPES.HEURISTIC,
@@ -9221,7 +9298,10 @@ function wrapLegacyResult(spot, h, k, refractionLevelsOverride, turbulenceOverri
 
   // V2.0-K : sous-score géométrie solaire (§22 révisé) — réutilise h._lightingType
   // déjà posé par solarGeometryAdvanced() lors de l'appel scoreDay() ci-dessus.
-  const solarRes = computeSolarGeometrySubscoreV2(h);
+  // Correctif 05/09-9 : atmSub.sigma/sigmaSource transmis pour le solarVeilPenalty
+  // (jamais recalculés) — atmSub est déjà calculé plus haut (ligne ~9095), avant
+  // cet appel, donc aucun réordonnancement nécessaire.
+  const solarRes = computeSolarGeometrySubscoreV2(h, atmSub.sigma, atmSub.sigmaSource);
   v2.solar.lightingType = solarRes.lightingType;
   v2.solar.diffDeg = solarRes.diffDeg;
   v2.solar.sunAltDeg = solarRes.sunAltDeg;
