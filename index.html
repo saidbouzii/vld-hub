@@ -8614,11 +8614,24 @@ function computeAtmosphereSubscoreV2(spot, h, aodResPrecomputed) {
   const aodRes = aodResPrecomputed || computeAodEffectiveV2(aodColumn, blh);
   if (!aodResPrecomputed) diagnostics.push(aodRes.diagnostic);
 
+  // §31 — Décision 08/09-1 (diagnostic croisé Claude/ChatGPT, cas terrain Crêt de
+  // la Perdrix, horizon bleu/laiteux malgré Air=100/100) : sigma VLD (visée
+  // quasi-horizontale) utilise désormais l'AOD COLONNE BRUTE, comme le critère
+  // Koschmieder principal (§11d) — jamais l'AOD "effective" diluée par BLH
+  // (computeAodEffectiveV2, V2.0-C). La dilution fractionBL=clamp(blh/1500,0.15,1.0)
+  // a du sens pour une colonne verticale (satellite), mais est physiquement
+  // inversée pour une ligne de visée horizontale : une BLH basse concentre les
+  // aérosols près du sol (donc extinction horizontale potentiellement PLUS forte),
+  // alors que la dilution la faisait baisser artificiellement (jusqu'à ×0.15 au
+  // plancher F_MIN) — c'était la cause du cas constaté (Air 100/100 vs Extinction
+  // Koschmieder 0/23, 114km affichés pour une cible à 360km, le matin même où
+  // l'horizon était visuellement laiteux, BLH typiquement basse juste après le
+  // lever). computeAodEffectiveV2 n'est PAS supprimée du projet — reste
+  // disponible pour d'éventuels usages où une colonne atmosphérique/BLH est
+  // réellement pertinente — simplement plus utilisée ici.
   const _atmPointSigma = (aodPoint, rhPoint) => {
     if (aodPoint == null || !isFinite(aodPoint) || rhPoint == null || !isFinite(rhPoint)) return null;
-    const eff = computeAodEffectiveV2(aodPoint, blh).aodEffective;
-    if (eff == null) return null;
-    const sigmaBase = eff * VLD_LEGACY_KOSCH_CALIBRATION.value;
+    const sigmaBase = aodPoint * VLD_LEGACY_KOSCH_CALIBRATION.value;
     const rhFactor = 1 / Math.pow(1 - Math.min(rhPoint, 95) / 100, 0.3);
     return Math.max(sigmaBase * rhFactor, 0.0001);
   };
@@ -8635,12 +8648,14 @@ function computeAtmosphereSubscoreV2(spot, h, aodResPrecomputed) {
     sigmaSource = worst.label;
     diagnostics.push(vldDiag("ATM_SIGMA_POINTWISE", "info", VLD_MODEL_TYPES.EMPIRICAL,
       `Sigma pointwise (AOD×rhFactor(RH) couplés au même point) : ${pointwiseCandidates.map(c => `${c.label}(AOD=${c.aod.toFixed(3)}, RH=${c.rh.toFixed(0)}%)→σ=${c.sigma.toFixed(5)}`).join(', ')} — pire retenu = ${sigmaSource} (§26-v2, décision 05/09-4).`));
-  } else if (aodRes.aodEffective !== null) {
+  } else if (aodColumn !== null) {
+    // §31 — même correctif que _atmPointSigma ci-dessus : AOD colonne brute,
+    // pas aodRes.aodEffective (dilué par BLH, cf. commentaire détaillé plus haut).
     const rhFactor = (rh !== null) ? 1 / Math.pow(1 - Math.min(rh, 95) / 100, 0.3) : 1;
-    sigma = Math.max(aodRes.aodEffective * VLD_LEGACY_KOSCH_CALIBRATION.value * rhFactor, 0.0001);
+    sigma = Math.max(aodColumn * VLD_LEGACY_KOSCH_CALIBRATION.value * rhFactor, 0.0001);
     sigmaSource = 'AGGREGATE';
     diagnostics.push(vldDiag("ATM_SIGMA_AGGREGATE_FALLBACK", "info", VLD_MODEL_TYPES.HEURISTIC,
-      `Sigma pointwise non calculable (OBS/MID incomplets) : repli sur AOD/RH agrégés uniques (comportement d'origine).${h._aodRawDebug ? ` [debug §28] obs:${h._aodRawDebug.obs} · mid:${h._aodRawDebug.mid} · tgt:${h._aodRawDebug.tgt}` : ''}`));
+      `Sigma pointwise non calculable (OBS/MID incomplets) : repli sur AOD/RH agrégés uniques (AOD colonne brute, §31).${h._aodRawDebug ? ` [debug §28] obs:${h._aodRawDebug.obs} · mid:${h._aodRawDebug.mid} · tgt:${h._aodRawDebug.tgt}` : ''}`));
   } else if (rh !== null) {
     // §27 — Décision 05/09-6 : quand l'AOD est TOTALEMENT indisponible (aucune
     // valeur, ni pointwise ni agrégée), le comportement d'origine sautait
