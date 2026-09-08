@@ -4667,7 +4667,31 @@ function scoreDay(spot, h) {
     maxScore += 23;
     items.push({ name: '🌫️ Extinction (Koschmieder)', val: Math.round(dVis), unit: 'km',
       pts: koschPts, max: 23, color: koschColor, verdict: koschVerdict, elim: false });
+  } else if (rh_sol_k !== null) {
+    // FIX (audit ChatGPT + Claude, 08/09) — quand l'AOD est totalement indisponible,
+    // ce bloc était auparavant sauté en entier : ni score ni maxScore incrémentés,
+    // donc le critère (23 pts, le plus lourd du score V1) disparaissait purement et
+    // simplement du dénominateur au lieu d'être compté comme pénalisant. Résultat :
+    // le score final se recalculait sur un total plus petit, gonflant artificiellement
+    // le pourcentage (constat terrain : jusqu'à 100/100 avec RH 80% et AOD absent).
+    // Correctif : repli RH-only prudent, EXACTEMENT les mêmes bornes que le repli
+    // déjà utilisé côté moteur V2 pour ce cas (§27, décision 05/09-6 — linéaire
+    // 40%→max, 95%→min), simplement mis à l'échelle de 60 vers 23 pts. "AOD inconnu"
+    // est ainsi traité comme une incertitude qui pénalise, pas comme une transparence
+    // excellente (bug d'origine) ni comme une mauvaise transparence certaine.
+    const RH_FALLBACK_MAX = 40; // %, RH en dessous = 23/23 (mêmes bornes que le repli V2, §27)
+    const RH_FALLBACK_MIN = 95; // %, RH au-dessus = 0/23
+    const koschPts = Math.max(0, Math.min(23,
+      23 * (RH_FALLBACK_MIN - rh_sol_k) / (RH_FALLBACK_MIN - RH_FALLBACK_MAX)));
+    const koschColor = koschPts >= 15 ? 'green' : koschPts >= 6 ? 'amber' : 'red';
+    const koschVerdict = `⚠️ AOD indisponible — repli RH-only prudent (RH=${Math.round(rh_sol_k)}%, mêmes bornes que le moteur V2 §27) : transparence inconnue, traitée comme une incertitude pénalisante`;
+    score    += koschPts;
+    maxScore += 23;
+    items.push({ name: '🌫️ Extinction (Koschmieder)', val: Math.round(koschPts * 10) / 10, unit: 'pts',
+      pts: koschPts, max: 23, color: koschColor, verdict: koschVerdict, elim: false });
   }
+  // Si ni AOD ni RH ne sont disponibles (cas résiduel, très rare), le critère
+  // reste absent du calcul — comportement inchangé sur ce cas limite.
 
   // ── SCORE FINAL ──────────────────────────────────
   // Pipeline : score_brut × pblFactor → normalisation sur 95 → +ΔRH → +régime → final
@@ -6294,7 +6318,7 @@ function renderDayRow(dayData, date, spot) {
     // recopie sur h (objet jour, affiché par renderKMini) pour que l'IPR les retrouve.
     h.kosch_sigma = hData.kosch_sigma; h.kosch_C0 = hData.kosch_C0;
     effectiveH = hData;
-  } else if (tw === 'avg' || tw === 'now') {
+  } else if (tw === 'avg') {
     // S'assurer que h a une _obsDate correcte pour solarGeometryAdvanced
     if (!h._obsDate || isNaN(new Date(h._obsDate).getTime())) {
       const sr = dayData.sunriseStr;
@@ -6302,6 +6326,33 @@ function renderDayRow(dayData, date, spot) {
       h._obsDate = d0.toISOString();
     }
     scoredResult = scoreDay(spot, h);
+  } else if (tw === 'now') {
+    // FIX (audit ChatGPT + Claude, 08/09) — score affiché ≠ détail V2 en mode
+    // "Maintenant" : le score affiché est calculé au chargement (cf. hourlyScores
+    // ['abs_'+heure], §fetchAll) sur hDataAbs, un instantané météo de l'heure
+    // absolue courante, alors que ce bloc utilisait jusqu'ici h=dayData.raw (la
+    // MOYENNE journalière) pour recalculer les items et le "Deuxième avis" V2 —
+    // deux jeux de données météo différents pour un seul score affiché. Constat
+    // terrain : RH pouvait varier de 30 points entre les deux (ex. Mont Lozère,
+    // 70,3% en moyenne jour vs 37% à l'heure courante), suffisant pour faire
+    // diverger le sous-score Air de 30+ points via le repli RH-only (§27).
+    // Correctif : réutiliser le même instantané mis en cache à l'heure courante
+    // (_hSnap['abs_'+heure], déjà calculé et stocké au chargement, cf. ligne
+    // ~5245) au lieu de re-dériver depuis la moyenne du jour.
+    const nowH = new Date().getHours();
+    const hSnapNow = dayData._hSnap?.['abs_' + nowH];
+    if (!hSnapNow) {
+      console.warn(
+        '[VLD Hub] Snapshot horaire absent pour abs_' + nowH +
+        ' — fallback sur la moyenne journalière.'
+      );
+    }
+    effectiveH = hSnapNow || h;
+    if (!effectiveH._obsDate || isNaN(new Date(effectiveH._obsDate).getTime())) {
+      const d0 = new Date(); d0.setHours(nowH, 0, 0, 0); d0.setDate(d0.getDate() + (h._day || 0));
+      effectiveH._obsDate = d0.toISOString();
+    }
+    scoredResult = scoreDay(spot, effectiveH);
   } else {
     const offset = parseFloat(tw);
     const sunriseStr = dayData.sunriseStr;
@@ -6346,7 +6397,14 @@ function renderDayRow(dayData, date, spot) {
   let v2Summary = null;
   try {
     if (window.VLD_ENGINE_V2 && typeof VLD_ENGINE_V2.wrapLegacyResult === 'function') {
-      const v2 = VLD_ENGINE_V2.wrapLegacyResult(spot, effectiveH, k);
+      // FIX (audit ChatGPT + Claude, 08/09) — refractionLevels/wind_shear/dTdh
+      // sont des grandeurs journalières (cf. commentaire de wrapLegacyResult) :
+      // absentes des snapshots horaires (hData/hDataAbs), elles doivent être
+      // explicitement reprises sur h=dayData.raw, exactement comme le fait
+      // getV2FinalScore() au chargement (cf. fetchAll). Avant ce fix, cet appel
+      // les omettait → le "Deuxième avis" pouvait diverger du score affiché même
+      // à créneau identique, indépendamment du bug de granularité temporelle.
+      const v2 = VLD_ENGINE_V2.wrapLegacyResult(spot, effectiveH, k, h._refractionLevels, {windShear: h.wind_shear, dTdh: h.dTdh});
       v2Summary = {
         atmosphere: v2.score.atmosphere,
         refraction: v2.score.refraction,
