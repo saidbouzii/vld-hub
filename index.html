@@ -1443,16 +1443,16 @@ tr.country-group-row td{border-bottom:1px solid rgba(255,255,255,.08);background
 
 /* ── Bandeau bouton "Poster dans Communauté" (sous Relief intermédiaire) ── */
 .comm-banner-btn{
-  display:flex; align-items:center; justify-content:center; gap:.4rem;
-  width:100%; margin-top:auto; padding:.6rem .8rem;
-  border-radius:9px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; gap:.6rem;
+  width:100%; margin-top:auto; padding:1.05rem 1.2rem;
+  border-radius:12px; cursor:pointer;
   background:rgba(255,214,0,.06); border:1px solid rgba(255,214,0,.28);
   transition:all .2s;
 }
 .comm-banner-btn:hover{background:rgba(255,214,0,.12); border-color:rgba(255,214,0,.5);}
 .comm-banner-label{
   font-family:'Inter','Helvetica Neue',sans-serif;
-  font-weight:800; font-size:12.5px; letter-spacing:.02em;
+  font-weight:800; font-size:17px; letter-spacing:.02em;
   color:#ffd400; text-transform:uppercase;
 }
 
@@ -6415,7 +6415,7 @@ function renderDayRow(dayData, date, spot) {
     </div>
     <div class="drow-body" id="${did}">
       <div class="drow-left"><div class="mb-grid">${renderMeteoButtons(items)}</div>${explainRow}<img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/bandeau4communaute.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;">${communityBanner}</div>
-      <div class="drow-right">${renderNewCurveBlock(spot,k)}<img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/bandeau2optique.png" alt="" style="width:100%;height:66px;object-fit:cover;object-position:center;border-radius:10px;display:block;margin:.75rem 0;">${renderKMini(k,h,spot,getIRScore(forecasts[spot.id], day, spot))}${renderAngularResolutionBlock(h, spot, getApertureMm())}<img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/bandeau3relief.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;margin:.75rem 0;"></div>
+      <div class="drow-right">${renderNewCurveBlock(spot,k)}<img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/bandeau2optique.png" alt="" style="width:100%;height:66px;object-fit:cover;object-position:center;border-radius:10px;display:block;margin:.75rem 0;">${renderKMini(k,h,spot,getIRScore(forecasts[spot.id], day, spot))}${renderAngularResolutionBlock(h, spot, getApertureMm())}</div>
     </div>
   </div>`;
 }
@@ -6593,7 +6593,6 @@ function renderNewCurveBlock(spot, k_default) {
   const flatLiftM = (k*dist_m_flat*dist_m_flat)/(2*R_FLAT);
   const flatAngleDeg = (k*dist_m_flat)/(2*R_FLAT)*180/Math.PI;
   return `<div class="dr-curve">
-    <img src="https://raw.githubusercontent.com/saidbouzii/vld-hub/main/bandeau1svdcourbure.png" alt="" style="width:100%;height:auto;border-radius:10px;display:block;margin-bottom:.75rem;">
     <div class="dr-curve-title">🌍 ${spot.name} → ${spot.target}</div>
     <div class="dr-curve-cta" onclick="openCurveOverlay('${spot.id}', ${k.toFixed(3)})" title="Ouvrir le profil de courbure interactif">
       <div class="dr-cta-illust">${illustSVG}</div>
